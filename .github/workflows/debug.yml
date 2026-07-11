@@ -22,7 +22,7 @@ env:
 
 jobs:
   build:
-    name: Analyze and build debug APK
+    name: Analyze, test, and build debug APK
     runs-on: ubuntu-latest
     timeout-minutes: 35
 
@@ -54,6 +54,9 @@ jobs:
 
       - name: Analyze Dart code
         run: flutter analyze .
+
+      - name: Run tests
+        run: flutter test
 
       - name: Build universal debug APK
         run: flutter build apk --debug --flavor github
