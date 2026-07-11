@@ -38,7 +38,7 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
     });
 
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final result = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: const ['csv'],
         allowMultiple: false,
@@ -174,7 +174,9 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : const Icon(FluentIcons.document_24_regular),
-                      label: Text(_isReading ? 'Reading CSV…' : 'Choose CSV file'),
+                      label: Text(
+                        _isReading ? 'Reading CSV…' : 'Choose CSV file',
+                      ),
                     ),
                   ),
                 ],
