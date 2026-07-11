@@ -27,6 +27,7 @@ import 'package:go_router/go_router.dart';
 import 'package:musify/constants/app_constants.dart';
 import 'package:musify/extensions/l10n.dart';
 import 'package:musify/main.dart';
+import 'package:musify/screens/spotify_import_page.dart';
 import 'package:musify/services/settings_manager.dart';
 import 'package:musify/utilities/flutter_bottom_sheet.dart'
     show closeCurrentBottomSheet;
@@ -139,6 +140,15 @@ class _BottomNavigationPageState extends State<BottomNavigationPage> {
                     ],
                   ),
                 ),
+                floatingActionButton:
+                    !isOfflineMode && widget.child.currentIndex == 2
+                    ? FloatingActionButton.extended(
+                        onPressed: _openSpotifyImporter,
+                        icon: const Icon(FluentIcons.arrow_upload_24_regular),
+                        label: const Text('Import Spotify'),
+                        tooltip: 'Import Spotify CSV',
+                      )
+                    : null,
                 bottomNavigationBar: !isLargeScreen
                     ? NavigationBar(
                         selectedIndex: _getCurrentIndex(items, isOfflineMode),
@@ -164,6 +174,13 @@ class _BottomNavigationPageState extends State<BottomNavigationPage> {
           );
         },
       ),
+    );
+  }
+
+  Future<void> _openSpotifyImporter() async {
+    closeCurrentBottomSheet();
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const SpotifyImportPage()),
     );
   }
 

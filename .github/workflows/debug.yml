@@ -22,7 +22,7 @@ env:
 
 jobs:
   build:
-    name: Analyze and build debug APK
+    name: Analyze, test, and build debug APK
     runs-on: ubuntu-latest
     timeout-minutes: 35
 
@@ -53,7 +53,50 @@ jobs:
         run: flutter pub get
 
       - name: Analyze Dart code
-        run: flutter analyze .
+        id: analyze
+        shell: bash
+        run: |
+          set +e
+          flutter analyze . 2>&1 | tee flutter-analyze.log
+          status=${PIPESTATUS[0]}
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Upload analyzer log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-analyze-${{ github.run_number }}
+          path: flutter-analyze.log
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Fail on analyzer issues
+        if: steps.analyze.outputs.status != '0'
+        run: exit 1
+
+      - name: Run tests
+        id: tests
+        shell: bash
+        run: |
+          set +e
+          flutter test 2>&1 | tee flutter-test.log
+          status=${PIPESTATUS[0]}
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Upload test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-test-${{ github.run_number }}
+          path: flutter-test.log
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Fail on test failures
+        if: steps.tests.outputs.status != '0'
+        run: exit 1
 
       - name: Build universal debug APK
         run: flutter build apk --debug --flavor github
