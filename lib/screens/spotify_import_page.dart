@@ -8,7 +8,6 @@
  */
 
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
@@ -41,14 +40,13 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
       final result = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: const ['csv'],
-        allowMultiple: false,
         withData: true,
       );
 
       if (result == null || result.files.isEmpty) return;
 
       final selectedFile = result.files.single;
-      Uint8List? bytes = selectedFile.bytes;
+      var bytes = selectedFile.bytes;
       if (bytes == null && selectedFile.path != null) {
         bytes = await File(selectedFile.path!).readAsBytes();
       }
