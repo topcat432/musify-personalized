@@ -434,7 +434,7 @@ class SpotifyMatchScorer {
   }
 
   static String _normalizeIsrc(String value) {
-    return value.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
+    return value.toUpperCase().replaceAll(RegExp('[^A-Z0-9]'), '');
   }
 
   static String _normalize(String value) {
