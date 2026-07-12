@@ -13,6 +13,7 @@ import 'package:hive/hive.dart';
 import 'package:musify/services/common_services.dart';
 import 'package:musify/services/data_manager.dart';
 import 'package:musify/services/spotify_match_scoring.dart';
+import 'package:youtube_music_explode_dart/youtube_music_explode_dart.dart';
 
 class SpotifyMatchingSnapshot {
   const SpotifyMatchingSnapshot({
@@ -44,9 +45,12 @@ class SpotifyMatchingSnapshot {
 class SpotifyTrackMatchingService {
   const SpotifyTrackMatchingService();
 
-  static const int defaultBatchSize = 100;
-  static const double automaticMatchThreshold = 0.90;
-  static const double reviewThreshold = 0.70;
+  static const int defaultBatchSize = 25;
+  static const int maximumPilotBatchSize = 50;
+  static const double automaticMatchThreshold = 0.86;
+  static const double reviewThreshold = 0.58;
+  static const Duration _musicSearchTimeout = Duration(seconds: 18);
+  static final YoutubeMusicExplode _youtubeMusic = YoutubeMusicExplode();
 
   Future<SpotifyMatchingSnapshot> loadSnapshot() async {
     final box = Hive.box('user');
@@ -67,6 +71,30 @@ class SpotifyTrackMatchingService {
         return leftRow.compareTo(rightRow);
       });
     return reviewItems;
+  }
+
+  Future<SpotifyMatchingSnapshot> restartMatching() async {
+    final box = Hive.box('user');
+    final tracks = _readMaps(box.get('spotifyImportTracks'));
+    final metadata = _readMap(box.get('spotifyImportMetadata'));
+    await deleteData('user', 'spotifyMatchResults');
+    metadata
+      ..['matchingVersion'] = 3
+      ..['matchingStatus'] = 'not_started'
+      ..['nextTrackIndex'] = 0
+      ..['matchedCount'] = 0
+      ..['reviewCount'] = 0
+      ..['unmatchedCount'] = 0
+      ..['errorCount'] = 0
+      ..['lastMatchingCheckpointAt'] = DateTime.now()
+          .toUtc()
+          .toIso8601String();
+    await addOrUpdateData<Map<String, dynamic>>(
+      'user',
+      'spotifyImportMetadata',
+      metadata,
+    );
+    return _snapshot(tracks, <Map<String, dynamic>>[], metadata);
   }
 
   Future<SpotifyMatchingSnapshot> resolveReviewItem({
@@ -135,7 +163,7 @@ class SpotifyTrackMatchingService {
       results.removeRange(nextIndex, results.length);
     }
 
-    final safeBatchSize = batchSize <= 0 ? tracks.length : batchSize;
+    final safeBatchSize = batchSize.clamp(1, maximumPilotBatchSize);
     final stopIndex = (nextIndex + safeBatchSize).clamp(0, tracks.length);
     metadata['matchingStatus'] = 'running';
     await _checkpoint(results, metadata, nextIndex, tracks.length);
@@ -153,6 +181,8 @@ class SpotifyTrackMatchingService {
           'sourceRow': source['sourceRow'],
           'sourceTitle': source['title']?.toString() ?? '',
           'sourceArtist': source['artist']?.toString() ?? '',
+          'sourceAlbum': source['album']?.toString() ?? '',
+          'sourceIsrc': source['isrc']?.toString() ?? '',
           'status': 'error',
           'score': 0.0,
           'error': error.toString(),
@@ -174,7 +204,7 @@ class SpotifyTrackMatchingService {
 
       onProgress?.call(_snapshot(tracks, results, metadata));
       if (nextIndex < stopIndex) {
-        await Future<void>.delayed(const Duration(milliseconds: 200));
+        await Future<void>.delayed(const Duration(milliseconds: 150));
       }
     }
 
@@ -188,28 +218,67 @@ class SpotifyTrackMatchingService {
   Future<Map<String, dynamic>> _matchOne(Map<String, dynamic> source) async {
     final title = source['title']?.toString().trim() ?? '';
     final artist = source['artist']?.toString().trim() ?? '';
+    final album = source['album']?.toString().trim() ?? '';
+    final isrc = source['isrc']?.toString().trim() ?? '';
     final durationMs = _asInt(source['durationMs']);
     final input = SpotifyMatchInput(
       title: title,
       artist: artist,
+      album: album,
+      isrc: isrc,
       durationMs: durationMs,
     );
 
-    final primaryQuery = '$artist $title official audio'.trim();
-    final primary = await fetchSongsList(primaryQuery);
-    var ranked = _rank(input, primary);
+    final candidates = <Map<String, dynamic>>[];
+    final searchSources = <String>[];
+    final sourceFailures = <String>[];
 
-    if (ranked.isEmpty ||
-        (ranked.first['score'] as double) < reviewThreshold) {
-      final fallback = await fetchSongsList('$artist $title'.trim());
-      ranked = _rank(input, [...primary, ...fallback]);
+    try {
+      final musicSongs = await _youtubeMusic.music
+          .searchSongs('$artist $title', limit: 12)
+          .timeout(_musicSearchTimeout);
+      candidates.addAll(musicSongs.map(_musicSongCandidate));
+      searchSources.add('youtube_music_songs');
+    } catch (error) {
+      sourceFailures.add('YouTube Music search failed: $error');
     }
 
-    final best = ranked.isEmpty ? null : ranked.first;
+    var evaluation = _evaluate(input, candidates);
+    final firstMusicScore = evaluation.ranked.isEmpty
+        ? 0.0
+        : evaluation.ranked.first['score'] as double;
+    final firstMusicAutomatic = evaluation.ranked.isNotEmpty &&
+        evaluation.ranked.first['automaticEligible'] == true;
+
+    if (!firstMusicAutomatic || firstMusicScore < automaticMatchThreshold) {
+      final officialResults = await fetchSongsList(
+        '$artist $title official audio'.trim(),
+      );
+      candidates.addAll(
+        officialResults.whereType<Map>().map(Map<String, dynamic>.from),
+      );
+      searchSources.add('youtube_official_audio');
+      evaluation = _evaluate(input, candidates);
+    }
+
+    final topScore = evaluation.ranked.isEmpty
+        ? 0.0
+        : evaluation.ranked.first['score'] as double;
+    if (topScore < reviewThreshold) {
+      final broadResults = await fetchSongsList('$artist $title'.trim());
+      candidates.addAll(
+        broadResults.whereType<Map>().map(Map<String, dynamic>.from),
+      );
+      searchSources.add('youtube_broad_fallback');
+      evaluation = _evaluate(input, candidates);
+    }
+
+    final best = evaluation.ranked.isEmpty ? null : evaluation.ranked.first;
     final bestScore = best?['score'] as double? ?? 0.0;
+    final automaticEligible = best?['automaticEligible'] == true;
     final status = best == null
         ? 'unmatched'
-        : bestScore >= automaticMatchThreshold
+        : automaticEligible && bestScore >= automaticMatchThreshold
         ? 'matched'
         : bestScore >= reviewThreshold
         ? 'needs_review'
@@ -219,15 +288,15 @@ class SpotifyTrackMatchingService {
       'sourceRow': source['sourceRow'],
       'sourceTitle': title,
       'sourceArtist': artist,
-      'sourceAlbum': source['album']?.toString() ?? '',
-      'sourceIsrc': source['isrc']?.toString() ?? '',
+      'sourceAlbum': album,
+      'sourceIsrc': isrc,
       'sourceDurationMs': durationMs,
       'status': status,
       'score': bestScore,
       'bestCandidate': best?['candidate'],
       'matchEvidence': best?['evidence'],
-      'alternatives': ranked
-          .take(3)
+      'alternatives': evaluation.ranked
+          .take(5)
           .map(
             (item) => {
               'score': item['score'],
@@ -236,16 +305,41 @@ class SpotifyTrackMatchingService {
             },
           )
           .toList(growable: false),
+      'rejectedCandidates': evaluation.rejected.take(5).toList(growable: false),
+      'unmatchedReason': status == 'unmatched'
+          ? _unmatchedReason(evaluation)
+          : null,
+      'searchSources': searchSources,
+      'sourceFailures': sourceFailures,
       'matchedAt': DateTime.now().toUtc().toIso8601String(),
     };
   }
 
-  List<Map<String, dynamic>> _rank(
+  static Map<String, dynamic> _musicSongCandidate(MusicSong song) {
+    final artist = song.artists.join(', ');
+    return {
+      'ytid': song.id,
+      'title': song.title,
+      'artist': artist,
+      'artists': song.artists,
+      'videoAuthor': song.artists.isEmpty ? artist : '${song.artists.first} - Topic',
+      'album': song.album ?? '',
+      'duration': song.duration?.inSeconds,
+      'image': song.thumbnailUrl,
+      'lowResImage': song.thumbnailUrl,
+      'highResImage': song.thumbnailUrl,
+      'isExplicit': song.explicit,
+      'sourceType': 'youtube_music_song',
+    };
+  }
+
+  _CandidateEvaluation _evaluate(
     SpotifyMatchInput input,
     Iterable<dynamic> candidates,
   ) {
     final seenIds = <String>{};
     final ranked = <Map<String, dynamic>>[];
+    final rejected = <Map<String, dynamic>>[];
 
     for (final raw in candidates) {
       if (raw is! Map) continue;
@@ -254,12 +348,17 @@ class SpotifyTrackMatchingService {
       if (id.isEmpty || !seenIds.add(id)) continue;
 
       final evidence = SpotifyMatchScorer.score(input, candidate);
-      if (evidence.disqualified) continue;
-      ranked.add({
+      final entry = {
         'score': evidence.score,
+        'automaticEligible': evidence.automaticEligible,
         'candidate': candidate,
         'evidence': evidence.toJson(),
-      });
+      };
+      if (evidence.disqualified) {
+        rejected.add(entry);
+      } else {
+        ranked.add(entry);
+      }
     }
 
     ranked.sort(
@@ -267,7 +366,37 @@ class SpotifyTrackMatchingService {
         left['score'] as double,
       ),
     );
-    return ranked;
+    rejected.sort((left, right) {
+      final leftEvidence = Map<String, dynamic>.from(left['evidence'] as Map);
+      final rightEvidence = Map<String, dynamic>.from(right['evidence'] as Map);
+      final leftIdentity =
+          (_asDouble(leftEvidence['titleScore']) ?? 0) +
+          (_asDouble(leftEvidence['primaryArtistScore']) ?? 0);
+      final rightIdentity =
+          (_asDouble(rightEvidence['titleScore']) ?? 0) +
+          (_asDouble(rightEvidence['primaryArtistScore']) ?? 0);
+      return rightIdentity.compareTo(leftIdentity);
+    });
+    return _CandidateEvaluation(ranked: ranked, rejected: rejected);
+  }
+
+  static String _unmatchedReason(_CandidateEvaluation evaluation) {
+    if (evaluation.ranked.isNotEmpty) {
+      final best = evaluation.ranked.first;
+      final score = ((best['score'] as double) * 100).round();
+      return 'Best surviving candidate reached only $score% confidence.';
+    }
+    if (evaluation.rejected.isNotEmpty) {
+      final evidence = Map<String, dynamic>.from(
+        evaluation.rejected.first['evidence'] as Map,
+      );
+      final reasons = evidence['reasons'];
+      if (reasons is List && reasons.isNotEmpty) {
+        return reasons.map((reason) => reason.toString()).join(' • ');
+      }
+      return 'Every candidate failed the song identity safety checks.';
+    }
+    return 'No playable song candidates were returned by the available sources.';
   }
 
   Future<void> _checkpoint(
@@ -276,7 +405,7 @@ class SpotifyTrackMatchingService {
     int nextIndex,
     int totalTracks,
   ) async {
-    metadata['matchingVersion'] = 2;
+    metadata['matchingVersion'] = 3;
     metadata['nextTrackIndex'] = nextIndex;
     metadata['matchedCount'] = results.where(_isMatched).length;
     metadata['reviewCount'] = _count(results, 'needs_review');
@@ -351,4 +480,11 @@ class SpotifyTrackMatchingService {
         .map(Map<String, dynamic>.from)
         .toList(growable: true);
   }
+}
+
+class _CandidateEvaluation {
+  const _CandidateEvaluation({required this.ranked, required this.rejected});
+
+  final List<Map<String, dynamic>> ranked;
+  final List<Map<String, dynamic>> rejected;
 }
