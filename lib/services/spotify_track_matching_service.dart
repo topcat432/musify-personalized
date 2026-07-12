@@ -60,12 +60,12 @@ class SpotifyTrackMatchingService {
     final results = _readMaps(Hive.box('user').get('spotifyMatchResults'));
     final reviewItems = results
         .where((result) => result['status'] == 'needs_review')
-        .toList(growable: false);
-    reviewItems.sort((left, right) {
-      final leftRow = _asInt(left['sourceRow']) ?? 0;
-      final rightRow = _asInt(right['sourceRow']) ?? 0;
-      return leftRow.compareTo(rightRow);
-    });
+        .toList(growable: false)
+      ..sort((left, right) {
+        final leftRow = _asInt(left['sourceRow']) ?? 0;
+        final rightRow = _asInt(right['sourceRow']) ?? 0;
+        return leftRow.compareTo(rightRow);
+      });
     return reviewItems;
   }
 
@@ -112,8 +112,7 @@ class SpotifyTrackMatchingService {
     results[resultIndex] = updated;
 
     final nextIndex = (_asInt(metadata['nextTrackIndex']) ?? results.length)
-        .clamp(0, tracks.length)
-        .toInt();
+        .clamp(0, tracks.length);
     await _checkpoint(results, metadata, nextIndex, tracks.length);
     return _snapshot(tracks, results, metadata);
   }
@@ -131,15 +130,13 @@ class SpotifyTrackMatchingService {
     if (tracks.isEmpty) return _snapshot(tracks, results, metadata);
 
     var nextIndex = _asInt(metadata['nextTrackIndex']) ?? results.length;
-    nextIndex = nextIndex.clamp(0, tracks.length).toInt();
+    nextIndex = nextIndex.clamp(0, tracks.length);
     if (results.length > nextIndex) {
       results.removeRange(nextIndex, results.length);
     }
 
     final safeBatchSize = batchSize <= 0 ? tracks.length : batchSize;
-    final stopIndex = (nextIndex + safeBatchSize)
-        .clamp(0, tracks.length)
-        .toInt();
+    final stopIndex = (nextIndex + safeBatchSize).clamp(0, tracks.length);
     metadata['matchingStatus'] = 'running';
     await _checkpoint(results, metadata, nextIndex, tracks.length);
 
@@ -304,8 +301,7 @@ class SpotifyTrackMatchingService {
     Map<String, dynamic> metadata,
   ) {
     final nextIndex = (_asInt(metadata['nextTrackIndex']) ?? results.length)
-        .clamp(0, tracks.length)
-        .toInt();
+        .clamp(0, tracks.length);
     return SpotifyMatchingSnapshot(
       totalTracks: tracks.length,
       nextTrackIndex: nextIndex,
