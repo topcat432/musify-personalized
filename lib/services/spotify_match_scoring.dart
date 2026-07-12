@@ -192,7 +192,9 @@ class SpotifyMatchScorer {
         durationScore * 0.15 +
         sourceScore * 0.05 -
         penalty;
-    final finalScore = disqualified ? 0.0 : weighted.clamp(0.0, 1.0);
+    final finalScore = disqualified
+        ? 0.0
+        : weighted.clamp(0.0, 1.0).toDouble();
 
     if (reasons.isEmpty) reasons.add('Loose metadata match');
 
@@ -256,7 +258,8 @@ class SpotifyMatchScorer {
     final coverage = intersection / leftTokens.length;
     return [jaccard * 0.65 + coverage * 0.35, containment]
         .reduce((a, b) => a > b ? a : b)
-        .clamp(0.0, 1.0);
+        .clamp(0.0, 1.0)
+        .toDouble();
   }
 
   static Set<String> _tokens(String value) {
