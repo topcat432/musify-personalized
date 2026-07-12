@@ -19,6 +19,8 @@ class SpotifyMatchingPage extends StatefulWidget {
 }
 
 class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
+  static const int _allRemaining = -1;
+
   final _service = const SpotifyTrackMatchingService();
   SpotifyMatchingSnapshot? _snapshot;
   bool _loading = true;
@@ -41,6 +43,10 @@ class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
         _snapshot = snapshot;
         _loading = false;
         _error = null;
+        if (!_allRemainingUnlocked(snapshot) &&
+            _selectedRunSize == _allRemaining) {
+          _selectedRunSize = SpotifyTrackMatchingService.defaultBatchSize;
+        }
       });
     } catch (error) {
       if (!mounted) return;
@@ -51,10 +57,39 @@ class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
     }
   }
 
+  Future<bool> _confirmAllRemaining(SpotifyMatchingSnapshot snapshot) async {
+    final approved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Match all ${snapshot.remainingCount} remaining tracks?'),
+        content: const Text(
+          'This may take a long time. Keep the app open, preferably on Wi-Fi and charging. Progress is saved every five tracks, and you can pause safely at any time.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Run all remaining'),
+          ),
+        ],
+      ),
+    );
+    return approved == true;
+  }
+
   Future<void> _runSelectedBatch() async {
     if (_running) return;
-    final snapshotBeforeRun = _snapshot;
-    if (snapshotBeforeRun == null || snapshotBeforeRun.isComplete) return;
+    var current = _snapshot;
+    if (current == null || current.isComplete) return;
+
+    final runAll = _selectedRunSize == _allRemaining;
+    if (runAll) {
+      if (!_allRemainingUnlocked(current)) return;
+      if (!await _confirmAllRemaining(current)) return;
+    }
 
     setState(() {
       _running = true;
@@ -63,15 +98,32 @@ class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
     });
 
     try {
-      final snapshot = await _service.matchNextBatch(
-        batchSize: _selectedRunSize,
-        shouldStop: () => _stopRequested,
-        onProgress: (progress) {
-          if (mounted) setState(() => _snapshot = progress);
-        },
-      );
-      if (!mounted) return;
-      setState(() => _snapshot = snapshot);
+      if (runAll) {
+        while (mounted && !_stopRequested && !current!.isComplete) {
+          final before = current.nextTrackIndex;
+          current = await _service.matchNextBatch(
+            batchSize: SpotifyTrackMatchingService.maximumPilotBatchSize,
+            shouldStop: () => _stopRequested,
+            onProgress: (progress) {
+              if (mounted) setState(() => _snapshot = progress);
+            },
+          );
+          if (!mounted) return;
+          setState(() => _snapshot = current);
+          if (current.nextTrackIndex <= before) break;
+          await Future<void>.delayed(const Duration(milliseconds: 250));
+        }
+      } else {
+        current = await _service.matchNextBatch(
+          batchSize: _selectedRunSize,
+          shouldStop: () => _stopRequested,
+          onProgress: (progress) {
+            if (mounted) setState(() => _snapshot = progress);
+          },
+        );
+        if (!mounted) return;
+        setState(() => _snapshot = current);
+      }
     } catch (error) {
       if (!mounted) return;
       setState(() => _error = error.toString());
@@ -85,7 +137,7 @@ class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
     }
   }
 
-  Future<void> _openReviewQueue() async {
+  Future<void> _openResolutionQueue() async {
     if (_running) return;
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -123,6 +175,7 @@ class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
       if (!mounted) return;
       setState(() {
         _snapshot = snapshot;
+        _selectedRunSize = SpotifyTrackMatchingService.defaultBatchSize;
         _error = null;
       });
     } catch (error) {
@@ -164,11 +217,11 @@ class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
                         ),
                         const SizedBox(height: 12),
                         const Text(
-                          'The finder now searches structured YouTube Music song results first, then uses ordinary YouTube only as a fallback. It compares the title, primary and featured artists, album, duration, version, and source reliability.',
+                          'The finder searches structured YouTube Music song results first, then uses ordinary YouTube only as a fallback. It compares title, artists, album, duration, version, and source reliability.',
                         ),
                         const SizedBox(height: 10),
                         const Text(
-                          'This remains a validation pass. Run only 25 or 50 tracks at a time until the real-world match rate is proven. Nothing is added to Favorites yet.',
+                          'Uncertain or missing tracks can now be searched and saved manually. Nothing is added to Favorites until the import is finalized.',
                         ),
                       ],
                     ),
@@ -180,12 +233,7 @@ class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
                     color: Theme.of(context).colorScheme.errorContainer,
                     child: Padding(
                       padding: const EdgeInsets.all(16),
-                      child: Text(
-                        _error!,
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.onErrorContainer,
-                        ),
-                      ),
+                      child: Text(_error!),
                     ),
                   ),
                 ],
@@ -195,7 +243,7 @@ class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
                     child: Padding(
                       padding: EdgeInsets.all(16),
                       child: Text(
-                        'No saved Spotify import was found. Return to the importer and save the CSV first.',
+                        'No saved Spotify import was found. Return to the importer and save a CSV first.',
                       ),
                     ),
                   )
@@ -204,6 +252,9 @@ class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
                   const SizedBox(height: 12),
                   _RunControlsCard(
                     selectedRunSize: _selectedRunSize,
+                    allRemainingValue: _allRemaining,
+                    remainingCount: snapshot.remainingCount,
+                    allRemainingUnlocked: _allRemainingUnlocked(snapshot),
                     enabled: !_running && !snapshot.isComplete,
                     onSelected: (value) =>
                         setState(() => _selectedRunSize = value),
@@ -231,6 +282,8 @@ class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
                             ? _stopRequested
                                   ? 'Pausing after this track…'
                                   : 'Pause safely'
+                            : _selectedRunSize == _allRemaining
+                            ? 'Match all ${snapshot.remainingCount} remaining'
                             : 'Match next $_selectedRunSize tracks',
                       ),
                     ),
@@ -239,21 +292,28 @@ class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
                   SizedBox(
                     width: double.infinity,
                     child: OutlinedButton.icon(
-                      onPressed: snapshot.reviewCount == 0 || _running
+                      onPressed: _unresolvedCount(snapshot) == 0 || _running
                           ? null
-                          : _openReviewQueue,
-                      icon: const Icon(Icons.fact_check_outlined),
+                          : _openResolutionQueue,
+                      icon: const Icon(Icons.manage_search),
                       label: Text(
-                        snapshot.reviewCount == 0
-                            ? 'No uncertain matches waiting'
-                            : 'Review ${snapshot.reviewCount} uncertain matches',
+                        _unresolvedCount(snapshot) == 0
+                            ? 'No unresolved matches waiting'
+                            : 'Review or search ${_unresolvedCount(snapshot)} unresolved',
                       ),
                     ),
                   ),
-                  if (_running && snapshot.reviewCount > 0) ...[
+                  if (_running && _unresolvedCount(snapshot) > 0) ...[
                     const SizedBox(height: 8),
                     const Text(
-                      'Pause safely before opening the review queue. Matching resumes from the saved checkpoint afterward.',
+                      'Pause safely before resolving tracks manually. Matching resumes from the saved checkpoint afterward.',
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                  if (_selectedRunSize == _allRemaining && !_running) ...[
+                    const SizedBox(height: 8),
+                    const Text(
+                      'All-remaining runs in safe 50-track sections and preserves a checkpoint every five tracks.',
                       textAlign: TextAlign.center,
                     ),
                   ],
@@ -287,16 +347,36 @@ class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
             ),
     );
   }
+
+  static int _unresolvedCount(SpotifyMatchingSnapshot snapshot) {
+    return snapshot.reviewCount + snapshot.unmatchedCount + snapshot.errorCount;
+  }
+
+  static bool _allRemainingUnlocked(SpotifyMatchingSnapshot snapshot) {
+    if (snapshot.nextTrackIndex < 50) return false;
+    final usableAttempts = snapshot.nextTrackIndex - snapshot.errorCount;
+    if (usableAttempts <= 0) return false;
+    final strongOrReview = snapshot.matchedCount + snapshot.reviewCount;
+    final usefulRate = strongOrReview / usableAttempts;
+    final unmatchedRate = snapshot.unmatchedCount / usableAttempts;
+    return usefulRate >= 0.90 && unmatchedRate <= 0.10;
+  }
 }
 
 class _RunControlsCard extends StatelessWidget {
   const _RunControlsCard({
     required this.selectedRunSize,
+    required this.allRemainingValue,
+    required this.remainingCount,
+    required this.allRemainingUnlocked,
     required this.enabled,
     required this.onSelected,
   });
 
   final int selectedRunSize;
+  final int allRemainingValue;
+  final int remainingCount;
+  final bool allRemainingUnlocked;
   final bool enabled;
   final ValueChanged<int> onSelected;
 
@@ -309,12 +389,14 @@ class _RunControlsCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Validation batch size',
+              'How much should run?',
               style: Theme.of(context).textTheme.titleSmall,
             ),
             const SizedBox(height: 6),
-            const Text(
-              'All-remaining mode stays locked until this finder passes the phone test.',
+            Text(
+              allRemainingUnlocked
+                  ? 'The first sample passed the safety gate, so all-remaining mode is available.'
+                  : 'Process at least 50 tracks with a strong real-world match rate to unlock all remaining.',
             ),
             const SizedBox(height: 10),
             Wrap(
@@ -330,6 +412,13 @@ class _RunControlsCard extends StatelessWidget {
                   label: const Text('50 tracks'),
                   selected: selectedRunSize == 50,
                   onSelected: enabled ? (_) => onSelected(50) : null,
+                ),
+                ChoiceChip(
+                  label: Text('All remaining ($remainingCount)'),
+                  selected: selectedRunSize == allRemainingValue,
+                  onSelected: enabled && allRemainingUnlocked
+                      ? (_) => onSelected(allRemainingValue)
+                      : null,
                 ),
               ],
             ),
