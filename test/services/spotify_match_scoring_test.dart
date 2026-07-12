@@ -17,8 +17,88 @@ void main() {
       });
 
       expect(result.disqualified, isFalse);
+      expect(result.automaticEligible, isTrue);
       expect(result.score, greaterThanOrEqualTo(0.90));
       expect(result.reasons, contains('Official or Topic source'));
+    });
+
+    test('accepts a structured YouTube Music song result', () {
+      const input = SpotifyMatchInput(
+        title: 'Lucy in the Sky with Diamonds',
+        artist: 'The Beatles',
+        album: "Sgt. Pepper's Lonely Hearts Club Band",
+      );
+      final result = SpotifyMatchScorer.score(input, {
+        'title': 'Lucy In The Sky With Diamonds',
+        'artist': 'The Beatles',
+        'artists': ['The Beatles'],
+        'album': "Sgt. Pepper's Lonely Hearts Club Band",
+        'sourceType': 'youtube_music_song',
+      });
+
+      expect(result.disqualified, isFalse);
+      expect(result.automaticEligible, isTrue);
+      expect(result.score, greaterThanOrEqualTo(0.90));
+      expect(result.reasons, contains('YouTube Music song result'));
+      expect(result.reasons, contains('Album matches'));
+    });
+
+    test('does not reject collaborations when the primary artist matches', () {
+      const input = SpotifyMatchInput(
+        title: 'Like That',
+        artist: 'Future, Metro Boomin, Kendrick Lamar',
+        album: "WE DON'T TRUST YOU",
+      );
+      final result = SpotifyMatchScorer.score(input, {
+        'title': 'Like That',
+        'artist': 'Future',
+        'artists': ['Future'],
+        'album': "WE DON'T TRUST YOU",
+        'sourceType': 'youtube_music_song',
+      });
+
+      expect(result.disqualified, isFalse);
+      expect(result.primaryArtistScore, greaterThanOrEqualTo(0.95));
+      expect(result.score, greaterThanOrEqualTo(0.80));
+    });
+
+    test('ignores a featured-artist suffix when comparing song titles', () {
+      const input = SpotifyMatchInput(
+        title: 'Song Name (feat. Guest Artist)',
+        artist: 'Main Artist, Guest Artist',
+      );
+      final result = SpotifyMatchScorer.score(input, {
+        'title': 'Song Name',
+        'artists': ['Main Artist', 'Guest Artist'],
+        'sourceType': 'youtube_music_song',
+      });
+
+      expect(result.disqualified, isFalse);
+      expect(result.titleScore, 1);
+      expect(result.artistScore, greaterThanOrEqualTo(0.95));
+    });
+
+    test('uses album identity to prefer the correct release', () {
+      const input = SpotifyMatchInput(
+        title: 'Intro',
+        artist: 'Example Artist',
+        album: 'First Album',
+      );
+      final correct = SpotifyMatchScorer.score(input, {
+        'title': 'Intro',
+        'artists': ['Example Artist'],
+        'album': 'First Album',
+        'sourceType': 'youtube_music_song',
+      });
+      final wrongAlbum = SpotifyMatchScorer.score(input, {
+        'title': 'Intro',
+        'artists': ['Example Artist'],
+        'album': 'Second Album',
+        'sourceType': 'youtube_music_song',
+      });
+
+      expect(correct.score, greaterThan(wrongAlbum.score));
+      expect(correct.albumScore, 1);
     });
 
     test('rejects a long compilation offered as one song', () {
@@ -57,6 +137,7 @@ void main() {
       });
 
       expect(studio.score, greaterThan(live.score));
+      expect(live.automaticEligible, isFalse);
       expect(live.reasons, contains('Alternate version not requested'));
     });
 
@@ -73,6 +154,10 @@ void main() {
       });
 
       expect(result.disqualified, isTrue);
+      expect(
+        result.reasons,
+        contains('Primary artist identity is too weak'),
+      );
     });
   });
 }
