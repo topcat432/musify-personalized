@@ -8,6 +8,8 @@
  */
 
 import 'package:flutter/material.dart';
+import 'package:hive/hive.dart';
+import 'package:musify/screens/spotify_manual_match_page.dart';
 import 'package:musify/services/spotify_track_matching_service.dart';
 
 class SpotifyMatchReviewPage extends StatefulWidget {
@@ -34,13 +36,23 @@ class _SpotifyMatchReviewPageState extends State<SpotifyMatchReviewPage> {
 
   Future<void> _load() async {
     try {
-      final items = await _service.loadReviewItems();
+      final raw = Hive.box('user').get('spotifyMatchResults');
+      final items = raw is List
+          ? raw
+                .whereType<Map>()
+                .map(Map<String, dynamic>.from)
+                .where(_needsResolution)
+                .toList()
+          : <Map<String, dynamic>>[];
+      items.sort((left, right) {
+        final leftRow = int.tryParse(left['sourceRow']?.toString() ?? '') ?? 0;
+        final rightRow = int.tryParse(right['sourceRow']?.toString() ?? '') ?? 0;
+        return leftRow.compareTo(rightRow);
+      });
+
       if (!mounted) return;
       setState(() {
-        // Keep a growable UI-owned copy. Service results may originate from a
-        // fixed-length list, but accepted/rejected rows must disappear from
-        // this screen immediately.
-        _items = List<Map<String, dynamic>>.of(items);
+        _items = items;
         _loading = false;
         _error = null;
       });
@@ -53,7 +65,7 @@ class _SpotifyMatchReviewPageState extends State<SpotifyMatchReviewPage> {
     }
   }
 
-  Future<void> _resolve(
+  Future<void> _resolveSuggested(
     Map<String, dynamic> item, {
     required bool accept,
   }) async {
@@ -78,15 +90,10 @@ class _SpotifyMatchReviewPageState extends State<SpotifyMatchReviewPage> {
         selectedAlternative: selectedAlternative,
       );
       if (!mounted) return;
-
-      // Build a new growable list instead of mutating the list returned by the
-      // service. This avoids Unsupported operation errors from fixed-length
-      // Dart lists while preserving the already-saved review decision.
-      final remainingItems = _items
-          .where((candidate) => _rowKey(candidate) != rowKey)
-          .toList();
       setState(() {
-        _items = remainingItems;
+        _items = _items
+            .where((candidate) => _rowKey(candidate) != rowKey)
+            .toList();
         _selectedAlternativeIndex.remove(rowKey);
       });
     } catch (error) {
@@ -97,13 +104,20 @@ class _SpotifyMatchReviewPageState extends State<SpotifyMatchReviewPage> {
     }
   }
 
+  Future<void> _searchManually(Map<String, dynamic> item) async {
+    final saved = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (_) => SpotifyManualMatchPage(item: item),
+      ),
+    );
+    if (saved == true) await _load();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          _loading ? 'Review uncertain matches' : 'Review (${_items.length})',
-        ),
+        title: Text(_loading ? 'Resolve imported tracks' : 'Resolve (${_items.length})'),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -117,7 +131,7 @@ class _SpotifyMatchReviewPageState extends State<SpotifyMatchReviewPage> {
                     child: Padding(
                       padding: EdgeInsets.all(16),
                       child: Text(
-                        'These tracks were close enough to keep, but not safe enough to accept automatically. Pick the correct source or mark that none of the suggestions are right. Decisions save immediately.',
+                        'Review close suggestions, or search manually when the finder cannot identify the exact recording. Every saved decision is attached to the imported song and persists immediately.',
                       ),
                     ),
                   ),
@@ -127,14 +141,7 @@ class _SpotifyMatchReviewPageState extends State<SpotifyMatchReviewPage> {
                       color: Theme.of(context).colorScheme.errorContainer,
                       child: Padding(
                         padding: const EdgeInsets.all(16),
-                        child: Text(
-                          _error!,
-                          style: TextStyle(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .onErrorContainer,
-                          ),
-                        ),
+                        child: Text(_error!),
                       ),
                     ),
                   ],
@@ -148,7 +155,7 @@ class _SpotifyMatchReviewPageState extends State<SpotifyMatchReviewPage> {
                             Icon(Icons.check_circle_outline, size: 42),
                             SizedBox(height: 10),
                             Text(
-                              'No uncertain matches are waiting right now.',
+                              'Every processed track currently has a resolved source.',
                               textAlign: TextAlign.center,
                             ),
                           ],
@@ -158,23 +165,33 @@ class _SpotifyMatchReviewPageState extends State<SpotifyMatchReviewPage> {
                   ] else
                     for (final item in _items) ...[
                       const SizedBox(height: 12),
-                      _ReviewCard(
+                      _ResolutionCard(
                         item: item,
                         selectedIndex:
                             _selectedAlternativeIndex[_rowKey(item)] ?? 0,
                         busy: _busyRows.contains(_rowKey(item)),
                         onSelected: (index) => setState(
-                          () => _selectedAlternativeIndex[_rowKey(item)] =
-                              index,
+                          () => _selectedAlternativeIndex[_rowKey(item)] = index,
                         ),
-                        onAccept: () => _resolve(item, accept: true),
-                        onReject: () => _resolve(item, accept: false),
+                        onAccept: () =>
+                            _resolveSuggested(item, accept: true),
+                        onReject: () =>
+                            _resolveSuggested(item, accept: false),
+                        onManualSearch: () => _searchManually(item),
                       ),
                     ],
                 ],
               ),
             ),
     );
+  }
+
+  static bool _needsResolution(Map<String, dynamic> item) {
+    final status = item['status'];
+    return status == 'needs_review' ||
+        status == 'unmatched' ||
+        status == 'manual_unmatched' ||
+        status == 'error';
   }
 
   static String _rowKey(Map<String, dynamic> item) =>
@@ -193,14 +210,15 @@ class _SpotifyMatchReviewPageState extends State<SpotifyMatchReviewPage> {
   }
 }
 
-class _ReviewCard extends StatelessWidget {
-  const _ReviewCard({
+class _ResolutionCard extends StatelessWidget {
+  const _ResolutionCard({
     required this.item,
     required this.selectedIndex,
     required this.busy,
     required this.onSelected,
     required this.onAccept,
     required this.onReject,
+    required this.onManualSearch,
   });
 
   final Map<String, dynamic> item;
@@ -209,10 +227,19 @@ class _ReviewCard extends StatelessWidget {
   final ValueChanged<int> onSelected;
   final VoidCallback onAccept;
   final VoidCallback onReject;
+  final VoidCallback onManualSearch;
 
   @override
   Widget build(BuildContext context) {
+    final status = item['status']?.toString() ?? 'unmatched';
     final alternatives = _SpotifyMatchReviewPageState._alternatives(item);
+    final canAcceptSuggestion = status == 'needs_review' && alternatives.isNotEmpty;
+    final reason = item['unmatchedReason']?.toString() ??
+        item['error']?.toString() ??
+        (status == 'manual_unmatched'
+            ? 'Previously marked as having no correct suggestion.'
+            : null);
+
     return Card(
       clipBehavior: Clip.antiAlias,
       child: Padding(
@@ -225,50 +252,59 @@ class _ReviewCard extends StatelessWidget {
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 2),
-            Text(
-              item['sourceArtist']?.toString() ?? 'Unknown artist',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-            if ((item['sourceAlbum']?.toString() ?? '').isNotEmpty) ...[
-              const SizedBox(height: 2),
+            Text(item['sourceArtist']?.toString() ?? 'Unknown artist'),
+            if ((item['sourceAlbum']?.toString() ?? '').isNotEmpty)
               Text(
                 item['sourceAlbum'].toString(),
                 style: Theme.of(context).textTheme.bodySmall,
               ),
+            if (reason != null) ...[
+              const SizedBox(height: 10),
+              Text(reason, style: Theme.of(context).textTheme.bodySmall),
             ],
-            const Divider(height: 24),
-            if (alternatives.isEmpty)
-              const Text('No usable alternatives were saved for this track.')
-            else
+            if (canAcceptSuggestion) ...[
+              const Divider(height: 24),
               for (final entry in alternatives.indexed)
                 _AlternativeTile(
                   alternative: entry.$2,
                   selected: entry.$1 == selectedIndex,
                   onTap: () => onSelected(entry.$1),
                 ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: busy ? null : onReject,
-                    child: const Text('None are correct'),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: FilledButton(
-                    onPressed: busy || alternatives.isEmpty ? null : onAccept,
-                    child: busy
-                        ? const SizedBox.square(
-                            dimension: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('Accept selected'),
-                  ),
-                ),
-              ],
+            ],
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: busy ? null : onManualSearch,
+                icon: const Icon(Icons.manage_search),
+                label: const Text('Search manually'),
+              ),
             ),
+            if (status == 'needs_review') ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: busy ? null : onReject,
+                      child: const Text('None are correct'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: busy || !canAcceptSuggestion ? null : onAccept,
+                      child: busy
+                          ? const SizedBox.square(
+                              dimension: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('Accept selected'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ],
         ),
       ),
@@ -299,10 +335,11 @@ class _AlternativeTile extends StatelessWidget {
         ? (alternative['score'] as num).toDouble()
         : 0.0;
     final reasons = evidence['reasons'] is List
-        ? List<String>.from(
-            (evidence['reasons'] as List).map((reason) => reason.toString()),
-          )
-        : const <String>[];
+        ? (evidence['reasons'] as List)
+            .map((reason) => reason.toString())
+            .take(2)
+            .join(' • ')
+        : '';
 
     return InkWell(
       onTap: onTap,
@@ -339,7 +376,7 @@ class _AlternativeTile extends StatelessWidget {
                   ),
                   const SizedBox(height: 3),
                   Text(
-                    '${(score * 100).round()}% confidence${reasons.isEmpty ? '' : ' • ${reasons.take(2).join(' • ')}'}',
+                    '${(score * 100).round()}% confidence${reasons.isEmpty ? '' : ' • $reasons'}',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ],
