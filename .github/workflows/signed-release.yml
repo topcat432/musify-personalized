@@ -1,0 +1,105 @@
+name: Build signed update APK
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  FLUTTER_VERSION: '3.44.5'
+
+jobs:
+  release:
+    name: Test and build permanently signed APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: '17'
+          cache: gradle
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Validate signing secrets
+        env:
+          MUSIFY_SIGNING_KEY_BASE64: ${{ secrets.MUSIFY_SIGNING_KEY_BASE64 }}
+          MUSIFY_SIGNING_PASSWORD: ${{ secrets.MUSIFY_SIGNING_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$MUSIFY_SIGNING_KEY_BASE64" || {
+            echo "Missing MUSIFY_SIGNING_KEY_BASE64 repository secret."
+            exit 1
+          }
+          test -n "$MUSIFY_SIGNING_PASSWORD" || {
+            echo "Missing MUSIFY_SIGNING_PASSWORD repository secret."
+            exit 1
+          }
+
+      - name: Restore permanent Android signing key
+        env:
+          MUSIFY_SIGNING_KEY_BASE64: ${{ secrets.MUSIFY_SIGNING_KEY_BASE64 }}
+          MUSIFY_SIGNING_PASSWORD: ${{ secrets.MUSIFY_SIGNING_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$MUSIFY_SIGNING_KEY_BASE64" | base64 --decode > android/app/key.jks
+          cat > android/key.properties <<EOF
+          storePassword=$MUSIFY_SIGNING_PASSWORD
+          keyPassword=$MUSIFY_SIGNING_PASSWORD
+          keyAlias=musify-personalized
+          EOF
+          keytool -list \
+            -keystore android/app/key.jks \
+            -storepass "$MUSIFY_SIGNING_PASSWORD" \
+            -alias musify-personalized >/dev/null
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze Dart code
+        run: flutter analyze .
+
+      - name: Run tests
+        run: flutter test
+
+      - name: Build signed release APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          build_number=$((200000 + GITHUB_RUN_NUMBER))
+          flutter build apk \
+            --release \
+            --flavor github \
+            --build-number "$build_number" \
+            --build-name "0.1.${GITHUB_RUN_NUMBER}"
+
+      - name: Verify signed APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk=build/app/outputs/flutter-apk/app-github-release.apk
+          test -f "$apk"
+          jarsigner -verify "$apk" >/dev/null
+          cp "$apk" musify-personalized-update.apk
+
+      - name: Upload signed update APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: musify-personalized-signed-${{ github.run_number }}
+          path: musify-personalized-update.apk
+          if-no-files-found: error
+          retention-days: 30
