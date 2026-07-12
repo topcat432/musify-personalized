@@ -19,8 +19,6 @@ class SpotifyMatchingPage extends StatefulWidget {
 }
 
 class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
-  static const int _allRemaining = -1;
-
   final _service = const SpotifyTrackMatchingService();
   SpotifyMatchingSnapshot? _snapshot;
   bool _loading = true;
@@ -58,10 +56,6 @@ class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
     final snapshotBeforeRun = _snapshot;
     if (snapshotBeforeRun == null || snapshotBeforeRun.isComplete) return;
 
-    final batchSize = _selectedRunSize == _allRemaining
-        ? snapshotBeforeRun.remainingCount
-        : _selectedRunSize;
-
     setState(() {
       _running = true;
       _stopRequested = false;
@@ -70,7 +64,7 @@ class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
 
     try {
       final snapshot = await _service.matchNextBatch(
-        batchSize: batchSize,
+        batchSize: _selectedRunSize,
         shouldStop: () => _stopRequested,
         onProgress: (progress) {
           if (mounted) setState(() => _snapshot = progress);
@@ -101,6 +95,42 @@ class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
     await _load();
   }
 
+  Future<void> _restartMatching() async {
+    if (_running) return;
+    final approved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Restart matching?'),
+        content: const Text(
+          'This clears the current staged matching results and starts again with the newest finder. Your imported CSV remains saved.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Restart'),
+          ),
+        ],
+      ),
+    );
+    if (approved != true) return;
+
+    try {
+      final snapshot = await _service.restartMatching();
+      if (!mounted) return;
+      setState(() {
+        _snapshot = snapshot;
+        _error = null;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _error = error.toString());
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final snapshot = _snapshot;
@@ -120,13 +150,13 @@ class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
                         Row(
                           children: [
                             Icon(
-                              Icons.manage_search,
+                              Icons.library_music_outlined,
                               color: Theme.of(context).colorScheme.primary,
                             ),
                             const SizedBox(width: 10),
                             Expanded(
                               child: Text(
-                                'Safe track matching',
+                                'Catalog-first matching',
                                 style: Theme.of(context).textTheme.titleMedium,
                               ),
                             ),
@@ -134,11 +164,11 @@ class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
                         ),
                         const SizedBox(height: 12),
                         const Text(
-                          'Each imported record is compared against YouTube results using title, artist, duration, source quality, and long-form-content checks. Strong matches are staged automatically; uncertain choices can be reviewed as soon as they appear.',
+                          'The finder now searches structured YouTube Music song results first, then uses ordinary YouTube only as a fallback. It compares the title, primary and featured artists, album, duration, version, and source reliability.',
                         ),
                         const SizedBox(height: 10),
                         const Text(
-                          'Progress is saved every five tracks. Nothing is added to Favorites or playlists during this validation pass.',
+                          'This remains a validation pass. Run only 25 or 50 tracks at a time until the real-world match rate is proven. Nothing is added to Favorites yet.',
                         ),
                       ],
                     ),
@@ -165,7 +195,7 @@ class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
                     child: Padding(
                       padding: EdgeInsets.all(16),
                       child: Text(
-                        'No saved Spotify import was found. Return to the importer and save a CSV first.',
+                        'No saved Spotify import was found. Return to the importer and save the CSV first.',
                       ),
                     ),
                   )
@@ -174,8 +204,6 @@ class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
                   const SizedBox(height: 12),
                   _RunControlsCard(
                     selectedRunSize: _selectedRunSize,
-                    allRemainingValue: _allRemaining,
-                    remainingCount: snapshot.remainingCount,
                     enabled: !_running && !snapshot.isComplete,
                     onSelected: (value) =>
                         setState(() => _selectedRunSize = value),
@@ -203,8 +231,6 @@ class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
                             ? _stopRequested
                                   ? 'Pausing after this track…'
                                   : 'Pause safely'
-                            : _selectedRunSize == _allRemaining
-                            ? 'Match all ${snapshot.remainingCount} remaining'
                             : 'Match next $_selectedRunSize tracks',
                       ),
                     ),
@@ -220,22 +246,23 @@ class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
                       label: Text(
                         snapshot.reviewCount == 0
                             ? 'No uncertain matches waiting'
-                            : 'Review ${snapshot.reviewCount} uncertain matches now',
+                            : 'Review ${snapshot.reviewCount} uncertain matches',
                       ),
                     ),
                   ),
                   if (_running && snapshot.reviewCount > 0) ...[
                     const SizedBox(height: 8),
                     const Text(
-                      'Tap Pause safely, then open the review queue. Matching resumes from the saved checkpoint afterward.',
+                      'Pause safely before opening the review queue. Matching resumes from the saved checkpoint afterward.',
                       textAlign: TextAlign.center,
                     ),
                   ],
-                  if (_selectedRunSize == _allRemaining && !_running) ...[
-                    const SizedBox(height: 8),
-                    const Text(
-                      'All remaining may take a while. Keep the app open; you can pause safely at any time.',
-                      textAlign: TextAlign.center,
+                  if (snapshot.nextTrackIndex > 0 && !_running) ...[
+                    const SizedBox(height: 10),
+                    TextButton.icon(
+                      onPressed: _restartMatching,
+                      icon: const Icon(Icons.restart_alt),
+                      label: const Text('Restart with the newest matcher'),
                     ),
                   ],
                   if (snapshot.recentResults.isNotEmpty) ...[
@@ -265,15 +292,11 @@ class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
 class _RunControlsCard extends StatelessWidget {
   const _RunControlsCard({
     required this.selectedRunSize,
-    required this.allRemainingValue,
-    required this.remainingCount,
     required this.enabled,
     required this.onSelected,
   });
 
   final int selectedRunSize;
-  final int allRemainingValue;
-  final int remainingCount;
   final bool enabled;
   final ValueChanged<int> onSelected;
 
@@ -286,8 +309,12 @@ class _RunControlsCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'How much should run?',
+              'Validation batch size',
               style: Theme.of(context).textTheme.titleSmall,
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'All-remaining mode stays locked until this finder passes the phone test.',
             ),
             const SizedBox(height: 10),
             Wrap(
@@ -295,21 +322,14 @@ class _RunControlsCard extends StatelessWidget {
               runSpacing: 8,
               children: [
                 ChoiceChip(
-                  label: const Text('25'),
+                  label: const Text('25 tracks'),
                   selected: selectedRunSize == 25,
                   onSelected: enabled ? (_) => onSelected(25) : null,
                 ),
                 ChoiceChip(
-                  label: const Text('100'),
-                  selected: selectedRunSize == 100,
-                  onSelected: enabled ? (_) => onSelected(100) : null,
-                ),
-                ChoiceChip(
-                  label: Text('All remaining ($remainingCount)'),
-                  selected: selectedRunSize == allRemainingValue,
-                  onSelected: enabled
-                      ? (_) => onSelected(allRemainingValue)
-                      : null,
+                  label: const Text('50 tracks'),
+                  selected: selectedRunSize == 50,
+                  onSelected: enabled ? (_) => onSelected(50) : null,
                 ),
               ],
             ),
@@ -427,6 +447,10 @@ class _ResultTile extends StatelessWidget {
 
     final candidateTitle = candidate['title']?.toString();
     final candidateArtist = candidate['artist']?.toString();
+    final sourceLabel = candidate['sourceType'] == 'youtube_music_song'
+        ? 'YouTube Music'
+        : 'YouTube fallback';
+    final unmatchedReason = result['unmatchedReason']?.toString();
 
     return ListTile(
       leading: Icon(icon),
@@ -437,12 +461,12 @@ class _ResultTile extends StatelessWidget {
       ),
       subtitle: Text(
         candidateTitle == null
-            ? '${result['sourceArtist'] ?? ''} • $label'
-            : '$candidateArtist — $candidateTitle\n$label • ${(score * 100).round()}%',
-        maxLines: 2,
+            ? '${result['sourceArtist'] ?? ''} • $label${unmatchedReason == null ? '' : '\n$unmatchedReason'}'
+            : '$candidateArtist — $candidateTitle\n$label • ${(score * 100).round()}% • $sourceLabel',
+        maxLines: candidateTitle == null && unmatchedReason != null ? 3 : 2,
         overflow: TextOverflow.ellipsis,
       ),
-      isThreeLine: candidateTitle != null,
+      isThreeLine: candidateTitle != null || unmatchedReason != null,
     );
   }
 }
