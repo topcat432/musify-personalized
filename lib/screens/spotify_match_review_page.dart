@@ -37,18 +37,20 @@ class _SpotifyMatchReviewPageState extends State<SpotifyMatchReviewPage> {
   Future<void> _load() async {
     try {
       final raw = Hive.box('user').get('spotifyMatchResults');
-      final items = raw is List
+      final items = (raw is List
           ? raw
                 .whereType<Map>()
                 .map(Map<String, dynamic>.from)
                 .where(_needsResolution)
                 .toList()
-          : <Map<String, dynamic>>[];
-      items.sort((left, right) {
-        final leftRow = int.tryParse(left['sourceRow']?.toString() ?? '') ?? 0;
-        final rightRow = int.tryParse(right['sourceRow']?.toString() ?? '') ?? 0;
-        return leftRow.compareTo(rightRow);
-      });
+          : <Map<String, dynamic>>[])
+        ..sort((left, right) {
+          final leftRow =
+              int.tryParse(left['sourceRow']?.toString() ?? '') ?? 0;
+          final rightRow =
+              int.tryParse(right['sourceRow']?.toString() ?? '') ?? 0;
+          return leftRow.compareTo(rightRow);
+        });
 
       if (!mounted) return;
       setState(() {
@@ -117,7 +119,9 @@ class _SpotifyMatchReviewPageState extends State<SpotifyMatchReviewPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(_loading ? 'Resolve imported tracks' : 'Resolve (${_items.length})'),
+        title: Text(
+          _loading ? 'Resolve imported tracks' : 'Resolve (${_items.length})',
+        ),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -171,7 +175,8 @@ class _SpotifyMatchReviewPageState extends State<SpotifyMatchReviewPage> {
                             _selectedAlternativeIndex[_rowKey(item)] ?? 0,
                         busy: _busyRows.contains(_rowKey(item)),
                         onSelected: (index) => setState(
-                          () => _selectedAlternativeIndex[_rowKey(item)] = index,
+                          () =>
+                              _selectedAlternativeIndex[_rowKey(item)] = index,
                         ),
                         onAccept: () =>
                             _resolveSuggested(item, accept: true),
@@ -233,7 +238,8 @@ class _ResolutionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final status = item['status']?.toString() ?? 'unmatched';
     final alternatives = _SpotifyMatchReviewPageState._alternatives(item);
-    final canAcceptSuggestion = status == 'needs_review' && alternatives.isNotEmpty;
+    final canAcceptSuggestion =
+        status == 'needs_review' && alternatives.isNotEmpty;
     final reason = item['unmatchedReason']?.toString() ??
         item['error']?.toString() ??
         (status == 'manual_unmatched'
