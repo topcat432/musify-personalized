@@ -11,6 +11,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
+import 'package:just_audio/just_audio.dart';
 import 'package:musify/services/common_services.dart';
 import 'package:musify/services/data_manager.dart';
 import 'package:musify/services/spotify_match_scoring.dart';
@@ -29,11 +30,18 @@ class SpotifyManualMatchPage extends StatefulWidget {
 class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
   static final YoutubeMusicExplode _youtubeMusic = YoutubeMusicExplode();
   static const Duration _timeout = Duration(seconds: 18);
+  static const Duration _previewLength = Duration(seconds: 30);
 
+  final AudioPlayer _previewPlayer = AudioPlayer();
   late final TextEditingController _queryController;
+  StreamSubscription<PlayerState>? _playerStateSubscription;
+  Timer? _previewTimer;
   List<Map<String, dynamic>> _results = [];
   bool _searching = false;
   bool _saving = false;
+  bool _previewPlaying = false;
+  String? _previewingId;
+  String? _previewLoadingId;
   String? _error;
 
   @override
@@ -42,11 +50,25 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
     final artist = widget.item['sourceArtist']?.toString().trim() ?? '';
     final title = widget.item['sourceTitle']?.toString().trim() ?? '';
     _queryController = TextEditingController(text: '$artist $title'.trim());
+    _playerStateSubscription = _previewPlayer.playerStateStream.listen((state) {
+      if (!mounted) return;
+      final completed = state.processingState == ProcessingState.completed;
+      setState(() {
+        _previewPlaying = state.playing && !completed;
+        if (completed) {
+          _previewingId = null;
+          _previewLoadingId = null;
+        }
+      });
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) => _search());
   }
 
   @override
   void dispose() {
+    _previewTimer?.cancel();
+    _playerStateSubscription?.cancel();
+    unawaited(_previewPlayer.dispose());
     _queryController.dispose();
     super.dispose();
   }
@@ -55,6 +77,8 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
     final query = _queryController.text.trim();
     if (query.isEmpty || _searching) return;
 
+    await _stopPreview();
+    if (!mounted) return;
     setState(() {
       _searching = true;
       _error = null;
@@ -135,11 +159,89 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
     }
   }
 
+  Future<void> _togglePreview(Map<String, dynamic> result) async {
+    if (_saving) return;
+    final candidate = result['candidate'];
+    if (candidate is! Map) return;
+    final songId = candidate['ytid']?.toString() ?? '';
+    if (songId.isEmpty || _previewLoadingId == songId) return;
+
+    if (_previewingId == songId) {
+      if (_previewPlaying) {
+        _previewTimer?.cancel();
+        await _previewPlayer.pause();
+      } else {
+        await _previewPlayer.play();
+        _armPreviewTimer();
+      }
+      return;
+    }
+
+    await _stopPreview();
+    if (!mounted) return;
+    setState(() {
+      _previewLoadingId = songId;
+      _error = null;
+    });
+
+    try {
+      final streamUrl = await fetchSongStreamUrl(songId, false);
+      if (streamUrl == null || streamUrl.isEmpty) {
+        throw StateError('No playable audio stream was found for this result.');
+      }
+
+      await _previewPlayer.setUrl(streamUrl);
+      final durationSeconds = _asInt(candidate['duration']);
+      final previewStart = durationSeconds != null && durationSeconds > 75
+          ? const Duration(seconds: 20)
+          : Duration.zero;
+      if (previewStart > Duration.zero) {
+        await _previewPlayer.seek(previewStart);
+      }
+      if (!mounted) return;
+      setState(() {
+        _previewingId = songId;
+        _previewLoadingId = null;
+      });
+      await _previewPlayer.play();
+      _armPreviewTimer();
+    } catch (error) {
+      await _stopPreview();
+      if (!mounted) return;
+      setState(() => _error = 'Preview failed: $error');
+    }
+  }
+
+  void _armPreviewTimer() {
+    _previewTimer?.cancel();
+    _previewTimer = Timer(_previewLength, () {
+      unawaited(_stopPreview());
+    });
+  }
+
+  Future<void> _stopPreview() async {
+    _previewTimer?.cancel();
+    _previewTimer = null;
+    try {
+      await _previewPlayer.stop();
+    } catch (_) {
+      // A failed or already-disposed player does not need further recovery.
+    }
+    if (!mounted) return;
+    setState(() {
+      _previewingId = null;
+      _previewLoadingId = null;
+      _previewPlaying = false;
+    });
+  }
+
   Future<void> _save(Map<String, dynamic> result) async {
     if (_saving) return;
     final candidate = result['candidate'];
     if (candidate is! Map) return;
 
+    await _stopPreview();
+    if (!mounted) return;
     setState(() {
       _saving = true;
       _error = null;
@@ -261,13 +363,26 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
                 ),
               ),
             )
-          else
+          else ...[
+            const Padding(
+              padding: EdgeInsets.only(bottom: 8),
+              child: Text(
+                'Preview plays up to 30 seconds and stops automatically. Listen before saving when titles or versions are ambiguous.',
+              ),
+            ),
             for (final result in _results)
               _ManualResultTile(
                 result: result,
                 enabled: !_saving,
+                previewLoading: _previewLoadingId ==
+                    (result['candidate'] as Map)['ytid']?.toString(),
+                previewPlaying: _previewPlaying &&
+                    _previewingId ==
+                        (result['candidate'] as Map)['ytid']?.toString(),
+                onPreview: () => _togglePreview(result),
                 onUse: () => _save(result),
               ),
+          ],
         ],
       ),
     );
@@ -304,11 +419,17 @@ class _ManualResultTile extends StatelessWidget {
   const _ManualResultTile({
     required this.result,
     required this.enabled,
+    required this.previewLoading,
+    required this.previewPlaying,
+    required this.onPreview,
     required this.onUse,
   });
 
   final Map<String, dynamic> result;
   final bool enabled;
+  final bool previewLoading;
+  final bool previewPlaying;
+  final VoidCallback onPreview;
   final VoidCallback onUse;
 
   @override
@@ -327,18 +448,53 @@ class _ManualResultTile extends StatelessWidget {
         : 'YouTube';
 
     return Card(
-      child: ListTile(
-        contentPadding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
-        title: Text(candidate['title']?.toString() ?? 'Unknown result'),
-        subtitle: Text(
-          '${candidate['artist'] ?? candidate['videoAuthor'] ?? 'Unknown artist'}\n${score.round()}% • $source${reasons.isEmpty ? '' : ' • $reasons'}',
-          maxLines: 3,
-          overflow: TextOverflow.ellipsis,
-        ),
-        isThreeLine: true,
-        trailing: FilledButton(
-          onPressed: enabled ? onUse : null,
-          child: const Text('Use'),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              candidate['title']?.toString() ?? 'Unknown result',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 3),
+            Text(
+              candidate['artist']?.toString() ??
+                  candidate['videoAuthor']?.toString() ??
+                  'Unknown artist',
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '${score.round()}% • $source${reasons.isEmpty ? '' : ' • $reasons'}',
+              style: Theme.of(context).textTheme.bodySmall,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: enabled && !previewLoading ? onPreview : null,
+                    icon: previewLoading
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Icon(previewPlaying ? Icons.pause : Icons.play_arrow),
+                    label: Text(previewPlaying ? 'Pause preview' : 'Preview'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: enabled ? onUse : null,
+                    child: const Text('Use this match'),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
