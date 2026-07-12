@@ -11,11 +11,15 @@ class SpotifyMatchInput {
   const SpotifyMatchInput({
     required this.title,
     required this.artist,
+    this.album = '',
+    this.isrc = '',
     this.durationMs,
   });
 
   final String title;
   final String artist;
+  final String album;
+  final String isrc;
   final int? durationMs;
 }
 
@@ -23,8 +27,11 @@ class SpotifyMatchScore {
   const SpotifyMatchScore({
     required this.score,
     required this.disqualified,
+    required this.automaticEligible,
     required this.titleScore,
     required this.artistScore,
+    required this.primaryArtistScore,
+    required this.albumScore,
     required this.durationScore,
     required this.sourceScore,
     required this.reasons,
@@ -32,8 +39,11 @@ class SpotifyMatchScore {
 
   final double score;
   final bool disqualified;
+  final bool automaticEligible;
   final double titleScore;
   final double artistScore;
+  final double primaryArtistScore;
+  final double albumScore;
   final double durationScore;
   final double sourceScore;
   final List<String> reasons;
@@ -41,8 +51,11 @@ class SpotifyMatchScore {
   Map<String, dynamic> toJson() => {
     'score': score,
     'disqualified': disqualified,
+    'automaticEligible': automaticEligible,
     'titleScore': titleScore,
     'artistScore': artistScore,
+    'primaryArtistScore': primaryArtistScore,
+    'albumScore': albumScore,
     'durationScore': durationScore,
     'sourceScore': sourceScore,
     'reasons': reasons,
@@ -86,6 +99,14 @@ class SpotifyMatchScorer {
     'clean version',
   ];
 
+  static const _masteringVariantTerms = <String>[
+    'remaster',
+    'remastered',
+    'anniversary edition',
+    'mono mix',
+    'stereo mix',
+  ];
+
   static const _noiseTokens = <String>{
     'official',
     'audio',
@@ -98,6 +119,7 @@ class SpotifyMatchScorer {
     'hd',
     'hq',
     '4k',
+    'explicit',
   };
 
   static SpotifyMatchScore score(
@@ -105,29 +127,27 @@ class SpotifyMatchScorer {
     Map<String, dynamic> candidate,
   ) {
     final candidateTitle = candidate['title']?.toString() ?? '';
-    final candidateArtist = candidate['artist']?.toString() ?? '';
+    final candidateAlbum = candidate['album']?.toString() ?? '';
     final videoAuthor = candidate['videoAuthor']?.toString() ?? '';
     final durationSeconds = _asInt(candidate['duration']);
+    final candidateArtists = _candidateArtists(candidate);
 
-    final normalizedSourceTitle = _normalize(input.title);
-    final normalizedCandidateTitle = _normalize(candidateTitle);
-    final normalizedSourceArtist = _normalize(input.artist);
-    final normalizedCandidateArtist = _normalize(
-      '$candidateArtist $videoAuthor',
-    );
-
+    final normalizedSourceTitle = _normalizeTitle(input.title);
+    final normalizedCandidateTitle = _normalizeTitle(candidateTitle);
     final titleScore = _textSimilarity(
       normalizedSourceTitle,
       normalizedCandidateTitle,
     );
-    final artistScore = _textSimilarity(
-      normalizedSourceArtist,
-      normalizedCandidateArtist,
-    );
+
+    final artistMatch = _artistSimilarity(input.artist, candidateArtists);
+    final artistScore = artistMatch.$1;
+    final primaryArtistScore = artistMatch.$2;
+    final albumScore = _optionalTextScore(input.album, candidateAlbum);
     final durationScore = _durationScore(input.durationMs, durationSeconds);
-    final sourceScore = _sourceScore(videoAuthor);
+    final sourceScore = _sourceScore(candidate, videoAuthor);
 
     final combinedText = _normalize('$candidateTitle $videoAuthor');
+    final normalizedSourceTitleFull = _normalize(input.title);
     final reasons = <String>[];
     var disqualified = false;
     var penalty = 0.0;
@@ -138,16 +158,37 @@ class SpotifyMatchScorer {
       reasons.add('Strong title match');
     }
 
-    if (artistScore >= 0.90) {
-      reasons.add('Strong artist match');
+    if (primaryArtistScore >= 0.90) {
+      reasons.add('Primary artist matches');
+    }
+    if (artistScore >= 0.88 && _splitArtists(input.artist).length > 1) {
+      reasons.add('Collaborating artists match');
+    }
+
+    if (albumScore >= 0.90 &&
+        input.album.trim().isNotEmpty &&
+        candidateAlbum.trim().isNotEmpty) {
+      reasons.add('Album matches');
     }
 
     if (durationScore >= 0.90 && input.durationMs != null) {
       reasons.add('Duration closely matches');
     }
 
-    if (sourceScore >= 0.90) {
-      reasons.add('Official or Topic source');
+    if (sourceScore >= 0.95) {
+      reasons.add(
+        candidate['sourceType'] == 'youtube_music_song'
+            ? 'YouTube Music song result'
+            : 'Official or Topic source',
+      );
+    }
+
+    final sourceIsrc = _normalizeIsrc(input.isrc);
+    final candidateIsrc = _normalizeIsrc(candidate['isrc']?.toString() ?? '');
+    var isrcBonus = 0.0;
+    if (sourceIsrc.isNotEmpty && candidateIsrc == sourceIsrc) {
+      isrcBonus = 0.08;
+      reasons.add('ISRC exactly matches');
     }
 
     final hasLongFormTerm = _longFormTerms.any(combinedText.contains);
@@ -172,39 +213,134 @@ class SpotifyMatchScorer {
     }
 
     final sourceMentionsAlternate = _alternateVersionTerms.any(
-      normalizedSourceTitle.contains,
+      normalizedSourceTitleFull.contains,
     );
     final candidateMentionsAlternate = _alternateVersionTerms.any(
       combinedText.contains,
     );
     if (candidateMentionsAlternate && !sourceMentionsAlternate) {
-      penalty += 0.12;
+      penalty += 0.14;
       reasons.add('Alternate version not requested');
     }
 
-    if (titleScore < 0.45 || artistScore < 0.30) {
-      disqualified = true;
-      reasons.add('Title or artist identity is too weak');
+    final sourceMentionsMasteringVariant = _masteringVariantTerms.any(
+      normalizedSourceTitleFull.contains,
+    );
+    final candidateMentionsMasteringVariant = _masteringVariantTerms.any(
+      combinedText.contains,
+    );
+    if (candidateMentionsMasteringVariant && !sourceMentionsMasteringVariant) {
+      penalty += 0.05;
+      reasons.add('Different mastering or mix version');
     }
 
-    final weighted = titleScore * 0.48 +
-        artistScore * 0.32 +
-        durationScore * 0.15 +
-        sourceScore * 0.05 -
+    if (titleScore < 0.38) {
+      disqualified = true;
+      reasons.add('Song title identity is too weak');
+    }
+    if (primaryArtistScore < 0.35 && artistScore < 0.42) {
+      disqualified = true;
+      reasons.add('Primary artist identity is too weak');
+    }
+
+    final weighted = titleScore * 0.40 +
+        artistScore * 0.28 +
+        albumScore * 0.10 +
+        durationScore * 0.12 +
+        sourceScore * 0.10 +
+        isrcBonus -
         penalty;
     final finalScore = disqualified ? 0.0 : weighted.clamp(0.0, 1.0);
+    final automaticEligible = !disqualified &&
+        !candidateMentionsAlternate &&
+        titleScore >= 0.82 &&
+        primaryArtistScore >= 0.72 &&
+        finalScore >= 0.86;
 
     if (reasons.isEmpty) reasons.add('Loose metadata match');
 
     return SpotifyMatchScore(
       score: finalScore,
       disqualified: disqualified,
+      automaticEligible: automaticEligible,
       titleScore: titleScore,
       artistScore: artistScore,
+      primaryArtistScore: primaryArtistScore,
+      albumScore: albumScore,
       durationScore: durationScore,
       sourceScore: sourceScore,
       reasons: List.unmodifiable(reasons),
     );
+  }
+
+  static List<String> _candidateArtists(Map<String, dynamic> candidate) {
+    final result = <String>[];
+    final seen = <String>{};
+
+    void add(String? raw) {
+      if (raw == null) return;
+      for (final artist in _splitArtists(_cleanChannelArtist(raw))) {
+        final normalized = _normalize(artist);
+        if (normalized.isNotEmpty && seen.add(normalized)) result.add(artist);
+      }
+    }
+
+    final structured = candidate['artists'];
+    if (structured is List) {
+      for (final artist in structured) {
+        add(artist?.toString());
+      }
+    }
+    add(candidate['artist']?.toString());
+    add(candidate['videoAuthor']?.toString());
+    return result;
+  }
+
+  static (double, double) _artistSimilarity(
+    String source,
+    List<String> candidates,
+  ) {
+    final expected = _splitArtists(source);
+    if (expected.isEmpty || candidates.isEmpty) return (0.0, 0.0);
+
+    double bestAgainst(String artist) {
+      var best = 0.0;
+      for (final candidate in candidates) {
+        final similarity = _textSimilarity(
+          _normalize(artist),
+          _normalize(candidate),
+        );
+        if (similarity > best) best = similarity;
+      }
+      return best;
+    }
+
+    final primary = bestAgainst(expected.first);
+    final coverage = expected.map(bestAgainst).reduce((a, b) => a + b) /
+        expected.length;
+    return ((primary * 0.65 + coverage * 0.35).clamp(0.0, 1.0), primary);
+  }
+
+  static List<String> _splitArtists(String value) {
+    final separated = value
+        .replaceAll(
+          RegExp(r'\s+(?:feat(?:uring)?|ft)\.?\s+', caseSensitive: false),
+          ',',
+        )
+        .replaceAll(RegExp(r'\s+[xX]\s+'), ',');
+    return separated
+        .split(RegExp(r'\s*[,;]\s*'))
+        .map((artist) => artist.trim())
+        .where((artist) => artist.isNotEmpty)
+        .toList(growable: false);
+  }
+
+  static String _cleanChannelArtist(String value) {
+    return value
+        .replaceAll(RegExp(r'\s*-\s*topic\s*$', caseSensitive: false), '')
+        .replaceAll(RegExp(r'\s+vevo\s*$', caseSensitive: false), '')
+        .replaceAll(RegExp(r'\s+official\s*$', caseSensitive: false), '')
+        .trim();
   }
 
   static int? _asInt(dynamic value) {
@@ -226,12 +362,21 @@ class SpotifyMatchScorer {
     return 0;
   }
 
-  static double _sourceScore(String author) {
+  static double _optionalTextScore(String source, String candidate) {
+    if (source.trim().isEmpty || candidate.trim().isEmpty) return 0.5;
+    return _textSimilarity(_normalize(source), _normalize(candidate));
+  }
+
+  static double _sourceScore(
+    Map<String, dynamic> candidate,
+    String author,
+  ) {
+    if (candidate['sourceType'] == 'youtube_music_song') return 1;
     final normalized = _normalize(author);
-    if (normalized.contains('topic')) return 1;
-    if (normalized.contains('vevo')) return 0.95;
-    if (normalized.contains('official')) return 0.88;
-    return 0.5;
+    if (normalized.contains('topic')) return 0.96;
+    if (normalized.contains('vevo')) return 0.92;
+    if (normalized.contains('official')) return 0.85;
+    return 0.55;
   }
 
   static double _textSimilarity(String left, String right) {
@@ -245,16 +390,18 @@ class SpotifyMatchScorer {
     final intersection = leftTokens.intersection(rightTokens).length;
     final union = leftTokens.union(rightTokens).length;
     final jaccard = union == 0 ? 0.0 : intersection / union;
+    final leftCoverage = intersection / leftTokens.length;
+    final rightCoverage = intersection / rightTokens.length;
+    final balancedCoverage = (leftCoverage + rightCoverage) / 2;
 
     final shorter = left.length <= right.length ? left : right;
     final longer = left.length > right.length ? left : right;
     final containment = longer.contains(shorter) &&
-            shorter.length >= (longer.length * 0.60)
+            shorter.length >= (longer.length * 0.55)
         ? 0.94
         : 0.0;
 
-    final coverage = intersection / leftTokens.length;
-    return [jaccard * 0.65 + coverage * 0.35, containment]
+    return [jaccard * 0.55 + balancedCoverage * 0.45, containment]
         .reduce((a, b) => a > b ? a : b)
         .clamp(0.0, 1.0);
   }
@@ -264,6 +411,30 @@ class SpotifyMatchScorer {
         .split(' ')
         .where((token) => token.length > 1 && !_noiseTokens.contains(token))
         .toSet();
+  }
+
+  static String _normalizeTitle(String value) {
+    return _normalize(
+      value
+          .replaceAll(
+            RegExp(
+              r'[\(\[]\s*(?:feat(?:uring)?|ft)\.?[^\)\]]*[\)\]]',
+              caseSensitive: false,
+            ),
+            ' ',
+          )
+          .replaceAll(
+            RegExp(
+              r'\s+(?:feat(?:uring)?|ft)\.?\s+.+$',
+              caseSensitive: false,
+            ),
+            ' ',
+          ),
+    );
+  }
+
+  static String _normalizeIsrc(String value) {
+    return value.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
   }
 
   static String _normalize(String value) {
