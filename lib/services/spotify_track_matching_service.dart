@@ -37,13 +37,14 @@ class SpotifyMatchingSnapshot {
 
   bool get hasImport => totalTracks > 0;
   bool get isComplete => totalTracks > 0 && nextTrackIndex >= totalTracks;
+  int get remainingCount => (totalTracks - nextTrackIndex).clamp(0, totalTracks);
   double get progress => totalTracks == 0 ? 0 : nextTrackIndex / totalTracks;
 }
 
 class SpotifyTrackMatchingService {
   const SpotifyTrackMatchingService();
 
-  static const int defaultBatchSize = 25;
+  static const int defaultBatchSize = 100;
   static const double automaticMatchThreshold = 0.90;
   static const double reviewThreshold = 0.70;
 
@@ -52,6 +53,68 @@ class SpotifyTrackMatchingService {
     final tracks = _readMaps(box.get('spotifyImportTracks'));
     final results = _readMaps(box.get('spotifyMatchResults'));
     final metadata = _readMap(box.get('spotifyImportMetadata'));
+    return _snapshot(tracks, results, metadata);
+  }
+
+  Future<List<Map<String, dynamic>>> loadReviewItems() async {
+    final results = _readMaps(Hive.box('user').get('spotifyMatchResults'));
+    final reviewItems = results
+        .where((result) => result['status'] == 'needs_review')
+        .toList(growable: false);
+    reviewItems.sort((left, right) {
+      final leftRow = _asInt(left['sourceRow']) ?? 0;
+      final rightRow = _asInt(right['sourceRow']) ?? 0;
+      return leftRow.compareTo(rightRow);
+    });
+    return reviewItems;
+  }
+
+  Future<SpotifyMatchingSnapshot> resolveReviewItem({
+    required Object? sourceRow,
+    required bool accept,
+    Map<String, dynamic>? selectedAlternative,
+  }) async {
+    final box = Hive.box('user');
+    final tracks = _readMaps(box.get('spotifyImportTracks'));
+    final results = _readMaps(box.get('spotifyMatchResults'));
+    final metadata = _readMap(box.get('spotifyImportMetadata'));
+
+    final resultIndex = results.indexWhere(
+      (result) =>
+          result['sourceRow']?.toString() == sourceRow?.toString() &&
+          result['status'] == 'needs_review',
+    );
+    if (resultIndex == -1) {
+      return _snapshot(tracks, results, metadata);
+    }
+
+    final updated = Map<String, dynamic>.from(results[resultIndex]);
+    if (accept) {
+      final candidate = selectedAlternative?['candidate'];
+      if (candidate is! Map) {
+        throw StateError('The selected match is no longer available.');
+      }
+      updated
+        ..['status'] = 'manually_matched'
+        ..['score'] = _asDouble(selectedAlternative?['score']) ?? 0.0
+        ..['bestCandidate'] = Map<String, dynamic>.from(candidate)
+        ..['matchEvidence'] = selectedAlternative?['evidence']
+        ..['reviewDecision'] = 'accepted';
+    } else {
+      updated
+        ..['status'] = 'manual_unmatched'
+        ..['score'] = 0.0
+        ..['bestCandidate'] = null
+        ..['matchEvidence'] = null
+        ..['reviewDecision'] = 'no_correct_match';
+    }
+    updated['reviewedAt'] = DateTime.now().toUtc().toIso8601String();
+    results[resultIndex] = updated;
+
+    final nextIndex = (_asInt(metadata['nextTrackIndex']) ?? results.length)
+        .clamp(0, tracks.length)
+        .toInt();
+    await _checkpoint(results, metadata, nextIndex, tracks.length);
     return _snapshot(tracks, results, metadata);
   }
 
@@ -68,12 +131,15 @@ class SpotifyTrackMatchingService {
     if (tracks.isEmpty) return _snapshot(tracks, results, metadata);
 
     var nextIndex = _asInt(metadata['nextTrackIndex']) ?? results.length;
-    nextIndex = nextIndex.clamp(0, tracks.length);
+    nextIndex = nextIndex.clamp(0, tracks.length).toInt();
     if (results.length > nextIndex) {
       results.removeRange(nextIndex, results.length);
     }
 
-    final stopIndex = (nextIndex + batchSize).clamp(0, tracks.length);
+    final safeBatchSize = batchSize <= 0 ? tracks.length : batchSize;
+    final stopIndex = (nextIndex + safeBatchSize)
+        .clamp(0, tracks.length)
+        .toInt();
     metadata['matchingStatus'] = 'running';
     await _checkpoint(results, metadata, nextIndex, tracks.length);
 
@@ -111,7 +177,7 @@ class SpotifyTrackMatchingService {
 
       onProgress?.call(_snapshot(tracks, results, metadata));
       if (nextIndex < stopIndex) {
-        await Future<void>.delayed(const Duration(milliseconds: 300));
+        await Future<void>.delayed(const Duration(milliseconds: 200));
       }
     }
 
@@ -213,11 +279,11 @@ class SpotifyTrackMatchingService {
     int nextIndex,
     int totalTracks,
   ) async {
-    metadata['matchingVersion'] = 1;
+    metadata['matchingVersion'] = 2;
     metadata['nextTrackIndex'] = nextIndex;
-    metadata['matchedCount'] = _count(results, 'matched');
+    metadata['matchedCount'] = results.where(_isMatched).length;
     metadata['reviewCount'] = _count(results, 'needs_review');
-    metadata['unmatchedCount'] = _count(results, 'unmatched');
+    metadata['unmatchedCount'] = results.where(_isUnmatched).length;
     metadata['errorCount'] = _count(results, 'error');
     metadata['validTrackCount'] = totalTracks;
     metadata['lastMatchingCheckpointAt'] = DateTime.now()
@@ -238,17 +304,28 @@ class SpotifyTrackMatchingService {
     Map<String, dynamic> metadata,
   ) {
     final nextIndex = (_asInt(metadata['nextTrackIndex']) ?? results.length)
-        .clamp(0, tracks.length);
+        .clamp(0, tracks.length)
+        .toInt();
     return SpotifyMatchingSnapshot(
       totalTracks: tracks.length,
       nextTrackIndex: nextIndex,
-      matchedCount: _count(results, 'matched'),
+      matchedCount: results.where(_isMatched).length,
       reviewCount: _count(results, 'needs_review'),
-      unmatchedCount: _count(results, 'unmatched'),
+      unmatchedCount: results.where(_isUnmatched).length,
       errorCount: _count(results, 'error'),
       status: metadata['matchingStatus']?.toString() ?? 'not_started',
       recentResults: results.reversed.take(10).toList(growable: false),
     );
+  }
+
+  static bool _isMatched(Map<String, dynamic> result) {
+    final status = result['status'];
+    return status == 'matched' || status == 'manually_matched';
+  }
+
+  static bool _isUnmatched(Map<String, dynamic> result) {
+    final status = result['status'];
+    return status == 'unmatched' || status == 'manual_unmatched';
   }
 
   static int _count(List<Map<String, dynamic>> results, String status) {
@@ -259,6 +336,12 @@ class SpotifyTrackMatchingService {
     if (value is int) return value;
     if (value is num) return value.round();
     return int.tryParse(value?.toString() ?? '');
+  }
+
+  static double? _asDouble(dynamic value) {
+    if (value is double) return value;
+    if (value is num) return value.toDouble();
+    return double.tryParse(value?.toString() ?? '');
   }
 
   static Map<String, dynamic> _readMap(dynamic value) {
