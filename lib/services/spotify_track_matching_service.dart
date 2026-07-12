@@ -68,14 +68,12 @@ class SpotifyTrackMatchingService {
     if (tracks.isEmpty) return _snapshot(tracks, results, metadata);
 
     var nextIndex = _asInt(metadata['nextTrackIndex']) ?? results.length;
-    nextIndex = nextIndex.clamp(0, tracks.length).toInt();
+    nextIndex = nextIndex.clamp(0, tracks.length);
     if (results.length > nextIndex) {
       results.removeRange(nextIndex, results.length);
     }
 
-    final stopIndex = (nextIndex + batchSize)
-        .clamp(0, tracks.length)
-        .toInt();
+    final stopIndex = (nextIndex + batchSize).clamp(0, tracks.length);
     metadata['matchingStatus'] = 'running';
     await _checkpoint(results, metadata, nextIndex, tracks.length);
 
@@ -240,8 +238,7 @@ class SpotifyTrackMatchingService {
     Map<String, dynamic> metadata,
   ) {
     final nextIndex = (_asInt(metadata['nextTrackIndex']) ?? results.length)
-        .clamp(0, tracks.length)
-        .toInt();
+        .clamp(0, tracks.length);
     return SpotifyMatchingSnapshot(
       totalTracks: tracks.length,
       nextTrackIndex: nextIndex,
