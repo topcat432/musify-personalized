@@ -298,38 +298,41 @@ class _AlternativeTile extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
+        padding: const EdgeInsets.symmetric(vertical: 8),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Radio<bool>(
-              value: true,
-              groupValue: selected,
-              onChanged: (_) => onTap(),
+            Padding(
+              padding: const EdgeInsets.only(top: 2, right: 12),
+              child: Icon(
+                selected
+                    ? Icons.radio_button_checked
+                    : Icons.radio_button_unchecked,
+                color: selected
+                    ? Theme.of(context).colorScheme.primary
+                    : Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
             Expanded(
-              child: Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      candidate['title']?.toString() ?? 'Unknown candidate',
-                      style: Theme.of(context).textTheme.titleSmall,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      candidate['artist']?.toString() ??
-                          candidate['videoAuthor']?.toString() ??
-                          'Unknown source',
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      '${(score * 100).round()}% confidence${reasons.isEmpty ? '' : ' • ${reasons.take(2).join(' • ')}'}',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    candidate['title']?.toString() ?? 'Unknown candidate',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    candidate['artist']?.toString() ??
+                        candidate['videoAuthor']?.toString() ??
+                        'Unknown source',
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    '${(score * 100).round()}% confidence${reasons.isEmpty ? '' : ' • ${reasons.take(2).join(' • ')}'}',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
               ),
             ),
           ],
