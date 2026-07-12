@@ -37,7 +37,10 @@ class _SpotifyMatchReviewPageState extends State<SpotifyMatchReviewPage> {
       final items = await _service.loadReviewItems();
       if (!mounted) return;
       setState(() {
-        _items = items;
+        // Keep a growable UI-owned copy. Service results may originate from a
+        // fixed-length list, but accepted/rejected rows must disappear from
+        // this screen immediately.
+        _items = List<Map<String, dynamic>>.of(items, growable: true);
         _loading = false;
         _error = null;
       });
@@ -75,8 +78,15 @@ class _SpotifyMatchReviewPageState extends State<SpotifyMatchReviewPage> {
         selectedAlternative: selectedAlternative,
       );
       if (!mounted) return;
+
+      // Build a new growable list instead of mutating the list returned by the
+      // service. This avoids Unsupported operation errors from fixed-length
+      // Dart lists while preserving the already-saved review decision.
+      final remainingItems = _items
+          .where((candidate) => _rowKey(candidate) != rowKey)
+          .toList(growable: true);
       setState(() {
-        _items.removeWhere((candidate) => _rowKey(candidate) == rowKey);
+        _items = remainingItems;
         _selectedAlternativeIndex.remove(rowKey);
       });
     } catch (error) {
