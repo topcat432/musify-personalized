@@ -8,6 +8,7 @@
  */
 
 import 'package:flutter/material.dart';
+import 'package:musify/screens/spotify_match_review_page.dart';
 import 'package:musify/services/spotify_track_matching_service.dart';
 
 class SpotifyMatchingPage extends StatefulWidget {
@@ -18,11 +19,14 @@ class SpotifyMatchingPage extends StatefulWidget {
 }
 
 class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
+  static const int _allRemaining = -1;
+
   final _service = const SpotifyTrackMatchingService();
   SpotifyMatchingSnapshot? _snapshot;
   bool _loading = true;
   bool _running = false;
   bool _stopRequested = false;
+  int _selectedRunSize = SpotifyTrackMatchingService.defaultBatchSize;
   String? _error;
 
   @override
@@ -38,6 +42,7 @@ class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
       setState(() {
         _snapshot = snapshot;
         _loading = false;
+        _error = null;
       });
     } catch (error) {
       if (!mounted) return;
@@ -48,8 +53,15 @@ class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
     }
   }
 
-  Future<void> _runNextBatch() async {
+  Future<void> _runSelectedBatch() async {
     if (_running) return;
+    final snapshotBeforeRun = _snapshot;
+    if (snapshotBeforeRun == null || snapshotBeforeRun.isComplete) return;
+
+    final batchSize = _selectedRunSize == _allRemaining
+        ? snapshotBeforeRun.remainingCount
+        : _selectedRunSize;
+
     setState(() {
       _running = true;
       _stopRequested = false;
@@ -58,6 +70,7 @@ class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
 
     try {
       final snapshot = await _service.matchNextBatch(
+        batchSize: batchSize,
         shouldStop: () => _stopRequested,
         onProgress: (progress) {
           if (mounted) setState(() => _snapshot = progress);
@@ -76,6 +89,16 @@ class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
         });
       }
     }
+  }
+
+  Future<void> _openReviewQueue() async {
+    if (_running) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const SpotifyMatchReviewPage(),
+      ),
+    );
+    await _load();
   }
 
   @override
@@ -101,19 +124,21 @@ class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
                               color: Theme.of(context).colorScheme.primary,
                             ),
                             const SizedBox(width: 10),
-                            Text(
-                              'Safe track matching',
-                              style: Theme.of(context).textTheme.titleMedium,
+                            Expanded(
+                              child: Text(
+                                'Safe track matching',
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
                             ),
                           ],
                         ),
                         const SizedBox(height: 12),
                         const Text(
-                          'Each imported record is compared against YouTube results using title, artist, duration, source quality, and long-form-content checks. Strong matches are saved automatically; uncertain choices remain separated for review.',
+                          'Each imported record is compared against YouTube results using title, artist, duration, source quality, and long-form-content checks. Strong matches are staged automatically; uncertain choices can be reviewed as soon as they appear.',
                         ),
                         const SizedBox(height: 10),
                         const Text(
-                          'This pilot processes 25 tracks at a time and saves a checkpoint every five tracks. It does not add anything to Favorites or playlists yet.',
+                          'Progress is saved every five tracks. Nothing is added to Favorites or playlists during this validation pass.',
                         ),
                       ],
                     ),
@@ -147,6 +172,15 @@ class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
                 else ...[
                   _ProgressCard(snapshot: snapshot),
                   const SizedBox(height: 12),
+                  _RunControlsCard(
+                    selectedRunSize: _selectedRunSize,
+                    allRemainingValue: _allRemaining,
+                    remainingCount: snapshot.remainingCount,
+                    enabled: !_running && !snapshot.isComplete,
+                    onSelected: (value) =>
+                        setState(() => _selectedRunSize = value),
+                  ),
+                  const SizedBox(height: 12),
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton.icon(
@@ -154,7 +188,7 @@ class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
                           ? null
                           : _running
                           ? () => setState(() => _stopRequested = true)
-                          : _runNextBatch,
+                          : _runSelectedBatch,
                       icon: Icon(
                         snapshot.isComplete
                             ? Icons.check_circle
@@ -169,10 +203,41 @@ class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
                             ? _stopRequested
                                   ? 'Pausing after this track…'
                                   : 'Pause safely'
-                            : 'Match next 25 tracks',
+                            : _selectedRunSize == _allRemaining
+                            ? 'Match all ${snapshot.remainingCount} remaining'
+                            : 'Match next $_selectedRunSize tracks',
                       ),
                     ),
                   ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: snapshot.reviewCount == 0 || _running
+                          ? null
+                          : _openReviewQueue,
+                      icon: const Icon(Icons.fact_check_outlined),
+                      label: Text(
+                        snapshot.reviewCount == 0
+                            ? 'No uncertain matches waiting'
+                            : 'Review ${snapshot.reviewCount} uncertain matches now',
+                      ),
+                    ),
+                  ),
+                  if (_running && snapshot.reviewCount > 0) ...[
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Tap Pause safely, then open the review queue. Matching resumes from the saved checkpoint afterward.',
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                  if (_selectedRunSize == _allRemaining && !_running) ...[
+                    const SizedBox(height: 8),
+                    const Text(
+                      'All remaining may take a while. Keep the app open; you can pause safely at any time.',
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
                   if (snapshot.recentResults.isNotEmpty) ...[
                     const SizedBox(height: 18),
                     Text(
@@ -193,6 +258,64 @@ class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
                 ],
               ],
             ),
+    );
+  }
+}
+
+class _RunControlsCard extends StatelessWidget {
+  const _RunControlsCard({
+    required this.selectedRunSize,
+    required this.allRemainingValue,
+    required this.remainingCount,
+    required this.enabled,
+    required this.onSelected,
+  });
+
+  final int selectedRunSize;
+  final int allRemainingValue;
+  final int remainingCount;
+  final bool enabled;
+  final ValueChanged<int> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'How much should run?',
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                ChoiceChip(
+                  label: const Text('25'),
+                  selected: selectedRunSize == 25,
+                  onSelected: enabled ? (_) => onSelected(25) : null,
+                ),
+                ChoiceChip(
+                  label: const Text('100'),
+                  selected: selectedRunSize == 100,
+                  onSelected: enabled ? (_) => onSelected(100) : null,
+                ),
+                ChoiceChip(
+                  label: Text('All remaining ($remainingCount)'),
+                  selected: selectedRunSize == allRemainingValue,
+                  onSelected: enabled
+                      ? (_) => onSelected(allRemainingValue)
+                      : null,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -295,7 +418,9 @@ class _ResultTile extends StatelessWidget {
 
     final (icon, label) = switch (status) {
       'matched' => (Icons.check_circle, 'Strong match'),
+      'manually_matched' => (Icons.verified, 'Manually confirmed'),
       'needs_review' => (Icons.help, 'Needs review'),
+      'manual_unmatched' => (Icons.block, 'Marked unmatched'),
       'error' => (Icons.error, 'Error'),
       _ => (Icons.search_off, 'Unmatched'),
     };
