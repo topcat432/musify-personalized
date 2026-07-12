@@ -192,9 +192,7 @@ class SpotifyMatchScorer {
         durationScore * 0.15 +
         sourceScore * 0.05 -
         penalty;
-    final finalScore = disqualified
-        ? 0.0
-        : weighted.clamp(0.0, 1.0).toDouble();
+    final finalScore = disqualified ? 0.0 : weighted.clamp(0.0, 1.0);
 
     if (reasons.isEmpty) reasons.add('Loose metadata match');
 
@@ -220,29 +218,29 @@ class SpotifyMatchScorer {
 
     final expectedSeconds = expectedMs / 1000;
     final difference = (expectedSeconds - candidateSeconds).abs();
-    if (difference <= 4) return 1.0;
+    if (difference <= 4) return 1;
     if (difference <= 8) return 0.92;
     if (difference <= 15) return 0.80;
     if (difference <= 30) return 0.55;
     if (difference <= 60) return 0.25;
-    return 0.0;
+    return 0;
   }
 
   static double _sourceScore(String author) {
     final normalized = _normalize(author);
-    if (normalized.contains('topic')) return 1.0;
+    if (normalized.contains('topic')) return 1;
     if (normalized.contains('vevo')) return 0.95;
     if (normalized.contains('official')) return 0.88;
     return 0.5;
   }
 
   static double _textSimilarity(String left, String right) {
-    if (left.isEmpty || right.isEmpty) return 0.0;
-    if (left == right) return 1.0;
+    if (left.isEmpty || right.isEmpty) return 0;
+    if (left == right) return 1;
 
     final leftTokens = _tokens(left);
     final rightTokens = _tokens(right);
-    if (leftTokens.isEmpty || rightTokens.isEmpty) return 0.0;
+    if (leftTokens.isEmpty || rightTokens.isEmpty) return 0;
 
     final intersection = leftTokens.intersection(rightTokens).length;
     final union = leftTokens.union(rightTokens).length;
@@ -258,8 +256,7 @@ class SpotifyMatchScorer {
     final coverage = intersection / leftTokens.length;
     return [jaccard * 0.65 + coverage * 0.35, containment]
         .reduce((a, b) => a > b ? a : b)
-        .clamp(0.0, 1.0)
-        .toDouble();
+        .clamp(0.0, 1.0);
   }
 
   static Set<String> _tokens(String value) {
@@ -273,7 +270,7 @@ class SpotifyMatchScorer {
     return value
         .toLowerCase()
         .replaceAll('&', ' and ')
-        .replaceAll(RegExp(r"['’]"), '')
+        .replaceAll(RegExp("['’]"), '')
         .replaceAll(RegExp(r'[^a-z0-9\u00c0-\u024f]+'), ' ')
         .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
