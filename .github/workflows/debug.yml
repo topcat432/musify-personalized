@@ -22,9 +22,9 @@ env:
 
 jobs:
   build:
-    name: Analyze, test, and build debug APK
+    name: Analyze, test, and build APKs
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
 
     steps:
       - name: Check out repository
@@ -101,7 +101,7 @@ jobs:
       - name: Build universal debug APK
         run: flutter build apk --debug --flavor github
 
-      - name: Verify APK output
+      - name: Verify debug APK output
         run: test -f build/app/outputs/flutter-apk/app-github-debug.apk
 
       - name: Upload debug APK
@@ -109,5 +109,27 @@ jobs:
         with:
           name: musify-personalized-debug-${{ github.run_number }}
           path: build/app/outputs/flutter-apk/app-github-debug.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Build unsigned release APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          build_number=$((200000 + GITHUB_RUN_NUMBER))
+          flutter build apk \
+            --release \
+            --flavor github \
+            --build-number "$build_number" \
+            --build-name "0.1.${GITHUB_RUN_NUMBER}"
+
+      - name: Verify unsigned release APK output
+        run: test -f build/app/outputs/flutter-apk/app-github-release.apk
+
+      - name: Upload unsigned release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: musify-personalized-unsigned-release-${{ github.run_number }}
+          path: build/app/outputs/flutter-apk/app-github-release.apk
           if-no-files-found: error
           retention-days: 14
