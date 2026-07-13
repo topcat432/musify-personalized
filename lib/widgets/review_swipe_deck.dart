@@ -175,7 +175,7 @@ class _ReviewSwipeDeckState extends State<ReviewSwipeDeck>
     final targetAngle = switch (action) {
       ReviewSwipeAction.accept => 0.18,
       ReviewSwipeAction.reject => -0.18,
-      ReviewSwipeAction.postpone => 0,
+      ReviewSwipeAction.postpone => 0.0,
     };
     await _animateTo(target, targetAngle, const Duration(milliseconds: 220));
     if (!mounted) return;
@@ -237,8 +237,9 @@ class _ReviewSwipeDeckState extends State<ReviewSwipeDeck>
     } on TickerCanceled {
       // A new gesture or disposal superseded this animation.
     } finally {
-      animation.removeListener(update);
-      animation.dispose();
+      animation
+        ..removeListener(update)
+        ..dispose();
     }
   }
 

@@ -107,7 +107,7 @@ class _SpotifyReviewSprintPageState extends State<SpotifyReviewSprintPage> {
       final items = await _service.loadUnresolvedItems();
       if (!mounted) return;
       setState(() {
-        _items = List<Map<String, dynamic>>.from(items, growable: true);
+        _items = List<Map<String, dynamic>>.from(items);
         _selectedAlternativeIndex = 0;
         _initialQueueSize = _initialQueueSize == 0
             ? items.length
@@ -813,7 +813,7 @@ class _ReviewSongCard extends StatelessWidget {
                         ),
                       ),
                     ),
-                    Positioned(
+                    const Positioned(
                       left: 16,
                       top: 14,
                       child: _CardLabel(

@@ -81,6 +81,7 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
   static const Duration _searchTimeout = Duration(seconds: 18);
   static final YoutubeMusicExplode _youtubeMusic = YoutubeMusicExplode();
 
+  @override
   Future<List<Map<String, dynamic>>> loadUnresolvedItems() async {
     final results = _readMaps(Hive.box('user').get('spotifyMatchResults'));
     final items = results.where(isPendingResolution).toList(growable: true)
@@ -207,6 +208,7 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
     return progress;
   }
 
+  @override
   Future<SpotifyResolutionResult> resolveItem({
     required Map<String, dynamic> item,
     required bool accept,
@@ -262,6 +264,7 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
     );
   }
 
+  @override
   Future<int> bulkApproveCluster(String key) async {
     final box = Hive.box('user');
     final results = _readMaps(box.get('spotifyMatchResults'));
