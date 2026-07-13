@@ -2,26 +2,69 @@ name: Build signed production APK
 
 on:
   workflow_dispatch:
+    inputs:
+      candidate_ref:
+        description: Full commit SHA to test, build, and sign
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: signed-production-${{ github.ref }}
+  group: signed-production
   cancel-in-progress: false
 
 env:
   FLUTTER_VERSION: '3.44.5'
 
 jobs:
-  release:
-    name: Test and build permanently signed APK
+  build:
+    name: Test and build unsigned production candidate
+    if: github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    outputs:
+      build_number: ${{ steps.version.outputs.build_number }}
+      candidate_sha: ${{ steps.candidate.outputs.sha }}
 
     steps:
+      - name: Validate candidate commit input
+        env:
+          CANDIDATE_REF: ${{ inputs.candidate_ref }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$CANDIDATE_REF" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "candidate_ref must be a full lowercase 40-character commit SHA."
+            exit 1
+          }
+
       - name: Check out selected candidate
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.candidate_ref }}
+          fetch-depth: 1
+
+      - name: Record immutable candidate commit
+        id: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          candidate_sha="$(git rev-parse HEAD)"
+          test "$candidate_sha" = "${{ inputs.candidate_ref }}"
+          echo "sha=$candidate_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Set production version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The permanent production sequence starts above all earlier 200xxx
+          # test builds and uses the complete, non-wrapping workflow run number.
+          build_number=$((300000 + GITHUB_RUN_NUMBER))
+          test "$build_number" -le 2100000000
+          echo "build_number=$build_number" >> "$GITHUB_OUTPUT"
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
@@ -37,8 +80,91 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Validate signing secrets
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze Dart code
+        run: flutter analyze .
+
+      - name: Run tests
+        run: flutter test
+
+      - name: Build unsigned release APK
         env:
+          BUILD_NUMBER: ${{ steps.version.outputs.build_number }}
+          CANDIDATE_SHA: ${{ steps.candidate.outputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -e android/key.properties
+          test ! -e android/app/key.jks
+          flutter build apk \
+            --release \
+            --flavor github \
+            --build-number "$BUILD_NUMBER" \
+            --build-name "0.1.$BUILD_NUMBER" \
+            --dart-define=GIT_SHA="$CANDIDATE_SHA"
+
+      - name: Verify unsigned production identity
+        env:
+          BUILD_NUMBER: ${{ steps.version.outputs.build_number }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk=build/app/outputs/flutter-apk/app-github-release.apk
+          test -f "$apk"
+          unzip -t "$apk" >/dev/null
+          apksigner="$(find "$ANDROID_SDK_ROOT/build-tools" -mindepth 2 -maxdepth 2 -type f -name apksigner | sort -V | tail -1)"
+          test -x "$apksigner"
+          if "$apksigner" verify "$apk" >/dev/null 2>&1; then
+            echo "Candidate APK must be unsigned before entering the isolated signing job."
+            exit 1
+          fi
+          aapt="$(find "$ANDROID_SDK_ROOT/build-tools" -mindepth 2 -maxdepth 2 -type f -name aapt | sort -V | tail -1)"
+          test -x "$aapt"
+          badging="$($aapt dump badging "$apk")"
+          package_line="$(head -1 <<<"$badging")"
+          grep -Fq "package: name='com.topcat432.musifypersonalized'" <<<"$package_line"
+          grep -Fq "versionCode='$BUILD_NUMBER'" <<<"$package_line"
+          grep -Fq "application-label:'Musify Personalized'" <<<"$badging"
+          ! grep -Fq 'application-debuggable' <<<"$badging"
+          cp "$apk" musify-personalized-unsigned.apk
+          sha256sum musify-personalized-unsigned.apk > musify-personalized-unsigned.apk.sha256
+
+      - name: Upload isolated unsigned candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: musify-personalized-UNSIGNED-${{ github.run_id }}
+          path: |
+            musify-personalized-unsigned.apk
+            musify-personalized-unsigned.apk.sha256
+          if-no-files-found: error
+          retention-days: 1
+
+  sign:
+    name: Sign and verify permanent production APK
+    needs: build
+    if: needs.build.result == 'success' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: '17'
+
+      - name: Download isolated unsigned candidate
+        uses: actions/download-artifact@v4
+        with:
+          name: musify-personalized-UNSIGNED-${{ github.run_id }}
+          path: ${{ runner.temp }}/candidate
+
+      - name: Restore key, sign, and verify permanent identity
+        env:
+          BUILD_NUMBER: ${{ needs.build.outputs.build_number }}
+          CANDIDATE_SHA: ${{ needs.build.outputs.candidate_sha }}
           MUSIFY_SIGNING_KEY_BASE64: ${{ secrets.MUSIFY_SIGNING_KEY_BASE64 }}
           MUSIFY_SIGNING_PASSWORD: ${{ secrets.MUSIFY_SIGNING_PASSWORD }}
         shell: bash
@@ -53,75 +179,85 @@ jobs:
             exit 1
           }
 
-      - name: Restore permanent Android signing key
-        env:
-          MUSIFY_SIGNING_KEY_BASE64: ${{ secrets.MUSIFY_SIGNING_KEY_BASE64 }}
-          MUSIFY_SIGNING_PASSWORD: ${{ secrets.MUSIFY_SIGNING_PASSWORD }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          printf '%s' "$MUSIFY_SIGNING_KEY_BASE64" | base64 --decode > android/app/key.jks
-          cat > android/key.properties <<EOF
-          storePassword=$MUSIFY_SIGNING_PASSWORD
-          keyPassword=$MUSIFY_SIGNING_PASSWORD
-          keyAlias=musify-personalized
-          EOF
+          keystore="$RUNNER_TEMP/musify-personalized-release.jks"
+          certificate="$RUNNER_TEMP/musify-personalized-release.der"
+          trap 'rm -f "$keystore" "$certificate"' EXIT
+          printf '%s' "$MUSIFY_SIGNING_KEY_BASE64" | base64 --decode > "$keystore"
+          chmod 600 "$keystore"
           keytool -list \
-            -keystore android/app/key.jks \
+            -keystore "$keystore" \
             -storepass "$MUSIFY_SIGNING_PASSWORD" \
             -alias musify-personalized >/dev/null
+          keytool -exportcert \
+            -keystore "$keystore" \
+            -storepass "$MUSIFY_SIGNING_PASSWORD" \
+            -alias musify-personalized \
+            -file "$certificate" >/dev/null
+          expected_signer_sha="$(sha256sum "$certificate" | cut -d' ' -f1)"
 
-      - name: Install dependencies
-        run: flutter pub get
+          unsigned_apk="$RUNNER_TEMP/candidate/musify-personalized-unsigned.apk"
+          unsigned_checksum="$RUNNER_TEMP/candidate/musify-personalized-unsigned.apk.sha256"
+          test -f "$unsigned_apk"
+          test -f "$unsigned_checksum"
+          (cd "$(dirname "$unsigned_apk")" && sha256sum -c "$(basename "$unsigned_checksum")")
+          unzip -t "$unsigned_apk" >/dev/null
 
-      - name: Analyze Dart code
-        run: flutter analyze .
-
-      - name: Run tests
-        run: flutter test
-
-      - name: Build signed release APK
-        shell: bash
-        run: |
-          set -euo pipefail
-          # YYDDD plus a three-digit workflow sequence is monotonic across
-          # calendar days and safely above all earlier 200xxx test builds.
-          day_code="$(date -u +'%y%j')"
-          build_number=$((10#$day_code * 1000 + GITHUB_RUN_NUMBER % 1000))
-          flutter build apk \
-            --release \
-            --flavor github \
-            --build-number "$build_number" \
-            --build-name "0.1.$build_number" \
-            --dart-define=GIT_SHA="$GITHUB_SHA"
-
-      - name: Verify signed production identity
-        shell: bash
-        run: |
-          set -euo pipefail
-          apk=build/app/outputs/flutter-apk/app-github-release.apk
-          test -f "$apk"
           apksigner="$(find "$ANDROID_SDK_ROOT/build-tools" -mindepth 2 -maxdepth 2 -type f -name apksigner | sort -V | tail -1)"
+          aapt="$(find "$ANDROID_SDK_ROOT/build-tools" -mindepth 2 -maxdepth 2 -type f -name aapt | sort -V | tail -1)"
           test -x "$apksigner"
-          verification="$($apksigner verify --verbose --print-certs "$apk")"
+          test -x "$aapt"
+          if "$apksigner" verify "$unsigned_apk" >/dev/null 2>&1; then
+            echo "Refusing to sign an APK that already has a valid signature."
+            exit 1
+          fi
+
+          unsigned_badging="$($aapt dump badging "$unsigned_apk")"
+          unsigned_package_line="$(head -1 <<<"$unsigned_badging")"
+          grep -Fq "package: name='com.topcat432.musifypersonalized'" <<<"$unsigned_package_line"
+          grep -Fq "versionCode='$BUILD_NUMBER'" <<<"$unsigned_package_line"
+          grep -Fq "application-label:'Musify Personalized'" <<<"$unsigned_badging"
+          ! grep -Fq 'application-debuggable' <<<"$unsigned_badging"
+
+          "$apksigner" sign \
+            --ks "$keystore" \
+            --ks-key-alias musify-personalized \
+            --ks-pass env:MUSIFY_SIGNING_PASSWORD \
+            --key-pass env:MUSIFY_SIGNING_PASSWORD \
+            --v1-signing-enabled true \
+            --v2-signing-enabled true \
+            --v3-signing-enabled true \
+            --out musify-personalized-production.apk \
+            "$unsigned_apk"
+
+          verification="$($apksigner verify --verbose --print-certs musify-personalized-production.apk)"
           printf '%s\n' "$verification"
           grep -Fq 'Verified using v2 scheme (APK Signature Scheme v2): true' <<<"$verification"
           grep -Fq 'Verified using v3 scheme (APK Signature Scheme v3): true' <<<"$verification"
-          signer_sha="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' <<<"$verification" | head -1)"
-          test -n "$signer_sha"
-          aapt="$(find "$ANDROID_SDK_ROOT/build-tools" -mindepth 2 -maxdepth 2 -type f -name aapt | sort -V | tail -1)"
-          badging="$($aapt dump badging "$apk")"
-          grep -Fq "package: name='com.topcat432.musifypersonalized'" <<<"$badging"
+          mapfile -t signer_shas < <(
+            sed -nE \
+              -e 's/^Signer #[0-9]+ certificate SHA-256 digest: ([0-9a-fA-F]+)$/\1/p' \
+              -e 's/^V[0-9.]+ Signer: certificate SHA-256 digest: ([0-9a-fA-F]+)$/\1/p' \
+              <<<"$verification" | tr '[:upper:]' '[:lower:]' | sort -u
+          )
+          test "${#signer_shas[@]}" -eq 1
+          signer_sha="${signer_shas[0]}"
+          test "${signer_sha,,}" = "${expected_signer_sha,,}"
+
+          badging="$($aapt dump badging musify-personalized-production.apk)"
+          package_line="$(head -1 <<<"$badging")"
+          grep -Fq "package: name='com.topcat432.musifypersonalized'" <<<"$package_line"
+          grep -Fq "versionCode='$BUILD_NUMBER'" <<<"$package_line"
           grep -Fq "application-label:'Musify Personalized'" <<<"$badging"
           ! grep -Fq 'application-debuggable' <<<"$badging"
-          cp "$apk" musify-personalized-production.apk
+          unzip -t musify-personalized-production.apk >/dev/null
           sha256sum musify-personalized-production.apk > musify-personalized-production.apk.sha256
-          package_line="$(head -1 <<<"$badging")"
           {
             echo "Musify Personalized production release proof"
-            echo "Source commit: $GITHUB_SHA"
+            echo "Candidate commit: $CANDIDATE_SHA"
+            echo "Workflow commit: $GITHUB_SHA"
             echo "Workflow run: $GITHUB_RUN_ID"
-            echo "Signer SHA-256: $signer_sha"
+            echo "Expected signer SHA-256: $expected_signer_sha"
+            echo "APK signer SHA-256: $signer_sha"
             echo "APK SHA-256: $(cut -d' ' -f1 musify-personalized-production.apk.sha256)"
             echo "$package_line"
             echo "Application label: Musify Personalized"
