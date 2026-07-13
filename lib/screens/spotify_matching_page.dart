@@ -349,7 +349,7 @@ class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
   }
 
   static int _unresolvedCount(SpotifyMatchingSnapshot snapshot) {
-    return snapshot.reviewCount + snapshot.unmatchedCount + snapshot.errorCount;
+    return snapshot.pendingResolutionCount;
   }
 
   static bool _allRemainingUnlocked(SpotifyMatchingSnapshot snapshot) {

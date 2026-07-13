@@ -61,7 +61,19 @@ class SpotifyReviewCluster {
   final bool safeForBulkApproval;
 }
 
-class SpotifyReviewWorkflowService {
+abstract interface class SpotifyReviewSprintDataSource {
+  Future<List<Map<String, dynamic>>> loadUnresolvedItems();
+
+  Future<SpotifyResolutionResult> resolveItem({
+    required Map<String, dynamic> item,
+    required bool accept,
+    Map<String, dynamic>? selectedAlternative,
+  });
+
+  Future<int> bulkApproveCluster(String key);
+}
+
+class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
   const SpotifyReviewWorkflowService();
 
   static const double _automaticThreshold = 0.86;
@@ -71,7 +83,7 @@ class SpotifyReviewWorkflowService {
 
   Future<List<Map<String, dynamic>>> loadUnresolvedItems() async {
     final results = _readMaps(Hive.box('user').get('spotifyMatchResults'));
-    final items = results.where(_needsResolution).toList(growable: true)
+    final items = results.where(isPendingResolution).toList(growable: true)
       ..sort(_reviewPriorityCompare);
     return items;
   }
@@ -246,7 +258,7 @@ class SpotifyReviewWorkflowService {
     await _checkpoint(results, metadata);
     return SpotifyResolutionResult(
       duplicatesApplied: duplicatesApplied,
-      remainingUnresolved: results.where(_needsResolution).length,
+      remainingUnresolved: results.where(isPendingResolution).length,
     );
   }
 
@@ -481,7 +493,7 @@ class SpotifyReviewWorkflowService {
     if (candidate is! Map) return 0;
     var applied = 0;
     for (var index = 0; index < results.length; index++) {
-      if (index == sourceIndex || !_needsResolution(results[index])) continue;
+      if (index == sourceIndex || !isPendingResolution(results[index])) continue;
       final otherIsrc = _normalizeIsrc(results[index]['sourceIsrc']?.toString() ?? '');
       if (otherIsrc != sourceIsrc) continue;
       results[index] = Map<String, dynamic>.from(results[index])
@@ -519,6 +531,7 @@ class SpotifyReviewWorkflowService {
       ..['reviewCount'] = results.where((item) => item['status'] == 'needs_review').length
       ..['unmatchedCount'] = results.where(_isUnmatched).length
       ..['errorCount'] = results.where((item) => item['status'] == 'error').length
+      ..['pendingResolutionCount'] = results.where(isPendingResolution).length
       ..['lastMatchingCheckpointAt'] = DateTime.now().toUtc().toIso8601String();
     await addOrUpdateData<List>('user', 'spotifyMatchResults', results);
     await addOrUpdateData<Map<String, dynamic>>(
@@ -546,11 +559,10 @@ class SpotifyReviewWorkflowService {
     return (_asInt(left['sourceRow']) ?? 0).compareTo(_asInt(right['sourceRow']) ?? 0);
   }
 
-  static bool _needsResolution(Map<String, dynamic> item) {
+  static bool isPendingResolution(Map<String, dynamic> item) {
     final status = item['status'];
     return status == 'needs_review' ||
         status == 'unmatched' ||
-        status == 'manual_unmatched' ||
         status == 'error';
   }
 
