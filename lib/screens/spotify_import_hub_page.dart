@@ -10,6 +10,7 @@
 import 'package:flutter/material.dart';
 import 'package:musify/screens/spotify_import_page.dart';
 import 'package:musify/screens/spotify_matching_page.dart';
+import 'package:musify/screens/spotify_review_sprint_page.dart';
 
 class SpotifyImportHubPage extends StatelessWidget {
   const SpotifyImportHubPage({super.key});
@@ -43,6 +44,19 @@ class SpotifyImportHubPage extends StatelessWidget {
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute<void>(
                 builder: (_) => const SpotifyMatchingPage(),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          _WorkflowCard(
+            icon: Icons.swipe_rounded,
+            title: 'Quick review',
+            description:
+                'Review one unresolved song at a time. Hear the suggested source, then swipe or tap Accept, None, or Later.',
+            buttonLabel: 'Start quick review',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const SpotifyReviewSprintPage(),
               ),
             ),
           ),
