@@ -154,6 +154,7 @@ class _FakeAudioPlayer implements ReviewSprintAudioPlayer {
       StreamController<ReviewSprintAudioState>.broadcast();
   final List<String> loadedUrls = <String>[];
   int playCount = 0;
+  Completer<void>? _playCompleter;
 
   @override
   Stream<ReviewSprintAudioState> get stateStream => _controller.stream;
@@ -162,15 +163,18 @@ class _FakeAudioPlayer implements ReviewSprintAudioPlayer {
   Future<void> setUrl(String url) async => loadedUrls.add(url);
 
   @override
-  Future<void> play() async {
+  Future<void> play() {
     playCount++;
+    _playCompleter = Completer<void>();
     _controller.add(
       const ReviewSprintAudioState(playing: true, completed: false),
     );
+    return _playCompleter!.future;
   }
 
   @override
   Future<void> pause() async {
+    _finishPlayback();
     _controller.add(
       const ReviewSprintAudioState(playing: false, completed: false),
     );
@@ -178,6 +182,7 @@ class _FakeAudioPlayer implements ReviewSprintAudioPlayer {
 
   @override
   Future<void> stop() async {
+    _finishPlayback();
     _controller.add(
       const ReviewSprintAudioState(playing: false, completed: false),
     );
@@ -187,5 +192,14 @@ class _FakeAudioPlayer implements ReviewSprintAudioPlayer {
   Future<void> seek(Duration position) async {}
 
   @override
-  Future<void> dispose() => _controller.close();
+  Future<void> dispose() {
+    _finishPlayback();
+    return _controller.close();
+  }
+
+  void _finishPlayback() {
+    final completer = _playCompleter;
+    if (completer != null && !completer.isCompleted) completer.complete();
+    _playCompleter = null;
+  }
 }

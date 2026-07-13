@@ -192,7 +192,13 @@ class _SpotifyReviewSprintPageState extends State<SpotifyReviewSprintPage> {
         _previewTimer?.cancel();
         await _runAudio(_player.pause);
       } else {
-        await _runAudio(_player.play);
+        await _runAudio(() async {
+          _beginPlayback(
+            generation: _playbackGeneration,
+            itemKey: _itemKey(item),
+            songId: songId,
+          );
+        });
         _armPreviewTimer();
       }
       return;
@@ -250,7 +256,11 @@ class _SpotifyReviewSprintPageState extends State<SpotifyReviewSprintPage> {
             _previewLoadingId = null;
           });
         }
-        await _player.play();
+        _beginPlayback(
+          generation: generation,
+          itemKey: itemKey,
+          songId: songId,
+        );
       });
       if (_isCurrentPreview(generation, itemKey, songId)) {
         _armPreviewTimer();
@@ -273,6 +283,30 @@ class _SpotifyReviewSprintPageState extends State<SpotifyReviewSprintPage> {
         _selectedAlternativeIndex.clamp(0, alternatives.length - 1)];
     final candidate = selected['candidate'];
     return candidate is Map && candidate['ytid']?.toString() == songId;
+  }
+
+  void _beginPlayback({
+    required int generation,
+    required String itemKey,
+    required String songId,
+  }) {
+    try {
+      unawaited(
+        _player.play().catchError((Object error, StackTrace _) {
+          if (!_isCurrentPreview(generation, itemKey, songId)) return;
+          setState(() {
+            _previewPlaying = false;
+            _error = 'Preview failed: $error';
+          });
+        }),
+      );
+    } catch (error) {
+      if (!_isCurrentPreview(generation, itemKey, songId)) return;
+      setState(() {
+        _previewPlaying = false;
+        _error = 'Preview failed: $error';
+      });
+    }
   }
 
   Future<void> _runAudio(Future<void> Function() operation) {
