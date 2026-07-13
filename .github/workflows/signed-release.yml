@@ -2,6 +2,10 @@ name: Build signed production APK
 
 on:
   workflow_dispatch:
+  # Frozen one-shot branch used only to produce this verified candidate.
+  push:
+    branches:
+      - agent/signed-candidate-20260713
 
 permissions:
   contents: read
