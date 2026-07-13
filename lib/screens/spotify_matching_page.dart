@@ -9,6 +9,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:musify/screens/spotify_match_review_page.dart';
+import 'package:musify/screens/spotify_review_sprint_page.dart';
 import 'package:musify/services/spotify_track_matching_service.dart';
 
 class SpotifyMatchingPage extends StatefulWidget {
@@ -140,9 +141,15 @@ class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
   Future<void> _openResolutionQueue() async {
     if (_running) return;
     await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => const SpotifyMatchReviewPage(),
-      ),
+      MaterialPageRoute<void>(builder: (_) => const SpotifyMatchReviewPage()),
+    );
+    await _load();
+  }
+
+  Future<void> _openQuickReview() async {
+    if (_running) return;
+    await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(builder: (_) => const SpotifyReviewSprintPage()),
     );
     await _load();
   }
@@ -291,16 +298,27 @@ class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
                   const SizedBox(height: 10),
                   SizedBox(
                     width: double.infinity,
+                    child: FilledButton.tonalIcon(
+                      onPressed: _unresolvedCount(snapshot) == 0 || _running
+                          ? null
+                          : _openQuickReview,
+                      icon: const Icon(Icons.swipe_rounded),
+                      label: Text(
+                        _unresolvedCount(snapshot) == 0
+                            ? 'No unresolved matches waiting'
+                            : 'Quick review ${_unresolvedCount(snapshot)} tracks',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
                     child: OutlinedButton.icon(
                       onPressed: _unresolvedCount(snapshot) == 0 || _running
                           ? null
                           : _openResolutionQueue,
                       icon: const Icon(Icons.manage_search),
-                      label: Text(
-                        _unresolvedCount(snapshot) == 0
-                            ? 'No unresolved matches waiting'
-                            : 'Review or search ${_unresolvedCount(snapshot)} unresolved',
-                      ),
+                      label: const Text('Detailed review & manual search'),
                     ),
                   ),
                   if (_running && _unresolvedCount(snapshot) > 0) ...[
@@ -503,10 +521,7 @@ class _CountChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Chip(
-      avatar: Icon(icon, size: 18),
-      label: Text('$label $count'),
-    );
+    return Chip(avatar: Icon(icon, size: 18), label: Text('$label $count'));
   }
 }
 
