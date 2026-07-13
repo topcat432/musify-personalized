@@ -163,7 +163,7 @@ class _ReviewSwipeDeckState extends State<ReviewSwipeDeck>
       return;
     }
     _animating = true;
-    await HapticFeedback.mediumImpact();
+    unawaited(HapticFeedback.mediumImpact());
     if (!mounted) return;
     final width = math.max(_deckSize.width, 360);
     final height = math.max(_deckSize.height, 560);

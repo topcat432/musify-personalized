@@ -42,7 +42,9 @@ class ReviewSprintPrefetchCache {
         _urls.remove(_urls.keys.first);
       }
       return url;
-    }).whenComplete(() => _inFlight.remove(songId));
+    }).whenComplete(() {
+      _inFlight.remove(songId);
+    });
     _inFlight[songId] = request;
     return request;
   }
