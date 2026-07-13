@@ -71,8 +71,8 @@ class SpotifyReviewWorkflowService {
 
   Future<List<Map<String, dynamic>>> loadUnresolvedItems() async {
     final results = _readMaps(Hive.box('user').get('spotifyMatchResults'));
-    final items = results.where(_needsResolution).toList(growable: true);
-    items.sort(_reviewPriorityCompare);
+    final items = results.where(_needsResolution).toList(growable: true)
+      ..sort(_reviewPriorityCompare);
     return items;
   }
 
