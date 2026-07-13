@@ -9,7 +9,6 @@
 
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:file_picker/file_picker.dart';
@@ -254,7 +253,6 @@ class MusifyBackupService {
     final result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: const [musifyBackupExtension],
-      allowMultiple: false,
       withData: true,
     );
     if (result == null || result.files.isEmpty) return null;
@@ -1006,7 +1004,7 @@ class MusifyBackupService {
   }
 
   static bool _legacyNameMatches(String name, String boxName) {
-    return RegExp('^${boxName}(?:_[0-9]+)?[.]hive\$').hasMatch(name);
+    return RegExp('^$boxName(?:_[0-9]+)?[.]hive\$').hasMatch(name);
   }
 
   static String _fileTimestamp(DateTime value) {
