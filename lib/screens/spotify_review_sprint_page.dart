@@ -298,8 +298,8 @@ class _SpotifyReviewSprintPageState extends State<SpotifyReviewSprintPage> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: Text('Approve $count matching-pattern tracks?'),
-        content: Text(
-          'You accepted at least $_clusterAuditThreshold examples from this exact evidence cluster without rejecting one. Only tracks that still meet the strict title, artist, source, album, duration, and version-safety checks will be approved.',
+        content: const Text(
+          'You accepted at least five examples from this exact evidence cluster without rejecting one. Only tracks that still meet the strict title, artist, source, album, duration, and version-safety checks will be approved.',
         ),
         actions: [
           TextButton(
