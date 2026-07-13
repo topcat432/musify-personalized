@@ -825,10 +825,28 @@ class SettingsPage extends StatelessWidget {
       );
       final result = await MusifyBackupService.createVerifiedBackup();
       if (context.mounted) {
-        showToast(
-          context,
-          result.message,
-          icon: result.success ? null : FluentIcons.error_circle_24_regular,
+        await showDialog<void>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            scrollable: true,
+            icon: Icon(
+              result.success
+                  ? FluentIcons.shield_checkmark_24_regular
+                  : FluentIcons.error_circle_24_regular,
+            ),
+            title: Text(
+              result.success
+                  ? 'Backup verified'
+                  : 'Backup was not created',
+            ),
+            content: SelectableText(result.message),
+            actions: [
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
         );
       }
     } catch (e, stackTrace) {

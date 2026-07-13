@@ -136,15 +136,6 @@ class MusifyBackupService {
         message: 'Another backup or restore operation is already running.',
       );
     }
-
-    final destination = await FilePicker.getDirectoryPath();
-    if (destination == null) {
-      return const BackupOperationResult(
-        success: false,
-        message: 'No backup folder was selected.',
-      );
-    }
-
     _operationInProgress = true;
     Directory? stagingDirectory;
     try {
@@ -185,38 +176,30 @@ class MusifyBackupService {
         sourceDescription: 'newly created backup',
       );
 
-      final destinationDirectory = Directory(destination);
-      await destinationDirectory.create(recursive: true);
       final timestamp = _fileTimestamp(DateTime.now().toUtc());
-      final finalFile = File(
-        '${destinationDirectory.path}/Musify-Personalized-Backup-$timestamp.$musifyBackupExtension',
+      final fileName =
+          'Musify-Personalized-Backup-$timestamp.$musifyBackupExtension';
+      final outputPath = await FilePicker.saveFile(
+        dialogTitle: 'Save verified Musify backup',
+        fileName: fileName,
+        type: FileType.custom,
+        allowedExtensions: const [musifyBackupExtension],
+        bytes: bundleBytes,
       );
-      final partialFile = File('${finalFile.path}.partial');
-      if (await partialFile.exists()) await partialFile.delete();
-      await partialFile.writeAsBytes(bundleBytes, flush: true);
-
-      // Read back the real output. A successful write alone is not enough.
-      final writtenBytes = await partialFile.readAsBytes();
-      final verified = await inspectBundleBytes(
-        writtenBytes,
-        sourceDescription: partialFile.path,
-      );
-      if (verified.summary.toJson().toString() != summary.toJson().toString()) {
-        throw const BackupValidationException(
-          'The written backup summary does not match the source data.',
+      if (outputPath == null) {
+        return const BackupOperationResult(
+          success: false,
+          message: 'Backup canceled. No verified backup was created.',
         );
       }
-      if (await finalFile.exists()) {
-        throw BackupValidationException(
-          'Refusing to overwrite the existing backup ${finalFile.path}.',
-        );
-      }
-      await partialFile.rename(finalFile.path);
 
-      final finalBytes = await finalFile.readAsBytes();
-      final finalVerification = await inspectBundleBytes(
-        finalBytes,
-        sourceDescription: finalFile.path,
+      // Android's save-as picker writes through the Storage Access Framework.
+      // Treat the picker return as untrusted until the actual saved file is
+      // reopened and proven byte-for-byte identical to the validated bundle.
+      final finalFile = File(outputPath);
+      final finalVerification = await _verifySavedBackupFile(
+        finalFile,
+        expectedBytes: bundleBytes,
       );
       return BackupOperationResult(
         success: true,
@@ -247,6 +230,44 @@ class MusifyBackupService {
       _operationInProgress = false;
       await _deleteDirectoryQuietly(stagingDirectory);
     }
+  }
+
+  @visibleForTesting
+  static Future<ValidatedBackup> verifySavedBackupFileForTesting(
+    File file,
+    Uint8List expectedBytes,
+  ) {
+    return _verifySavedBackupFile(file, expectedBytes: expectedBytes);
+  }
+
+  static Future<ValidatedBackup> _verifySavedBackupFile(
+    File file, {
+    required Uint8List expectedBytes,
+  }) async {
+    final fileName = file.uri.pathSegments.isEmpty
+        ? file.path
+        : file.uri.pathSegments.last;
+    if (!fileName.toLowerCase().endsWith('.$musifyBackupExtension')) {
+      throw const BackupValidationException(
+        'The saved file must keep the .musifybackup extension.',
+      );
+    }
+    if (!await file.exists()) {
+      throw const BackupValidationException(
+        'The selected backup destination did not produce a readable file.',
+      );
+    }
+    final savedBytes = await file.readAsBytes();
+    if (savedBytes.isEmpty) {
+      throw const BackupValidationException('The saved backup file is empty.');
+    }
+    if (savedBytes.length != expectedBytes.length ||
+        sha256.convert(savedBytes) != sha256.convert(expectedBytes)) {
+      throw const BackupValidationException(
+        'The saved backup does not exactly match the verified source data.',
+      );
+    }
+    return inspectBundleBytes(savedBytes, sourceDescription: file.path);
   }
 
   static Future<ValidatedBackup?> pickAndInspectBundle() async {

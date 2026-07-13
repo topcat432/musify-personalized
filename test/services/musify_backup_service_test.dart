@@ -110,6 +110,75 @@ void main() {
     );
   });
 
+  test(
+    'reopens and verifies the exact file written by the save picker',
+    () async {
+      final payloads = await _createMatchingPayloads(
+        importedTracks: 3,
+        matched: 2,
+        review: 1,
+        unmatched: 0,
+      );
+      final bundle = await MusifyBackupService.createBundleBytesForTesting(
+        payloads,
+      );
+      final saved = File('${hiveRoot.path}/verified.musifybackup');
+      await saved.writeAsBytes(bundle, flush: true);
+
+      final validated =
+          await MusifyBackupService.verifySavedBackupFileForTesting(
+            saved,
+            bundle,
+          );
+
+      expect(validated.summary.importedTracks, 3);
+      expect(validated.summary.matchResults, 3);
+    },
+  );
+
+  test(
+    'rejects a save-picker file whose bytes changed after validation',
+    () async {
+      final payloads = await _createMatchingPayloads(
+        importedTracks: 2,
+        matched: 2,
+        review: 0,
+        unmatched: 0,
+      );
+      final bundle = await MusifyBackupService.createBundleBytesForTesting(
+        payloads,
+      );
+      final saved = File('${hiveRoot.path}/changed.musifybackup');
+      final changed = Uint8List.fromList(bundle);
+      changed[bundle.length ~/ 2] ^= 0x01;
+      await saved.writeAsBytes(changed, flush: true);
+
+      await expectLater(
+        MusifyBackupService.verifySavedBackupFileForTesting(saved, bundle),
+        throwsA(isA<BackupValidationException>()),
+      );
+    },
+  );
+
+  test('rejects a valid bundle saved without the required extension', () async {
+    final payloads = await _createMatchingPayloads(
+      importedTracks: 1,
+      matched: 1,
+      review: 0,
+      unmatched: 0,
+    );
+    final bundle = await MusifyBackupService.createBundleBytesForTesting(
+      payloads,
+    );
+    final saved = File('${hiveRoot.path}/wrong-extension.txt');
+    await saved.writeAsBytes(bundle, flush: true);
+
+    await expectLater(
+      MusifyBackupService.verifySavedBackupFileForTesting(saved, bundle),
+      throwsA(isA<BackupValidationException>()),
+    );
+  });
+
   test('rejects random bytes renamed as legacy Hive files', () async {
     await expectLater(
       MusifyBackupService.inspectLegacyPayloadsForTesting({

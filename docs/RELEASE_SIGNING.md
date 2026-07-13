@@ -1,6 +1,8 @@
 # Stable Android signing requirement
 
-The GitHub Actions debug APK is currently unsuitable for seamless on-device updates because each hosted runner may create a different Android debug keystore. Android only accepts an APK as an update when its package name and signing certificate match the installed app.
+GitHub Actions debug APKs are unsuitable for user-facing updates because hosted
+runners may create different debug certificates. Android accepts an update only
+when its package name and signing certificate match the installed app.
 
 Before the next user-facing APK release:
 
@@ -14,6 +16,17 @@ Before the next user-facing APK release:
 
 Do not commit private signing keys or passwords to this public repository.
 
-## Temporary data-preservation rule
+## Current release gate
 
-Until stable signing is configured, users should back up the `user` and `settings` Hive boxes from **Settings → Tools → Back up user data** before uninstalling any test build. The backup includes imported Spotify records and matching progress because those records live in the `user` box.
+The branch contains permanent release-signing configuration, but configuration
+alone is not proof. Before distributing an APK:
+
+1. build through `.github/workflows/signed-release.yml` using the encrypted
+   long-lived key;
+2. require v2 and v3 signature verification;
+3. require production package and label verification;
+4. install over the existing production app without uninstalling;
+5. confirm the existing production data remains readable;
+6. record the signer certificate fingerprint for future releases.
+
+The installed debug app remains untouched throughout this proof.

@@ -1,8 +1,10 @@
 # Update delivery plan
 
-## Current failure
+## Previous failure
 
-GitHub Actions currently produces debug APKs on fresh hosted runners. Those APKs are not guaranteed to share one persistent debug signing certificate, so Android may reject a new APK as an update to the installed build.
+GitHub Actions produced debug APKs on fresh hosted runners. Those APKs were not
+guaranteed to share one persistent debug signing certificate, so Android could
+reject a new APK as an update to an installed build.
 
 ## Permanent approach
 
@@ -14,6 +16,14 @@ GitHub Actions currently produces debug APKs on fresh hosted runners. Those APKs
 - Verify every release by installing it directly over the previous release without uninstalling.
 - Keep normal full APK updates available even if a future Dart code-push system is added.
 
-## Migration
+## Current reset-and-reimport path
 
-Because already-installed debug builds may have unknown or inconsistent signing certificates, one final uninstall/install migration may be unavoidable. Before that migration, export `user.hive` and `settings.hive` using the app's backup tool, then restore them into the permanently signed build.
+The completed debug dataset remains installed as a fallback. It will not be
+updated, uninstalled, cleared, exported through the old broken backup path, or
+used as the destination for the corrected build.
+
+The corrected APK must update the existing production package in place. The
+original Spotify CSV is then imported again into production, automatic strong
+matches are retained, and only uncertain/unmatched tracks require manual work.
+The debug fallback may be removed only after production survives restart and a
+new verified `.musifybackup` passes independent restore testing.
