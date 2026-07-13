@@ -99,18 +99,25 @@ jobs:
         run: exit 1
 
       - name: Build universal debug APK
-        run: flutter build apk --debug --flavor github
+        run: >-
+          flutter build apk --debug --flavor github
+          --dart-define=GIT_SHA=${{ github.sha }}
 
       - name: Verify debug APK output
         run: test -f build/app/outputs/flutter-apk/app-github-debug.apk
 
-      - name: Upload debug APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: musify-personalized-debug-${{ github.run_number }}
-          path: build/app/outputs/flutter-apk/app-github-debug.apk
-          if-no-files-found: error
-          retention-days: 14
+      - name: Verify debug channel identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk=build/app/outputs/flutter-apk/app-github-debug.apk
+          aapt="$(find "$ANDROID_SDK_ROOT/build-tools" -mindepth 2 -maxdepth 2 -type f -name aapt | sort -V | tail -1)"
+          badging="$($aapt dump badging "$apk")"
+          grep -Fq "package: name='com.topcat432.musifypersonalized.debug'" <<<"$badging"
+          grep -Fq "application-label:'Musify Personalized DEBUG'" <<<"$badging"
+          ! cmp -s \
+            android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png \
+            android/app/src/debug/res/mipmap-xxxhdpi/ic_launcher.png
 
       - name: Build unsigned release APK
         shell: bash
@@ -121,15 +128,20 @@ jobs:
             --release \
             --flavor github \
             --build-number "$build_number" \
-            --build-name "0.1.${GITHUB_RUN_NUMBER}"
+            --build-name "0.1.${GITHUB_RUN_NUMBER}" \
+            --dart-define=GIT_SHA="$GITHUB_SHA"
 
       - name: Verify unsigned release APK output
-        run: test -f build/app/outputs/flutter-apk/app-github-release.apk
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk=build/app/outputs/flutter-apk/app-github-release.apk
+          test -f "$apk"
+          aapt="$(find "$ANDROID_SDK_ROOT/build-tools" -mindepth 2 -maxdepth 2 -type f -name aapt | sort -V | tail -1)"
+          badging="$($aapt dump badging "$apk")"
+          grep -Fq "package: name='com.topcat432.musifypersonalized'" <<<"$badging"
+          grep -Fq "application-label:'Musify Personalized'" <<<"$badging"
 
-      - name: Upload unsigned release APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: musify-personalized-unsigned-release-${{ github.run_number }}
-          path: build/app/outputs/flutter-apk/app-github-release.apk
-          if-no-files-found: error
-          retention-days: 14
+      # CI builds are verification inputs only. They are deliberately not
+      # uploaded because debug signing is ephemeral and unsigned releases are
+      # not safe user updates. User-facing APKs come only from signed-release.

@@ -85,7 +85,8 @@ jobs:
             --release \
             --flavor github \
             --build-number "$build_number" \
-            --build-name "0.1.${GITHUB_RUN_NUMBER}"
+            --build-name "0.1.${GITHUB_RUN_NUMBER}" \
+            --dart-define=GIT_SHA="$GITHUB_SHA"
 
       - name: Verify signed APK
         shell: bash
@@ -99,6 +100,10 @@ jobs:
           printf '%s\n' "$verification"
           grep -Fq 'Verified using v2 scheme (APK Signature Scheme v2): true' <<<"$verification"
           grep -Fq 'Verified using v3 scheme (APK Signature Scheme v3): true' <<<"$verification"
+          aapt="$(find "$ANDROID_SDK_ROOT/build-tools" -mindepth 2 -maxdepth 2 -type f -name aapt | sort -V | tail -1)"
+          badging="$($aapt dump badging "$apk")"
+          grep -Fq "package: name='com.topcat432.musifypersonalized'" <<<"$badging"
+          grep -Fq "application-label:'Musify Personalized'" <<<"$badging"
           cp "$apk" musify-personalized-update.apk
 
       - name: Upload signed update APK
