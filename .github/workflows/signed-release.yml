@@ -93,7 +93,12 @@ jobs:
           set -euo pipefail
           apk=build/app/outputs/flutter-apk/app-github-release.apk
           test -f "$apk"
-          jarsigner -verify "$apk" >/dev/null
+          apksigner="$(find "$ANDROID_SDK_ROOT/build-tools" -mindepth 2 -maxdepth 2 -type f -name apksigner | sort -V | tail -1)"
+          test -x "$apksigner"
+          verification="$($apksigner verify --verbose --print-certs "$apk")"
+          printf '%s\n' "$verification"
+          grep -Fq 'Verified using v2 scheme (APK Signature Scheme v2): true' <<<"$verification"
+          grep -Fq 'Verified using v3 scheme (APK Signature Scheme v3): true' <<<"$verification"
           cp "$apk" musify-personalized-update.apk
 
       - name: Upload signed update APK
