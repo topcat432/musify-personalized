@@ -30,6 +30,7 @@ import 'package:musify/screens/search_page.dart';
 import 'package:musify/services/common_services.dart';
 import 'package:musify/services/data_manager.dart';
 import 'package:musify/services/listening_stats_service.dart';
+import 'package:musify/services/musify_backup_service.dart';
 import 'package:musify/services/playlist_download_service.dart';
 import 'package:musify/services/playlists_manager.dart';
 import 'package:musify/services/router_service.dart';
@@ -370,47 +371,13 @@ class SettingsPage extends StatelessWidget {
         CustomBar(
           context.l10n!.restoreUserData,
           FluentIcons.cloud_add_24_regular,
-          onTap: () async {
-            try {
-              final result = await restoreData(context);
-              if (result.success) {
-                reloadSongLibraryStateFromStorage();
-                reloadPlaylistLibraryStateFromStorage();
-                reloadSearchHistoryFromStorage();
-                // The restored settings box may carry a different
-                // wrappedEnabled value than the one already loaded into this
-                // ValueNotifier; without resyncing it here, recording silently
-                // keeps following the pre-restore value until the next cold
-                // start, when it would suddenly flip without explanation.
-                wrappedEnabled.value =
-                    await getData(
-                          'settings',
-                          'wrappedEnabled',
-                          defaultValue: true,
-                        )
-                        as bool;
-                listeningStatsService.reload();
-              }
-              if (context.mounted) {
-                showToast(
-                  context,
-                  result.message,
-                  icon: result.success
-                      ? null
-                      : FluentIcons.error_circle_24_regular,
-                );
-              }
-            } catch (e, str) {
-              logger.log('Error restoring data', error: e, stackTrace: str);
-              if (context.mounted) {
-                showToast(
-                  context,
-                  context.l10n!.error,
-                  icon: FluentIcons.error_circle_24_regular,
-                );
-              }
-            }
-          },
+          onTap: () => _restoreVerifiedBundle(context),
+        ),
+        CustomBar(
+          'Recover legacy debug data',
+          Icons.settings_backup_restore,
+          description: 'Validate and import user.hive plus settings.hive',
+          onTap: () => _restoreLegacyPair(context),
         ),
         if (!isFdroidBuild)
           CustomBar(
@@ -840,7 +807,9 @@ class SettingsPage extends StatelessWidget {
               size: 32,
             ),
             content: Text(
-              context.l10n!.folderRestrictions,
+              'Musify will create one .musifybackup file containing both '
+              'required databases, checksums, and verified data counts. '
+              'Success is shown only after the saved file is read back.',
               style: TextStyle(color: colorScheme.onSurfaceVariant),
               textAlign: TextAlign.center,
             ),
@@ -854,12 +823,30 @@ class SettingsPage extends StatelessWidget {
           );
         },
       );
-      final result = await backupData(context);
+      final result = await MusifyBackupService.createVerifiedBackup();
       if (context.mounted) {
-        showToast(
-          context,
-          result.message,
-          icon: result.success ? null : FluentIcons.error_circle_24_regular,
+        await showDialog<void>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            scrollable: true,
+            icon: Icon(
+              result.success
+                  ? FluentIcons.shield_checkmark_24_regular
+                  : FluentIcons.error_circle_24_regular,
+            ),
+            title: Text(
+              result.success
+                  ? 'Backup verified'
+                  : 'Backup was not created',
+            ),
+            content: SelectableText(result.message),
+            actions: [
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
         );
       }
     } catch (e, stackTrace) {
@@ -871,6 +858,153 @@ class SettingsPage extends StatelessWidget {
           icon: FluentIcons.error_circle_24_regular,
         );
       }
+    }
+  }
+
+  Future<void> _restoreVerifiedBundle(BuildContext context) async {
+    try {
+      final backup = await MusifyBackupService.pickAndInspectBundle();
+      if (backup == null || !context.mounted) return;
+      final confirmed = await _confirmValidatedRestore(context, backup);
+      if (!confirmed || !context.mounted) return;
+      final result = await MusifyBackupService.restoreValidatedBackup(backup);
+      await _finishRestore(context, result);
+    } on BackupValidationException catch (error, stackTrace) {
+      logger.log(
+        'Backup selection rejected',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (context.mounted) {
+        showToast(
+          context,
+          error.message,
+          icon: FluentIcons.error_circle_24_regular,
+        );
+      }
+    } catch (error, stackTrace) {
+      logger.log(
+        'Verified restore failed',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (context.mounted) {
+        showToast(
+          context,
+          'Restore failed before any success could be verified.',
+          icon: FluentIcons.error_circle_24_regular,
+        );
+      }
+    }
+  }
+
+  Future<void> _restoreLegacyPair(BuildContext context) async {
+    try {
+      final backup = await MusifyBackupService.pickAndInspectLegacyPair();
+      if (backup == null || !context.mounted) return;
+      final confirmed = await _confirmValidatedRestore(
+        context,
+        backup,
+        legacy: true,
+      );
+      if (!confirmed || !context.mounted) return;
+      final result = await MusifyBackupService.restoreValidatedBackup(backup);
+      await _finishRestore(context, result);
+    } on BackupValidationException catch (error, stackTrace) {
+      logger.log(
+        'Legacy recovery rejected',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (context.mounted) {
+        showToast(
+          context,
+          error.message,
+          icon: FluentIcons.error_circle_24_regular,
+        );
+      }
+    } catch (error, stackTrace) {
+      logger.log(
+        'Legacy recovery failed',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (context.mounted) {
+        showToast(
+          context,
+          'Legacy recovery failed before verification.',
+          icon: FluentIcons.error_circle_24_regular,
+        );
+      }
+    }
+  }
+
+  Future<bool> _confirmValidatedRestore(
+    BuildContext context,
+    ValidatedBackup backup, {
+    bool legacy = false,
+  }) async {
+    final summary = backup.summary;
+    return await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            scrollable: true,
+            icon: const Icon(FluentIcons.shield_checkmark_24_regular),
+            title: Text(legacy ? 'Validated legacy data' : 'Validated backup'),
+            content: Text(
+              'Source: ${backup.sourceDescription}\n\n'
+              'Imported tracks: ${summary.importedTracks}\n'
+              'Match results: ${summary.matchResults}\n'
+              'Strong/manual matches: ${summary.strongMatches}\n'
+              'Needs review: ${summary.reviewItems}\n'
+              'Unmatched: ${summary.unmatchedItems}\n'
+              'Errors: ${summary.errorItems}\n'
+              'Favorites: ${summary.favorites}\n'
+              'Playlists: ${summary.playlists}\n\n'
+              'Musify will create and verify a rollback copy before replacing '
+              'live data. Continue only if these counts are correct.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: const Text('Restore verified data'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+  }
+
+  Future<void> _finishRestore(
+    BuildContext context,
+    BackupOperationResult result,
+  ) async {
+    if (result.success) {
+      reloadSongLibraryStateFromStorage();
+      reloadPlaylistLibraryStateFromStorage();
+      reloadSearchHistoryFromStorage();
+      reloadSettingsStateFromStorage();
+      listeningStatsService.reload();
+      if (context.mounted) {
+        await Musify.updateAppState(
+          context,
+          newThemeMode: getThemeMode(themeModeSetting),
+          newLocale: languageSetting,
+          newAccentColor: primaryColorSetting,
+          useSystemColor: useSystemColor.value,
+        );
+      }
+    }
+    if (context.mounted) {
+      showToast(
+        context,
+        result.message,
+        icon: result.success ? null : FluentIcons.error_circle_24_regular,
+      );
     }
   }
 }

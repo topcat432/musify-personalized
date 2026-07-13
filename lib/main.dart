@@ -37,6 +37,7 @@ import 'package:musify/services/data_manager.dart';
 import 'package:musify/services/io_service.dart';
 import 'package:musify/services/listening_stats_service.dart';
 import 'package:musify/services/logger_service.dart';
+import 'package:musify/services/musify_backup_service.dart';
 import 'package:musify/services/playlist_sharing.dart';
 import 'package:musify/services/playlists_manager.dart';
 import 'package:musify/services/router_service.dart';
@@ -262,6 +263,14 @@ class _MusifyState extends State<Musify> with WidgetsBindingObserver {
             supportedLocales: appSupportedLocales,
             locale: languageSetting,
             routerConfig: NavigationManager.router,
+            builder: (context, child) => kDebugMode
+                ? Banner(
+                    message: 'DEBUG',
+                    location: BannerLocation.topEnd,
+                    color: Colors.red.shade800,
+                    child: child ?? const SizedBox.shrink(),
+                  )
+                : child ?? const SizedBox.shrink(),
           ),
         );
       },
@@ -277,9 +286,13 @@ void main() async {
 }
 
 Future<void> initialisation() async {
-  try {
-    await Hive.initFlutter();
+  // Restore crash recovery is intentionally outside the broad initialization
+  // catch. If it cannot establish a consistent user/settings pair, startup
+  // must stop instead of opening empty or half-restored databases.
+  await Hive.initFlutter();
+  await MusifyBackupService.recoverInterruptedRestoreIfNeeded();
 
+  try {
     await Future.wait([
       Hive.openBox('settings'),
       Hive.openBox('user'),

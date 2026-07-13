@@ -1,10 +1,14 @@
-name: Build signed update APK
+name: Build signed production APK
 
 on:
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: signed-production-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   FLUTTER_VERSION: '3.44.5'
@@ -16,7 +20,7 @@ jobs:
     timeout-minutes: 40
 
     steps:
-      - name: Check out repository
+      - name: Check out selected candidate
         uses: actions/checkout@v4
 
       - name: Set up Java 17
@@ -80,14 +84,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          build_number=$((200000 + GITHUB_RUN_NUMBER))
+          # YYDDD plus a three-digit workflow sequence is monotonic across
+          # calendar days and safely above all earlier 200xxx test builds.
+          day_code="$(date -u +'%y%j')"
+          build_number=$((10#$day_code * 1000 + GITHUB_RUN_NUMBER % 1000))
           flutter build apk \
             --release \
             --flavor github \
             --build-number "$build_number" \
-            --build-name "0.1.${GITHUB_RUN_NUMBER}"
+            --build-name "0.1.$build_number" \
+            --dart-define=GIT_SHA="$GITHUB_SHA"
 
-      - name: Verify signed APK
+      - name: Verify signed production identity
         shell: bash
         run: |
           set -euo pipefail
@@ -99,12 +107,36 @@ jobs:
           printf '%s\n' "$verification"
           grep -Fq 'Verified using v2 scheme (APK Signature Scheme v2): true' <<<"$verification"
           grep -Fq 'Verified using v3 scheme (APK Signature Scheme v3): true' <<<"$verification"
-          cp "$apk" musify-personalized-update.apk
+          signer_sha="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' <<<"$verification" | head -1)"
+          test -n "$signer_sha"
+          aapt="$(find "$ANDROID_SDK_ROOT/build-tools" -mindepth 2 -maxdepth 2 -type f -name aapt | sort -V | tail -1)"
+          badging="$($aapt dump badging "$apk")"
+          grep -Fq "package: name='com.topcat432.musifypersonalized'" <<<"$badging"
+          grep -Fq "application-label:'Musify Personalized'" <<<"$badging"
+          ! grep -Fq 'application-debuggable' <<<"$badging"
+          cp "$apk" musify-personalized-production.apk
+          sha256sum musify-personalized-production.apk > musify-personalized-production.apk.sha256
+          package_line="$(head -1 <<<"$badging")"
+          {
+            echo "Musify Personalized production release proof"
+            echo "Source commit: $GITHUB_SHA"
+            echo "Workflow run: $GITHUB_RUN_ID"
+            echo "Signer SHA-256: $signer_sha"
+            echo "APK SHA-256: $(cut -d' ' -f1 musify-personalized-production.apk.sha256)"
+            echo "$package_line"
+            echo "Application label: Musify Personalized"
+            echo "Debuggable: false"
+            echo "Signature schemes: v2=true, v3=true"
+          } > release-proof.txt
+          cat release-proof.txt
 
-      - name: Upload signed update APK
+      - name: Upload verified production candidate
         uses: actions/upload-artifact@v4
         with:
-          name: musify-personalized-signed-${{ github.run_number }}
-          path: musify-personalized-update.apk
+          name: musify-personalized-PRODUCTION-${{ github.run_number }}
+          path: |
+            musify-personalized-production.apk
+            musify-personalized-production.apk.sha256
+            release-proof.txt
           if-no-files-found: error
           retention-days: 30

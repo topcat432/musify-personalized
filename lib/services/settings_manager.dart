@@ -94,7 +94,7 @@ Locale languageSetting = getLocaleFromLanguageCode(
   Hive.box('settings').get('languageCode', defaultValue: 'en') as String,
 );
 
-final themeModeSetting =
+int themeModeSetting =
     Hive.box('settings').get('themeIndex', defaultValue: 0) as int;
 
 String playlistSortSetting = Hive.box(
@@ -118,6 +118,59 @@ final repeatNotifier = ValueNotifier<AudioServiceRepeatMode>(
     'settings',
   ).get('repeatMode', defaultValue: 0)],
 );
+
+void reloadSettingsStateFromStorage() {
+  final box = Hive.box('settings');
+  shouldWeCheckUpdates.value = box.get(
+    'shouldWeCheckUpdates',
+    defaultValue: null,
+  );
+  playNextSongAutomatically.value = box.get(
+    'playNextSongAutomatically',
+    defaultValue: false,
+  );
+  useSystemColor.value = box.get('useSystemColor', defaultValue: true);
+  usePureBlackColor.value = box.get(
+    'usePureBlackColor',
+    defaultValue: false,
+  );
+  offlineMode.value = box.get('offlineMode', defaultValue: false);
+  wrappedEnabled.value = box.get('wrappedEnabled', defaultValue: true);
+  predictiveBack.value = box.get('predictiveBack', defaultValue: true);
+  sponsorBlockSupport.value = box.get(
+    'sponsorBlockSupport',
+    defaultValue: false,
+  );
+  externalRecommendations.value = box.get(
+    'externalRecommendations',
+    defaultValue: false,
+  );
+  useProxy.value = box.get('useProxy', defaultValue: false);
+  audioQualitySetting.value = box.get('audioQuality', defaultValue: 'high');
+  equalizerEnabled.value = box.get('equalizerEnabled', defaultValue: false);
+  equalizerBandGains.value = _readEqualizerGains();
+
+  final languageCode = box.get('languageCode', defaultValue: 'en');
+  languageSetting = getLocaleFromLanguageCode(languageCode as String);
+  themeModeSetting = box.get('themeIndex', defaultValue: 0) as int;
+  playlistSortSetting = box.get(
+    'playlistSortType',
+    defaultValue: PlaylistSortType.default_.name,
+  );
+  offlineSortSetting = box.get(
+    'offlineSortType',
+    defaultValue: OfflineSortType.default_.name,
+  );
+  primaryColorSetting = Color(
+    box.get('accentColor', defaultValue: 0xff91cef4) as int,
+  );
+  shuffleNotifier.value = box.get('shuffleEnabled', defaultValue: false);
+  final repeatIndex = box.get('repeatMode', defaultValue: 0) as int;
+  repeatNotifier.value = repeatIndex >= 0 &&
+          repeatIndex < AudioServiceRepeatMode.values.length
+      ? AudioServiceRepeatMode.values[repeatIndex]
+      : AudioServiceRepeatMode.none;
+}
 
 // Non-storage notifiers
 
