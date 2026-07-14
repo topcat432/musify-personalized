@@ -1017,15 +1017,19 @@ class _CandidatePanel extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      Text(
-                        'SUGGESTED MATCH',
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: Colors.white.withValues(alpha: 0.72),
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 1,
+                      Expanded(
+                        child: Text(
+                          'SUGGESTED MATCH',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: Colors.white.withValues(alpha: 0.72),
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 1,
+                          ),
                         ),
                       ),
-                      const Spacer(),
+                      const SizedBox(width: 8),
                       DecoratedBox(
                         decoration: BoxDecoration(
                           color: Colors.white.withValues(alpha: 0.14),
