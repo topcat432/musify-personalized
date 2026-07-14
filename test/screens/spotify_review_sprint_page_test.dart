@@ -116,7 +116,43 @@ void main() {
       findsOneWidget,
     );
     expect(find.byKey(const ValueKey('review-reject-button')), findsOneWidget);
+    expect(find.byKey(const ValueKey('review-exclude-button')), findsOneWidget);
     expect(tester.takeException(), isNull);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await player.dispose();
+  });
+
+  testWidgets('permanent exclusion confirms and removes the track', (
+    tester,
+  ) async {
+    final source = _FakeReviewDataSource([
+      _item(row: 1, title: 'Voice-over intro', songId: 'voice-over'),
+      _item(row: 2, title: 'Real song', songId: 'real-song'),
+    ]);
+    final player = _FakeAudioPlayer();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SpotifyReviewSprintPage(
+          dataSource: source,
+          audioPlayer: player,
+          streamResolver: (songId) async => 'url-$songId',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('review-exclude-button')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Exclude “Voice-over intro”'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Exclude'));
+    await tester.pumpAndSettle();
+
+    expect(source.excludedRows, <String>['1']);
+    expect(find.text('Voice-over intro'), findsNothing);
+    expect(find.text('Real song'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox.shrink());
     await player.dispose();
@@ -169,6 +205,7 @@ class _FakeReviewDataSource implements SpotifyReviewSprintDataSource {
 
   final List<Map<String, dynamic>> _items;
   final List<_Decision> decisions = <_Decision>[];
+  final List<String> excludedRows = <String>[];
 
   @override
   Future<List<Map<String, dynamic>>> loadUnresolvedItems() async {
@@ -183,6 +220,19 @@ class _FakeReviewDataSource implements SpotifyReviewSprintDataSource {
   }) async {
     final row = item['sourceRow'].toString();
     decisions.add(_Decision(row: row, accept: accept));
+    _items.removeWhere((candidate) => candidate['sourceRow'].toString() == row);
+    return SpotifyResolutionResult(
+      duplicatesApplied: 0,
+      remainingUnresolved: _items.length,
+    );
+  }
+
+  @override
+  Future<SpotifyResolutionResult> excludeItem({
+    required Map<String, dynamic> item,
+  }) async {
+    final row = item['sourceRow'].toString();
+    excludedRows.add(row);
     _items.removeWhere((candidate) => candidate['sourceRow'].toString() == row);
     return SpotifyResolutionResult(
       duplicatesApplied: 0,

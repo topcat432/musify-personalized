@@ -79,6 +79,7 @@ class SpotifyTrackMatchingService {
     final box = Hive.box('user');
     final tracks = _readMaps(box.get('spotifyImportTracks'));
     final metadata = _readMap(box.get('spotifyImportMetadata'));
+    final excludedRows = _readExcludedRows(box);
     await deleteData('user', 'spotifyMatchResults');
     metadata
       ..['matchingVersion'] = 3
@@ -88,6 +89,7 @@ class SpotifyTrackMatchingService {
       ..['reviewCount'] = 0
       ..['unmatchedCount'] = 0
       ..['errorCount'] = 0
+      ..['excludedCount'] = excludedRows.length
       ..['pendingResolutionCount'] = 0
       ..['lastMatchingCheckpointAt'] = DateTime.now()
           .toUtc()
@@ -157,6 +159,7 @@ class SpotifyTrackMatchingService {
     final tracks = _readMaps(box.get('spotifyImportTracks'));
     final results = _readMaps(box.get('spotifyMatchResults'));
     final metadata = _readMap(box.get('spotifyImportMetadata'));
+    final excludedRows = _readExcludedRows(box);
 
     if (tracks.isEmpty) return _snapshot(tracks, results, metadata);
 
@@ -177,20 +180,24 @@ class SpotifyTrackMatchingService {
 
       final source = tracks[nextIndex];
       Map<String, dynamic> result;
-      try {
-        result = await _matchOne(source);
-      } catch (error) {
-        result = {
-          'sourceRow': source['sourceRow'],
-          'sourceTitle': source['title']?.toString() ?? '',
-          'sourceArtist': source['artist']?.toString() ?? '',
-          'sourceAlbum': source['album']?.toString() ?? '',
-          'sourceIsrc': source['isrc']?.toString() ?? '',
-          'status': 'error',
-          'score': 0.0,
-          'error': error.toString(),
-          'matchedAt': DateTime.now().toUtc().toIso8601String(),
-        };
+      if (excludedRows.contains(source['sourceRow']?.toString())) {
+        result = _excludedResult(source);
+      } else {
+        try {
+          result = await _matchOne(source);
+        } catch (error) {
+          result = {
+            'sourceRow': source['sourceRow'],
+            'sourceTitle': source['title']?.toString() ?? '',
+            'sourceArtist': source['artist']?.toString() ?? '',
+            'sourceAlbum': source['album']?.toString() ?? '',
+            'sourceIsrc': source['isrc']?.toString() ?? '',
+            'status': 'error',
+            'score': 0.0,
+            'error': error.toString(),
+            'matchedAt': DateTime.now().toUtc().toIso8601String(),
+          };
+        }
       }
 
       results.add(result);
@@ -414,6 +421,7 @@ class SpotifyTrackMatchingService {
     metadata['reviewCount'] = _count(results, 'needs_review');
     metadata['unmatchedCount'] = results.where(_isUnmatched).length;
     metadata['errorCount'] = _count(results, 'error');
+    metadata['excludedCount'] = _count(results, 'excluded');
     metadata['pendingResolutionCount'] = results.where(_isPendingResolution).length;
     metadata['validTrackCount'] = totalTracks;
     metadata['lastMatchingCheckpointAt'] = DateTime.now()
@@ -468,6 +476,32 @@ class SpotifyTrackMatchingService {
 
   static int _count(List<Map<String, dynamic>> results, String status) {
     return results.where((result) => result['status'] == status).length;
+  }
+
+  static Set<String> _readExcludedRows(Box box) {
+    return (box.get('spotifyExcludedImportRows') as List? ?? const [])
+        .map((value) => value.toString())
+        .toSet();
+  }
+
+  static Map<String, dynamic> _excludedResult(Map<String, dynamic> source) {
+    final timestamp = DateTime.now().toUtc().toIso8601String();
+    return {
+      'sourceRow': source['sourceRow'],
+      'sourceTitle': source['title']?.toString() ?? '',
+      'sourceArtist': source['artist']?.toString() ?? '',
+      'sourceAlbum': source['album']?.toString() ?? '',
+      'sourceIsrc': source['isrc']?.toString() ?? '',
+      'sourceDurationMs': _asInt(source['durationMs']),
+      'status': 'excluded',
+      'score': 0.0,
+      'bestCandidate': null,
+      'matchEvidence': null,
+      'alternatives': <Map<String, dynamic>>[],
+      'reviewDecision': 'excluded_from_import',
+      'excludedAt': timestamp,
+      'reviewedAt': timestamp,
+    };
   }
 
   static int? _asInt(dynamic value) {

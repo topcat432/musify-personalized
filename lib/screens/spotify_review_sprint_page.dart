@@ -459,7 +459,7 @@ class _SpotifyReviewSprintPageState extends State<SpotifyReviewSprintPage> {
     await _stopPreview();
     if (!mounted) return;
     final saved = await Navigator.of(context).push<bool>(
-      MaterialPageRoute<bool>(
+      personalizedPageRoute<bool>(
         builder: (_) => SpotifyManualMatchPage(item: item),
       ),
     );
@@ -468,6 +468,53 @@ class _SpotifyReviewSprintPageState extends State<SpotifyReviewSprintPage> {
       await _load(showLoading: false);
     } else {
       await _prepareCurrent();
+    }
+  }
+
+  Future<void> _excludeCurrent() async {
+    final item = _current;
+    if (item == null || _saving) return;
+    final title = item['sourceTitle']?.toString().trim();
+    final confirmed = await showPersonalizedDestructiveConfirmation(
+      context: context,
+      title: 'Exclude “${title?.isNotEmpty == true ? title : 'this track'}”?',
+      message:
+          'This removes the track from review, rescue, and every destination for this import. It will not remove anything already in Liked Songs.',
+      confirmLabel: 'Exclude',
+    );
+    if (!confirmed || !mounted) return;
+
+    _playbackGeneration++;
+    await _stopPreview();
+    if (!mounted) return;
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      await _service.excludeItem(item: item);
+      if (!mounted) return;
+      setState(() {
+        _items.removeWhere(
+          (candidate) => _itemKey(candidate) == _itemKey(item),
+        );
+        _selectedAlternativeIndex = 0;
+        _sessionResolved++;
+        _saving = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Track excluded from this import workflow.'),
+        ),
+      );
+      unawaited(_prepareCurrent());
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _error = 'Track was not excluded. $error';
+      });
+      unawaited(_prepareCurrent());
     }
   }
 
@@ -570,10 +617,14 @@ class _SpotifyReviewSprintPageState extends State<SpotifyReviewSprintPage> {
                       horizontal: 11,
                       vertical: 6,
                     ),
-                    child: Text(
-                      '${_items.length} left',
-                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 220),
+                      child: Text(
+                        '${_items.length} left',
+                        key: ValueKey(_items.length),
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                   ),
@@ -615,48 +666,66 @@ class _SpotifyReviewSprintPageState extends State<SpotifyReviewSprintPage> {
                   Expanded(
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(14, 6, 14, 8),
-                      child: ReviewSwipeDeck(
-                        key: ValueKey(_itemKey(item)),
-                        controller: _deckController,
-                        enabled: !_saving,
-                        canAccept: alternatives.isNotEmpty,
-                        currentCard: _ReviewSongCard(
-                          item: item,
-                          alternative: selected,
-                          candidateIndex: _selectedAlternativeIndex,
-                          candidateCount: alternatives.length,
-                          previewLoadingId: _previewLoadingId,
-                          previewingId: _previewingId,
-                          previewPlaying: _previewPlaying,
-                          onPreview: _toggleSelectedPreview,
-                          onPreviousCandidate: _selectedAlternativeIndex > 0
-                              ? () => _selectAlternative(
-                                  _selectedAlternativeIndex - 1,
-                                )
-                              : null,
-                          onNextCandidate:
-                              _selectedAlternativeIndex + 1 <
-                                  alternatives.length
-                              ? () => _selectAlternative(
-                                  _selectedAlternativeIndex + 1,
-                                )
-                              : null,
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 280),
+                        switchInCurve: Curves.easeOutCubic,
+                        switchOutCurve: Curves.easeInCubic,
+                        transitionBuilder: (child, animation) {
+                          final slide = Tween<Offset>(
+                            begin: const Offset(0.04, 0.025),
+                            end: Offset.zero,
+                          ).animate(animation);
+                          return FadeTransition(
+                            opacity: animation,
+                            child: SlideTransition(
+                              position: slide,
+                              child: child,
+                            ),
+                          );
+                        },
+                        child: ReviewSwipeDeck(
+                          key: ValueKey(_itemKey(item)),
+                          controller: _deckController,
+                          enabled: !_saving,
+                          canAccept: alternatives.isNotEmpty,
+                          currentCard: _ReviewSongCard(
+                            item: item,
+                            alternative: selected,
+                            candidateIndex: _selectedAlternativeIndex,
+                            candidateCount: alternatives.length,
+                            previewLoadingId: _previewLoadingId,
+                            previewingId: _previewingId,
+                            previewPlaying: _previewPlaying,
+                            onPreview: _toggleSelectedPreview,
+                            onPreviousCandidate: _selectedAlternativeIndex > 0
+                                ? () => _selectAlternative(
+                                    _selectedAlternativeIndex - 1,
+                                  )
+                                : null,
+                            onNextCandidate:
+                                _selectedAlternativeIndex + 1 <
+                                    alternatives.length
+                                ? () => _selectAlternative(
+                                    _selectedAlternativeIndex + 1,
+                                  )
+                                : null,
+                          ),
+                          nextCard: nextItem == null
+                              ? null
+                              : _ReviewSongCard(
+                                  item: nextItem,
+                                  alternative: nextAlternatives.isEmpty
+                                      ? null
+                                      : nextAlternatives.first,
+                                  candidateIndex: 0,
+                                  candidateCount: nextAlternatives.length,
+                                  previewLoadingId: null,
+                                  previewingId: null,
+                                  previewPlaying: false,
+                                  behind: true,
+                                ),
+                          onAction: _handleDeckAction,
                         ),
-                        nextCard: nextItem == null
-                            ? null
-                            : _ReviewSongCard(
-                                item: nextItem,
-                                alternative: nextAlternatives.isEmpty
-                                    ? null
-                                    : nextAlternatives.first,
-                                candidateIndex: 0,
-                                candidateCount: nextAlternatives.length,
-                                previewLoadingId: null,
-                                previewingId: null,
-                                previewPlaying: false,
-                                behind: true,
-                              ),
-                        onAction: _handleDeckAction,
                       ),
                     ),
                   ),
@@ -675,6 +744,7 @@ class _SpotifyReviewSprintPageState extends State<SpotifyReviewSprintPage> {
                       _deckController.perform(ReviewSwipeAction.accept),
                     ),
                     onManualSearch: _manualSearch,
+                    onExclude: _excludeCurrent,
                     bulkApprovalAvailable: _clusterBulkApprovalAvailable(item),
                     onBulkApprove: _bulkApproveCurrentCluster,
                   ),
@@ -738,12 +808,17 @@ class _SprintStatusBar extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 7),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(99),
-                  child: LinearProgressIndicator(
-                    value: progress,
-                    minHeight: 4,
-                    backgroundColor: colors.surfaceContainerHighest,
+                TweenAnimationBuilder<double>(
+                  tween: Tween(end: progress),
+                  duration: const Duration(milliseconds: 320),
+                  curve: Curves.easeOutCubic,
+                  builder: (context, value, child) => ClipRRect(
+                    borderRadius: BorderRadius.circular(99),
+                    child: LinearProgressIndicator(
+                      value: value,
+                      minHeight: 4,
+                      backgroundColor: colors.surfaceContainerHighest,
+                    ),
                   ),
                 ),
               ],
@@ -1290,6 +1365,7 @@ class _SprintActions extends StatelessWidget {
     required this.onPostpone,
     required this.onAccept,
     required this.onManualSearch,
+    required this.onExclude,
     required this.bulkApprovalAvailable,
     required this.onBulkApprove,
   });
@@ -1301,6 +1377,7 @@ class _SprintActions extends StatelessWidget {
   final VoidCallback onPostpone;
   final VoidCallback onAccept;
   final VoidCallback onManualSearch;
+  final VoidCallback onExclude;
   final bool bulkApprovalAvailable;
   final VoidCallback onBulkApprove;
 
@@ -1373,6 +1450,19 @@ class _SprintActions extends StatelessWidget {
                     label: const Text('Approve similar'),
                   ),
               ],
+            ),
+            SizedBox(
+              height: 34,
+              child: TextButton.icon(
+                key: const ValueKey('review-exclude-button'),
+                onPressed: enabled ? onExclude : null,
+                style: TextButton.styleFrom(
+                  foregroundColor: colors.error,
+                  visualDensity: VisualDensity.compact,
+                ),
+                icon: const Icon(Icons.delete_forever_outlined, size: 18),
+                label: const Text('Exclude permanently'),
+              ),
             ),
             Text(
               'Swipe left for no match · right to accept · up for later',

@@ -48,7 +48,7 @@ class SpotifyImportHubPage extends StatelessWidget {
                   description:
                       'Validate and save tracks from Spotify, Exportify, or Soundiiz.',
                   onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(
+                    personalizedPageRoute<void>(
                       builder: (_) => const SpotifyImportPage(),
                     ),
                   ),
@@ -60,7 +60,7 @@ class SpotifyImportHubPage extends StatelessWidget {
                   title: 'Find the recordings',
                   description: 'Resume catalog matching with safe checkpoints.',
                   onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(
+                    personalizedPageRoute<void>(
                       builder: (_) => const SpotifyMatchingPage(),
                     ),
                   ),
@@ -73,7 +73,7 @@ class SpotifyImportHubPage extends StatelessWidget {
                   description:
                       'Preview one suggestion at a time and save each decision.',
                   onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(
+                    personalizedPageRoute<void>(
                       builder: (_) => const SpotifyReviewSprintPage(),
                     ),
                   ),
@@ -86,7 +86,7 @@ class SpotifyImportHubPage extends StatelessWidget {
                   description:
                       'Send all or an exact number of resolved songs to Liked Songs or a playlist.',
                   onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(
+                    personalizedPageRoute<void>(
                       builder: (_) => const SpotifyImportDestinationPage(),
                     ),
                   ),

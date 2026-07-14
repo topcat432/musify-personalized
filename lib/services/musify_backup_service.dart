@@ -49,6 +49,7 @@ class BackupSummary {
     required this.reviewItems,
     required this.unmatchedItems,
     required this.errorItems,
+    this.excludedItems = 0,
     required this.favorites,
     required this.playlists,
     required this.userKeys,
@@ -65,6 +66,9 @@ class BackupSummary {
       reviewItems: count('reviewItems'),
       unmatchedItems: count('unmatchedItems'),
       errorItems: count('errorItems'),
+      excludedItems: json['excludedItems'] == null
+          ? 0
+          : count('excludedItems'),
       favorites: count('favorites'),
       playlists: count('playlists'),
       userKeys: count('userKeys'),
@@ -78,6 +82,7 @@ class BackupSummary {
   final int reviewItems;
   final int unmatchedItems;
   final int errorItems;
+  final int excludedItems;
   final int favorites;
   final int playlists;
   final int userKeys;
@@ -90,6 +95,7 @@ class BackupSummary {
     'reviewItems': reviewItems,
     'unmatchedItems': unmatchedItems,
     'errorItems': errorItems,
+    'excludedItems': excludedItems,
     'favorites': favorites,
     'playlists': playlists,
     'userKeys': userKeys,
@@ -1066,6 +1072,7 @@ class MusifyBackupService {
       var review = 0;
       var unmatched = 0;
       var errors = 0;
+      var excluded = 0;
       for (final item in matches) {
         if (item is! Map) continue;
         switch (item['status']?.toString()) {
@@ -1083,9 +1090,12 @@ class MusifyBackupService {
           case 'error':
             errors++;
             break;
+          case 'excluded':
+            excluded++;
+            break;
         }
       }
-      if (strong + review + unmatched + errors != matches.length) {
+      if (strong + review + unmatched + errors + excluded != matches.length) {
         throw const BackupValidationException(
           'The matching database contains an unrecognized or malformed result.',
         );
@@ -1094,6 +1104,7 @@ class MusifyBackupService {
       counts['reviewItems'] = review;
       counts['unmatchedItems'] = unmatched;
       counts['errorItems'] = errors;
+      counts['excludedItems'] = excluded;
     }
     return _BoxSnapshot(keys: keys, keyTypes: keyTypes, counts: counts);
   }
@@ -1116,6 +1127,7 @@ class MusifyBackupService {
       reviewItems: count('reviewItems'),
       unmatchedItems: count('unmatchedItems'),
       errorItems: count('errorItems'),
+      excludedItems: count('excludedItems'),
       favorites: count('favorites'),
       playlists: count('playlists'),
       userKeys: user.keys.length,

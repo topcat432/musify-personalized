@@ -84,7 +84,12 @@ class SpotifyImportDestinationService {
       sourceName: _sourceName(metadata['fileName']?.toString()),
       resolvedSongs: List.unmodifiable(songs),
       resolvedResultCount: resolved.length,
-      unresolvedCount: results.where((result) => !_isResolved(result)).length,
+      unresolvedCount: results
+          .where(
+            (result) =>
+                !_isResolved(result) && result['status'] != 'excluded',
+          )
+          .length,
       customPlaylists: List.unmodifiable(customPlaylists),
     );
   }

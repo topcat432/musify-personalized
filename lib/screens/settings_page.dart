@@ -1070,6 +1070,7 @@ class _ValidatedBackupSummary extends StatelessWidget {
       ('Strong matches', summary.strongMatches),
       ('Needs review', summary.reviewItems),
       ('Unmatched', summary.unmatchedItems),
+      if (summary.excludedItems > 0) ('Excluded', summary.excludedItems),
       ('Errors', summary.errorItems),
       ('Favorites', summary.favorites),
       ('Playlists', summary.playlists),
