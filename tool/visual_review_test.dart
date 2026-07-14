@@ -38,7 +38,7 @@ void main() {
       MaterialApp(
         debugShowCheckedModeBanner: false,
         theme: _reviewTheme(Brightness.light),
-        home: const SpotifyImportDestinationPage(
+        home: SpotifyImportDestinationPage(
           initialSnapshot: _visualDestinationSnapshot,
         ),
       ),
@@ -61,7 +61,7 @@ void main() {
       MaterialApp(
         debugShowCheckedModeBanner: false,
         theme: _reviewTheme(Brightness.dark),
-        home: const SpotifyImportDestinationPage(
+        home: SpotifyImportDestinationPage(
           initialSnapshot: _visualDestinationSnapshot,
         ),
       ),
@@ -72,6 +72,16 @@ void main() {
       find.byType(Scaffold),
       matchesGoldenFile(
         'visual_review_goldens/import_destination_compact_dark.png',
+      ),
+    );
+
+    await tester.drag(find.byType(ListView), const Offset(0, -620));
+    await tester.pumpAndSettle();
+
+    await expectLater(
+      find.byType(Scaffold),
+      matchesGoldenFile(
+        'visual_review_goldens/import_destination_options_compact_dark.png',
       ),
     );
   });
@@ -274,21 +284,17 @@ final List<Map<String, dynamic>> _visualItems = [
   },
 ];
 
-const _visualDestinationSnapshot = SpotifyImportDestinationSnapshot(
+final _visualDestinationSnapshot = SpotifyImportDestinationSnapshot(
   sourceName: 'Liked Songs from Spotify',
-  resolvedSongs: [
-    {
-      'ytid': 'midnight-studio',
-      'title': 'Midnight Drive',
-      'artist': 'The Night Signals',
+  resolvedSongs: List<Map<String, dynamic>>.generate(
+    2619,
+    (index) => {
+      'ytid': 'visual-song-$index',
+      'title': 'Visual Song $index',
+      'artist': 'Visual Artist',
     },
-    {
-      'ytid': 'golden-hour',
-      'title': 'Golden Hour',
-      'artist': 'Mara June',
-    },
-  ],
-  resolvedResultCount: 4,
+  ),
+  resolvedResultCount: 2619,
   unresolvedCount: 24,
   customPlaylists: [
     {'ytid': 'road-trip', 'title': 'Road Trip'},
