@@ -66,16 +66,24 @@ Routing requirements:
 - Record destination history so newly resolved tracks can be synced later.
 - Write changes as a controlled checkpoint and leave staged import data intact.
 
-### 5. Playlist-aware file import
+### 5. Premium-free Spotify data import
 
 - Continue supporting flat CSV track imports.
+- Accept Spotify account-data ZIP files without requiring a Spotify developer account or Premium subscription.
+- Detect Spotify `Playlist.json` and `YourLibrary.json` files inside an account-data export.
+- Accept JSON and tab-separated exports produced by the Spotify Playlist Converter/spotify-backup format.
+- Accept compatible Exportify and Soundiiz CSV files.
+- Register Android share/open handlers so a supported export can be sent directly to Musify from the file manager.
 - If a flat file has no playlist membership, offer to create one playlist for the whole file.
 - Support richer JSON or compatible files that preserve multiple playlist names, ordering, track membership, and useful source metadata.
 - Match each unique recording once and reuse its Musify identity across every imported playlist.
 - Recreate selected source playlists individually or route selected tracks elsewhere.
+- On later imports, compare source identities and playlist membership, add only new content, and never delete existing Musify content without explicit confirmation.
 
-### 6. Direct Spotify connection
+### 6. Optional direct Spotify connection
 
+- Treat direct Spotify OAuth as an optional adapter, not a requirement for importing Spotify data.
+- Never require the user to buy Spotify Premium to use Musify's import workflow.
 - Use Spotify Authorization Code with PKCE rather than retired implicit authentication.
 - Allow Spotify Liked Songs to Musify Liked Songs import.
 - Allow Spotify playlist-to-new-playlist and playlist-to-existing-playlist import.
@@ -89,8 +97,8 @@ Routing requirements:
 2. Add unrestricted manual search and exact YouTube-link lookup.
 3. Add generalized destination routing, including Liked Songs.
 4. Add flat CSV whole-playlist and selective routing.
-5. Add playlist-aware JSON/file importing.
-6. Add direct Spotify connection and synchronization.
+5. Add Premium-free Spotify ZIP/JSON/CSV/TSV importing and repeat-import synchronization.
+6. Add direct Spotify connection only when a compliant developer Client ID is available.
 
 ## Safety and acceptance rules
 
