@@ -114,16 +114,24 @@ void main() {
       MaterialApp(
         debugShowCheckedModeBanner: false,
         theme: _reviewTheme(Brightness.dark),
-        home: SpotifyImportDestinationPage(
-          initialSnapshot: _visualDestinationSnapshot,
+        home: Scaffold(
+          body: SpotifyImportConfirmationDialog(
+            preview: const SpotifyImportRoutePreview(
+              selectedCount: 2619,
+              newCount: 2619,
+              alreadyPresentCount: 1250,
+              unresolvedCount: 24,
+            ),
+            onCancel: () {},
+            onConfirm: () {},
+          ),
         ),
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, 'Review'));
-    await tester.pumpAndSettle();
 
     expect(find.text('2619'), findsOneWidget);
+    expect(find.text('1250'), findsOneWidget);
     await expectLater(
       find.byType(AlertDialog),
       matchesGoldenFile(
