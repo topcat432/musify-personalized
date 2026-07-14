@@ -86,6 +86,62 @@ void main() {
     expect(metadata['pendingResolutionCount'], 0);
   });
 
+  test('cancellation after rescue work prevents a stale checkpoint', () async {
+    final box = Hive.box('user');
+    final original = <String, dynamic>{
+      'sourceRow': 7,
+      'status': 'needs_review',
+      'sourceTitle': 'Example Song',
+      'sourceArtist': 'Example Artist',
+      'sourceAlbum': 'Example Album',
+      'sourceDurationMs': 180000,
+      'alternatives': [
+        {
+          'score': 0.84,
+          'candidate': {
+            'ytid': 'abc123',
+            'title': 'Example Song',
+            'artist': 'Example Artist',
+            'album': 'Example Album',
+            'duration': 180,
+            'sourceType': 'youtube_music_song',
+          },
+          'evidence': {
+            'titleScore': 1.0,
+            'primaryArtistScore': 1.0,
+            'albumScore': 1.0,
+            'durationScore': 1.0,
+            'sourceScore': 1.0,
+            'reasons': [
+              'Exact title match',
+              'Primary artist matches',
+              'Album matches',
+              'Duration closely matches',
+            ],
+          },
+        },
+      ],
+    };
+    await box.put('spotifyMatchResults', [original]);
+    await box.put('spotifyImportMetadata', <String, dynamic>{
+      'importSessionId': 'current-session',
+    });
+    var stopChecks = 0;
+
+    final progress = await const SpotifyReviewWorkflowService().runRescuePass(
+      shouldStop: () => ++stopChecks > 1,
+    );
+
+    expect(stopChecks, 2);
+    expect(progress.processed, 0);
+    expect(progress.finished, isFalse);
+    final saved = Map<String, dynamic>.from(
+      (box.get('spotifyMatchResults') as List).single as Map,
+    );
+    expect(saved['status'], 'needs_review');
+    expect(saved['reviewDecision'], isNull);
+  });
+
   group('SpotifyReviewWorkflowService cluster safety', () {
     Map<String, dynamic> safeItem() => {
       'status': 'needs_review',

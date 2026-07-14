@@ -45,6 +45,32 @@ spotify:track:1,"Song, One",Artist One,Album One,147520,2015-08-04T04:07:20Z
       );
     });
 
+    test('preserves short durations from an explicit millisecond column', () {
+      const csv = '''Track Name,Artist Name(s),Track Duration (ms)
+Short Intro,Example Artist,8000
+''';
+
+      final preview = SpotifyCsvImporter.parseBytes(
+        csvBytes(csv),
+        fileName: 'short-exportify.csv',
+      );
+
+      expect(preview.tracks.single.durationMs, 8000);
+    });
+
+    test('converts short values from an ambiguous duration column', () {
+      const csv = '''title,artist,duration
+Short Intro,Example Artist,8
+''';
+
+      final preview = SpotifyCsvImporter.parseBytes(
+        csvBytes(csv),
+        fileName: 'generic.csv',
+      );
+
+      expect(preview.tracks.single.durationMs, 8000);
+    });
+
     test('rejects rows that are missing required values', () {
       const csv = '''index,title,artist,album,isrc
 0,Valid Song,Valid Artist,Album,ABC

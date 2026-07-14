@@ -147,7 +147,10 @@ class SpotifyMatchScorer {
     final sourceScore = _sourceScore(candidate, videoAuthor);
 
     final combinedText = _normalize('$candidateTitle $videoAuthor');
-    final normalizedSourceTitleFull = _normalize(input.title);
+    final sourceVersionText = _normalize('${input.title} ${input.album}');
+    final candidateVersionText = _normalize(
+      '$candidateTitle $candidateAlbum $videoAuthor',
+    );
     final reasons = <String>[];
     var disqualified = false;
     var penalty = 0.0;
@@ -213,23 +216,27 @@ class SpotifyMatchScorer {
     }
 
     final sourceMentionsAlternate = _alternateVersionTerms.any(
-      (term) => _containsWholeTerm(normalizedSourceTitleFull, term),
+      (term) => _containsWholeTerm(sourceVersionText, term),
     );
     final candidateMentionsAlternate = _alternateVersionTerms.any(
-      (term) => _containsWholeTerm(combinedText, term),
+      (term) => _containsWholeTerm(candidateVersionText, term),
     );
-    if (candidateMentionsAlternate && !sourceMentionsAlternate) {
+    final hasUnrequestedAlternate =
+        candidateMentionsAlternate && !sourceMentionsAlternate;
+    if (hasUnrequestedAlternate) {
       penalty += 0.14;
       reasons.add('Alternate version not requested');
     }
 
     final sourceMentionsMasteringVariant = _masteringVariantTerms.any(
-      (term) => _containsWholeTerm(normalizedSourceTitleFull, term),
+      (term) => _containsWholeTerm(sourceVersionText, term),
     );
     final candidateMentionsMasteringVariant = _masteringVariantTerms.any(
-      (term) => _containsWholeTerm(combinedText, term),
+      (term) => _containsWholeTerm(candidateVersionText, term),
     );
-    if (candidateMentionsMasteringVariant && !sourceMentionsMasteringVariant) {
+    final hasUnrequestedMasteringVariant =
+        candidateMentionsMasteringVariant && !sourceMentionsMasteringVariant;
+    if (hasUnrequestedMasteringVariant) {
       penalty += 0.05;
       reasons.add('Different mastering or mix version');
     }
@@ -252,7 +259,8 @@ class SpotifyMatchScorer {
         penalty;
     final finalScore = disqualified ? 0.0 : weighted.clamp(0.0, 1.0);
     final automaticEligible = !disqualified &&
-        !candidateMentionsAlternate &&
+        !hasUnrequestedAlternate &&
+        !hasUnrequestedMasteringVariant &&
         titleScore >= 0.82 &&
         primaryArtistScore >= 0.72 &&
         finalScore >= 0.86;

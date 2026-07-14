@@ -158,6 +158,47 @@ void main() {
       expect(result.reasons, isNot(contains('Alternate version not requested')));
     });
 
+    test('blocks an album-only mastering variant from automatic approval', () {
+      const input = SpotifyMatchInput(
+        title: 'Example Song',
+        artist: 'Example Artist',
+        album: 'Original Album',
+        durationMs: 180000,
+      );
+      final result = SpotifyMatchScorer.score(input, {
+        'title': 'Example Song',
+        'artist': 'Example Artist',
+        'album': 'Original Album Anniversary Edition',
+        'duration': 180,
+        'sourceType': 'youtube_music_song',
+      });
+
+      expect(result.automaticEligible, isFalse);
+      expect(result.reasons, contains('Different mastering or mix version'));
+    });
+
+    test('allows a mastering variant explicitly requested by source album', () {
+      const input = SpotifyMatchInput(
+        title: 'Example Song',
+        artist: 'Example Artist',
+        album: 'Original Album Remastered',
+        durationMs: 180000,
+      );
+      final result = SpotifyMatchScorer.score(input, {
+        'title': 'Example Song',
+        'artist': 'Example Artist',
+        'album': 'Original Album Remastered',
+        'duration': 180,
+        'sourceType': 'youtube_music_song',
+      });
+
+      expect(result.automaticEligible, isTrue);
+      expect(
+        result.reasons,
+        isNot(contains('Different mastering or mix version')),
+      );
+    });
+
     test('rejects a candidate with an unrelated artist identity', () {
       const input = SpotifyMatchInput(
         title: 'Place',

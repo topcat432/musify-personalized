@@ -127,6 +127,7 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
     final box = Hive.box('user');
     final results = _readMaps(box.get('spotifyMatchResults'));
     final metadata = _readMap(box.get('spotifyImportMetadata'));
+    final importSessionId = _sessionId(metadata);
     final targetIndexes = <int>[];
 
     for (var index = 0; index < results.length; index++) {
@@ -142,13 +143,17 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
     var stillUnmatched = 0;
     var errors = 0;
     var sinceCheckpoint = 0;
+    var stopped = false;
 
     for (final index in targetIndexes) {
-      if (shouldStop?.call() ?? false) break;
+      if (shouldStop?.call() ?? false) {
+        stopped = true;
+        break;
+      }
 
       final current = Map<String, dynamic>.from(results[index]);
+      var updated = current;
       try {
-        Map<String, dynamic> updated;
         if (current['status'] == 'needs_review' && isSafeClusterItem(current)) {
           updated = _acceptTopAlternative(
             current,
@@ -159,29 +164,44 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
         } else {
           updated = await _rescueOne(current);
         }
-
-        final previousStatus = current['status'];
-        final nextStatus = updated['status'];
-        if (nextStatus == 'matched' && previousStatus != 'matched') {
-          promotedToStrong++;
-        } else if (nextStatus == 'needs_review' && previousStatus != 'needs_review') {
-          promotedToReview++;
-        } else if (nextStatus == 'unmatched') {
-          stillUnmatched++;
-        }
-        results[index] = updated;
       } catch (error) {
         errors++;
-        results[index] = current
+        updated = Map<String, dynamic>.from(current)
           ..['status'] = 'error'
           ..['error'] = 'Rescue pass failed: $error'
           ..['rescueAttemptedAt'] = DateTime.now().toUtc().toIso8601String();
       }
 
+      // A rescue lookup can return after its page was disposed. Never let
+      // that old local result checkpoint over a replacement import session.
+      if (shouldStop?.call() ?? false) {
+        stopped = true;
+        break;
+      }
+
+      final previousStatus = current['status'];
+      final nextStatus = updated['status'];
+      if (nextStatus == 'matched' && previousStatus != 'matched') {
+        promotedToStrong++;
+      } else if (nextStatus == 'needs_review' &&
+          previousStatus != 'needs_review') {
+        promotedToReview++;
+      } else if (nextStatus == 'unmatched') {
+        stillUnmatched++;
+      }
+      results[index] = updated;
+
       processed++;
       sinceCheckpoint++;
       if (sinceCheckpoint >= 5) {
-        await _checkpoint(results, metadata);
+        if (!await _checkpoint(
+          results,
+          metadata,
+          expectedSessionId: importSessionId,
+        )) {
+          stopped = true;
+          break;
+        }
         sinceCheckpoint = 0;
       }
 
@@ -198,7 +218,13 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
       );
     }
 
-    await _checkpoint(results, metadata);
+    if (!stopped) {
+      stopped = !await _checkpoint(
+        results,
+        metadata,
+        expectedSessionId: importSessionId,
+      );
+    }
     final progress = SpotifyRescueProgress(
       processed: processed,
       total: targetIndexes.length,
@@ -206,7 +232,7 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
       promotedToReview: promotedToReview,
       stillUnmatched: stillUnmatched,
       errors: errors,
-      finished: processed >= targetIndexes.length,
+      finished: !stopped && processed >= targetIndexes.length,
     );
     onProgress?.call(progress);
     return progress;
@@ -574,10 +600,17 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
     };
   }
 
-  Future<void> _checkpoint(
+  Future<bool> _checkpoint(
     List<Map<String, dynamic>> results,
-    Map<String, dynamic> metadata,
-  ) async {
+    Map<String, dynamic> metadata, {
+    String? expectedSessionId,
+  }) async {
+    final box = Hive.box('user');
+    if (expectedSessionId != null &&
+        _sessionId(_readMap(box.get('spotifyImportMetadata'))) !=
+            expectedSessionId) {
+      return false;
+    }
     metadata
       ..['matchedCount'] = results.where(_isMatched).length
       ..['reviewCount'] = results.where((item) => item['status'] == 'needs_review').length
@@ -586,13 +619,18 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
       ..['excludedCount'] = results.where(isExcluded).length
       ..['pendingResolutionCount'] = results.where(isPendingResolution).length
       ..['lastMatchingCheckpointAt'] = DateTime.now().toUtc().toIso8601String();
-    await addOrUpdateData<List>('user', 'spotifyMatchResults', results);
-    await addOrUpdateData<Map<String, dynamic>>(
-      'user',
-      'spotifyImportMetadata',
-      metadata,
-    );
+    await box.putAll({
+      'spotifyMatchResults': results,
+      'spotifyImportMetadata': metadata,
+    });
+    return true;
   }
+
+  static String _sessionId(Map<String, dynamic> metadata) =>
+      metadata['importSessionId']?.toString() ??
+      metadata['importedAt']?.toString() ??
+      metadata['fileName']?.toString() ??
+      '';
 
   static int _reviewPriorityCompare(
     Map<String, dynamic> left,

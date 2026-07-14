@@ -40,6 +40,12 @@ class _SpotifyMatchReviewPageState extends State<SpotifyMatchReviewPage> {
     _load();
   }
 
+  @override
+  void dispose() {
+    _stopRescueRequested = true;
+    super.dispose();
+  }
+
   Future<void> _load() async {
     try {
       final items = await _service.loadUnresolvedItems();
@@ -92,7 +98,7 @@ class _SpotifyMatchReviewPageState extends State<SpotifyMatchReviewPage> {
 
     try {
       await _service.runRescuePass(
-        shouldStop: () => _stopRescueRequested,
+        shouldStop: () => !mounted || _stopRescueRequested,
         onProgress: (progress) {
           if (mounted) setState(() => _rescueProgress = progress);
         },

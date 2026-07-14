@@ -61,10 +61,11 @@ jobs:
             case "$(basename "$workflow")" in
               debug.yml|signed-release.yml) continue ;;
             esac
-            if grep -Fq -- '--flavor github' "$workflow" &&
-              { grep -Fq -- 'KEYSTORE2' "$workflow" ||
-                { grep -Fq -- 'flutter build apk' "$workflow" &&
-                  grep -Fq -- '--release' "$workflow"; }; }; then
+            workflow_text="$(tr '\n' ' ' < "$workflow")"
+            if grep -Eq -- '--flavor([=[:space:]\\]+)github([[:space:]\\]|$)' <<<"$workflow_text" &&
+              { grep -Fq -- 'KEYSTORE2' <<<"$workflow_text" ||
+                { grep -Fq -- 'flutter build apk' <<<"$workflow_text" &&
+                  grep -Fq -- '--release' <<<"$workflow_text"; }; }; then
               echo "Legacy production-package build path found in $workflow"
               exit 1
             fi

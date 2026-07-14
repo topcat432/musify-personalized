@@ -26,6 +26,7 @@ import 'package:flutter/material.dart';
 import 'package:musify/constants/app_constants.dart';
 import 'package:musify/extensions/l10n.dart';
 import 'package:musify/main.dart' show logger;
+import 'package:musify/screens/spotify_import_hub_page.dart';
 import 'package:musify/services/common_services.dart';
 import 'package:musify/services/playlist_download_service.dart';
 import 'package:musify/services/playlists_manager.dart';
@@ -38,8 +39,10 @@ import 'package:musify/utilities/offline_playlist_dialogs.dart';
 import 'package:musify/utilities/playlist_dialogs.dart';
 import 'package:musify/utilities/playlist_utils.dart';
 import 'package:musify/widgets/confirmation_dialog.dart';
+import 'package:musify/widgets/library_spotify_import_action.dart';
 import 'package:musify/widgets/mini_player_bottom_space.dart';
 import 'package:musify/widgets/playlist_bar.dart';
+import 'package:musify/widgets/personalized_ui.dart';
 import 'package:musify/widgets/section_header.dart';
 
 class LibraryPage extends StatefulWidget {
@@ -118,7 +121,15 @@ class _LibraryPageState extends State<LibraryPage> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: Text(context.l10n!.library)),
+      appBar: AppBar(
+        title: Text(context.l10n!.library),
+        actions: offlineMode.value
+            ? null
+            : [
+                LibrarySpotifyImportAction(onPressed: _openSpotifyImportHub),
+                const SizedBox(width: 8),
+              ],
+      ),
       body: AnimatedBuilder(
         animation: Listenable.merge([
           pinnedPlaylistIds,
@@ -145,6 +156,14 @@ class _LibraryPageState extends State<LibraryPage> {
             ),
           );
         },
+      ),
+    );
+  }
+
+  Future<void> _openSpotifyImportHub() async {
+    await Navigator.of(context).push(
+      personalizedPageRoute<void>(
+        builder: (_) => const SpotifyImportHubPage(),
       ),
     );
   }
