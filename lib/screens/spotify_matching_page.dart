@@ -404,13 +404,7 @@ class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
   }
 
   static bool _allRemainingUnlocked(SpotifyMatchingSnapshot snapshot) {
-    if (snapshot.nextTrackIndex < 50) return false;
-    final usableAttempts = snapshot.nextTrackIndex - snapshot.errorCount;
-    if (usableAttempts <= 0) return false;
-    final strongOrReview = snapshot.matchedCount + snapshot.reviewCount;
-    final usefulRate = strongOrReview / usableAttempts;
-    final unmatchedRate = snapshot.unmatchedCount / usableAttempts;
-    return usefulRate >= 0.90 && unmatchedRate <= 0.10;
+    return SpotifyTrackMatchingService.isFullLibraryRunUnlocked(snapshot);
   }
 }
 

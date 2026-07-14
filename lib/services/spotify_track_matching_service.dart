@@ -23,6 +23,7 @@ class SpotifyMatchingSnapshot {
     required this.reviewCount,
     required this.unmatchedCount,
     required this.errorCount,
+    required this.excludedCount,
     required this.pendingResolutionCount,
     required this.status,
     required this.recentResults,
@@ -34,6 +35,7 @@ class SpotifyMatchingSnapshot {
   final int reviewCount;
   final int unmatchedCount;
   final int errorCount;
+  final int excludedCount;
   final int pendingResolutionCount;
   final String status;
   final List<Map<String, dynamic>> recentResults;
@@ -53,6 +55,17 @@ class SpotifyTrackMatchingService {
   static const double reviewThreshold = 0.58;
   static const Duration _musicSearchTimeout = Duration(seconds: 18);
   static final YoutubeMusicExplode _youtubeMusic = YoutubeMusicExplode();
+
+  static bool isFullLibraryRunUnlocked(SpotifyMatchingSnapshot snapshot) {
+    if (snapshot.nextTrackIndex < maximumPilotBatchSize) return false;
+    final usableAttempts =
+        snapshot.nextTrackIndex - snapshot.errorCount - snapshot.excludedCount;
+    if (usableAttempts <= 0) return false;
+    final strongOrReview = snapshot.matchedCount + snapshot.reviewCount;
+    final usefulRate = strongOrReview / usableAttempts;
+    final unmatchedRate = snapshot.unmatchedCount / usableAttempts;
+    return usefulRate >= 0.90 && unmatchedRate <= 0.10;
+  }
 
   Future<SpotifyMatchingSnapshot> loadSnapshot() async {
     final box = Hive.box('user');
@@ -450,6 +463,7 @@ class SpotifyTrackMatchingService {
       reviewCount: _count(results, 'needs_review'),
       unmatchedCount: results.where(_isUnmatched).length,
       errorCount: _count(results, 'error'),
+      excludedCount: _count(results, 'excluded'),
       pendingResolutionCount: results.where(_isPendingResolution).length,
       status: metadata['matchingStatus']?.toString() ?? 'not_started',
       recentResults: results.reversed.take(10).toList(growable: false),

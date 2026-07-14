@@ -53,8 +53,29 @@ void main() {
     expect(completed.nextTrackIndex, 1);
     expect(completed.pendingResolutionCount, 0);
     expect(completed.unmatchedCount, 0);
+    expect(completed.excludedCount, 1);
     expect(saved['status'], 'excluded');
     expect(saved['reviewDecision'], 'excluded_from_import');
     expect(metadata['excludedCount'], 1);
+  });
+
+  test('excluded pilot rows do not lower the full-library success rate', () {
+    const snapshot = SpotifyMatchingSnapshot(
+      totalTracks: 100,
+      nextTrackIndex: 50,
+      matchedCount: 44,
+      reviewCount: 0,
+      unmatchedCount: 0,
+      errorCount: 0,
+      excludedCount: 6,
+      pendingResolutionCount: 0,
+      status: 'paused',
+      recentResults: [],
+    );
+
+    expect(
+      SpotifyTrackMatchingService.isFullLibraryRunUnlocked(snapshot),
+      isTrue,
+    );
   });
 }
