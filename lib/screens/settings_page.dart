@@ -369,10 +369,11 @@ class SettingsPage extends StatelessWidget {
         ),
         if (!isFdroidBuild)
           CustomBar(
-            context.l10n!.downloadAppUpdate,
+            'Check for personalized update',
             FluentIcons.arrow_download_24_regular,
+            description: 'Download only verified production APKs',
             borderRadius: commonCustomBarRadiusLast,
-            onTap: checkAppUpdates,
+            onTap: () => checkAppUpdates(showWhenCurrent: true),
           ),
       ],
     );

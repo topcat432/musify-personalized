@@ -1,27 +1,148 @@
-name: Build signed production APK
+name: Build and publish signed production APK
 
 on:
   workflow_dispatch:
+    inputs:
+      candidate_ref:
+        description: Full commit SHA to test, build, sign, and publish
+        required: true
+        type: string
+      release_notes:
+        description: Short notes shown inside the personalized updater
+        required: false
+        default: Verified Musify Personalized testing update.
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: signed-production-${{ github.ref }}
+  group: signed-production
   cancel-in-progress: false
 
 env:
   FLUTTER_VERSION: '3.44.5'
 
 jobs:
-  release:
-    name: Test and build permanently signed APK
+  build:
+    name: Test and build unsigned production candidate
+    if: github.ref_name == github.event.repository.default_branch
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 45
+    outputs:
+      build_number: ${{ steps.version.outputs.build_number }}
+      candidate_sha: ${{ steps.candidate.outputs.sha }}
+      version_name: ${{ steps.version.outputs.version_name }}
 
     steps:
-      - name: Check out selected candidate
+      - name: Validate candidate commit input
+        env:
+          CANDIDATE_REF: ${{ inputs.candidate_ref }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$CANDIDATE_REF" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "candidate_ref must be a full lowercase 40-character commit SHA."
+            exit 1
+          }
+
+      - name: Check out immutable candidate
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.candidate_ref }}
+          fetch-depth: 0
+
+      - name: Require candidate on the default branch
+        env:
+          CANDIDATE_REF: ${{ inputs.candidate_ref }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin \
+            "+refs/heads/$DEFAULT_BRANCH:refs/remotes/origin/$DEFAULT_BRANCH"
+          git merge-base --is-ancestor \
+            "$CANDIDATE_REF" "refs/remotes/origin/$DEFAULT_BRANCH" || {
+            echo "candidate_ref must be contained in the repository default branch."
+            exit 1
+          }
+
+      - name: Record candidate commit
+        id: candidate
+        env:
+          CANDIDATE_REF: ${{ inputs.candidate_ref }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          candidate_sha="$(git rev-parse HEAD)"
+          test "$candidate_sha" = "$CANDIDATE_REF"
+          echo "sha=$candidate_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Set monotonic production version
+        id: version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MANIFEST_ASSET: musify-personalized-update.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          build_number=$((100000000 + GITHUB_RUN_NUMBER))
+          test "$build_number" -gt 26195006
+          test "$build_number" -le 2100000000
+
+          latest_release="$RUNNER_TEMP/latest-personalized-release.json"
+          latest_manifest="$RUNNER_TEMP/latest-personalized-manifest.json"
+          status="$(curl --silent --show-error --location \
+            --output "$latest_release" \
+            --write-out '%{http_code}' \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/releases/latest")"
+
+          case "$status" in
+            200)
+              asset_count="$(jq --arg name "$MANIFEST_ASSET" \
+                '[.assets[] | select(.name == $name)] | length' \
+                "$latest_release")"
+              test "$asset_count" -eq 1 || {
+                echo "The latest release must contain exactly one $MANIFEST_ASSET asset."
+                exit 1
+              }
+              asset_url="$(jq -er --arg name "$MANIFEST_ASSET" \
+                '.assets[] | select(.name == $name) | .url' \
+                "$latest_release")"
+              curl --fail --silent --show-error --location \
+                --output "$latest_manifest" \
+                --header 'Accept: application/octet-stream' \
+                --header "Authorization: Bearer $GH_TOKEN" \
+                --header 'X-GitHub-Api-Version: 2022-11-28' \
+                "$asset_url"
+              if ! published_build_number="$(jq -er '
+                select(.schemaVersion == 1) |
+                select(.packageName == "com.topcat432.musifypersonalized") |
+                .versionCode |
+                select(type == "number" and . == floor)
+              ' "$latest_manifest")"; then
+                echo "The latest personalized update manifest is invalid."
+                exit 1
+              fi
+              if (( build_number <= published_build_number )); then
+                echo "Refusing stale production versionCode $build_number; latest is $published_build_number."
+                exit 1
+              fi
+              ;;
+            404)
+              echo "No existing production release; accepting initial versionCode $build_number."
+              ;;
+            *)
+              echo "Unable to verify the latest production version (GitHub HTTP $status)."
+              exit 1
+              ;;
+          esac
+
+          echo "build_number=$build_number" >> "$GITHUB_OUTPUT"
+          echo "version_name=0.1.$build_number" >> "$GITHUB_OUTPUT"
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
@@ -37,40 +158,6 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Validate signing secrets
-        env:
-          MUSIFY_SIGNING_KEY_BASE64: ${{ secrets.MUSIFY_SIGNING_KEY_BASE64 }}
-          MUSIFY_SIGNING_PASSWORD: ${{ secrets.MUSIFY_SIGNING_PASSWORD }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -n "$MUSIFY_SIGNING_KEY_BASE64" || {
-            echo "Missing MUSIFY_SIGNING_KEY_BASE64 repository secret."
-            exit 1
-          }
-          test -n "$MUSIFY_SIGNING_PASSWORD" || {
-            echo "Missing MUSIFY_SIGNING_PASSWORD repository secret."
-            exit 1
-          }
-
-      - name: Restore permanent Android signing key
-        env:
-          MUSIFY_SIGNING_KEY_BASE64: ${{ secrets.MUSIFY_SIGNING_KEY_BASE64 }}
-          MUSIFY_SIGNING_PASSWORD: ${{ secrets.MUSIFY_SIGNING_PASSWORD }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          printf '%s' "$MUSIFY_SIGNING_KEY_BASE64" | base64 --decode > android/app/key.jks
-          cat > android/key.properties <<EOF
-          storePassword=$MUSIFY_SIGNING_PASSWORD
-          keyPassword=$MUSIFY_SIGNING_PASSWORD
-          keyAlias=musify-personalized
-          EOF
-          keytool -list \
-            -keystore android/app/key.jks \
-            -storepass "$MUSIFY_SIGNING_PASSWORD" \
-            -alias musify-personalized >/dev/null
-
       - name: Install dependencies
         run: flutter pub get
 
@@ -80,63 +167,227 @@ jobs:
       - name: Run tests
         run: flutter test
 
-      - name: Build signed release APK
+      - name: Build unsigned release APK
+        env:
+          BUILD_NUMBER: ${{ steps.version.outputs.build_number }}
+          VERSION_NAME: ${{ steps.version.outputs.version_name }}
+          CANDIDATE_SHA: ${{ steps.candidate.outputs.sha }}
         shell: bash
         run: |
           set -euo pipefail
-          # YYDDD plus a three-digit workflow sequence is monotonic across
-          # calendar days and safely above all earlier 200xxx test builds.
-          day_code="$(date -u +'%y%j')"
-          build_number=$((10#$day_code * 1000 + GITHUB_RUN_NUMBER % 1000))
+          test ! -e android/key.properties
+          test ! -e android/app/key.jks
           flutter build apk \
             --release \
             --flavor github \
-            --build-number "$build_number" \
-            --build-name "0.1.$build_number" \
-            --dart-define=GIT_SHA="$GITHUB_SHA"
+            --build-number "$BUILD_NUMBER" \
+            --build-name "$VERSION_NAME" \
+            --dart-define=GIT_SHA="$CANDIDATE_SHA"
 
-      - name: Verify signed production identity
+      - name: Verify unsigned production identity
+        env:
+          BUILD_NUMBER: ${{ steps.version.outputs.build_number }}
         shell: bash
         run: |
           set -euo pipefail
           apk=build/app/outputs/flutter-apk/app-github-release.apk
           test -f "$apk"
+          unzip -t "$apk" >/dev/null
           apksigner="$(find "$ANDROID_SDK_ROOT/build-tools" -mindepth 2 -maxdepth 2 -type f -name apksigner | sort -V | tail -1)"
+          aapt="$(find "$ANDROID_SDK_ROOT/build-tools" -mindepth 2 -maxdepth 2 -type f -name aapt | sort -V | tail -1)"
           test -x "$apksigner"
-          verification="$($apksigner verify --verbose --print-certs "$apk")"
+          test -x "$aapt"
+          if "$apksigner" verify "$apk" >/dev/null 2>&1; then
+            echo "Candidate must be unsigned before entering the isolated signing job."
+            exit 1
+          fi
+          badging="$($aapt dump badging "$apk")"
+          package_line="$(head -1 <<<"$badging")"
+          grep -Fq "package: name='com.topcat432.musifypersonalized'" <<<"$package_line"
+          grep -Fq "versionCode='$BUILD_NUMBER'" <<<"$package_line"
+          grep -Fq "application-label:'Musify Personalized'" <<<"$badging"
+          ! grep -Fq 'application-debuggable' <<<"$badging"
+          cp "$apk" musify-personalized-unsigned.apk
+          sha256sum musify-personalized-unsigned.apk > musify-personalized-unsigned.apk.sha256
+
+      - name: Upload isolated unsigned candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: musify-personalized-UNSIGNED-${{ github.run_id }}
+          path: |
+            musify-personalized-unsigned.apk
+            musify-personalized-unsigned.apk.sha256
+          if-no-files-found: error
+          retention-days: 1
+
+  sign:
+    name: Sign, verify, and publish production APK
+    needs: build
+    if: >-
+      needs.build.result == 'success' &&
+      github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+
+    steps:
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: '17'
+
+      - name: Download isolated unsigned candidate
+        uses: actions/download-artifact@v4
+        with:
+          name: musify-personalized-UNSIGNED-${{ github.run_id }}
+          path: ${{ runner.temp }}/candidate
+
+      - name: Restore key, sign, verify, and create update manifest
+        id: signed
+        env:
+          BUILD_NUMBER: ${{ needs.build.outputs.build_number }}
+          VERSION_NAME: ${{ needs.build.outputs.version_name }}
+          CANDIDATE_SHA: ${{ needs.build.outputs.candidate_sha }}
+          RELEASE_NOTES: ${{ inputs.release_notes }}
+          MUSIFY_SIGNING_KEY_BASE64: ${{ secrets.MUSIFY_SIGNING_KEY_BASE64 }}
+          MUSIFY_SIGNING_PASSWORD: ${{ secrets.MUSIFY_SIGNING_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$MUSIFY_SIGNING_KEY_BASE64"
+          test -n "$MUSIFY_SIGNING_PASSWORD"
+
+          keystore="$RUNNER_TEMP/musify-personalized-release.jks"
+          certificate="$RUNNER_TEMP/musify-personalized-release.der"
+          trap 'rm -f "$keystore" "$certificate"' EXIT
+          printf '%s' "$MUSIFY_SIGNING_KEY_BASE64" | base64 --decode > "$keystore"
+          chmod 600 "$keystore"
+          keytool -list \
+            -keystore "$keystore" \
+            -storepass "$MUSIFY_SIGNING_PASSWORD" \
+            -alias musify-personalized >/dev/null
+          keytool -exportcert \
+            -keystore "$keystore" \
+            -storepass "$MUSIFY_SIGNING_PASSWORD" \
+            -alias musify-personalized \
+            -file "$certificate" >/dev/null
+          expected_signer_sha="$(sha256sum "$certificate" | cut -d' ' -f1)"
+
+          unsigned_apk="$RUNNER_TEMP/candidate/musify-personalized-unsigned.apk"
+          unsigned_checksum="$RUNNER_TEMP/candidate/musify-personalized-unsigned.apk.sha256"
+          test -f "$unsigned_apk"
+          test -f "$unsigned_checksum"
+          (cd "$(dirname "$unsigned_apk")" && sha256sum -c "$(basename "$unsigned_checksum")")
+          unzip -t "$unsigned_apk" >/dev/null
+
+          apksigner="$(find "$ANDROID_SDK_ROOT/build-tools" -mindepth 2 -maxdepth 2 -type f -name apksigner | sort -V | tail -1)"
+          aapt="$(find "$ANDROID_SDK_ROOT/build-tools" -mindepth 2 -maxdepth 2 -type f -name aapt | sort -V | tail -1)"
+          test -x "$apksigner"
+          test -x "$aapt"
+          if "$apksigner" verify "$unsigned_apk" >/dev/null 2>&1; then
+            echo "Refusing to sign an APK that already has a valid signature."
+            exit 1
+          fi
+
+          "$apksigner" sign \
+            --ks "$keystore" \
+            --ks-key-alias musify-personalized \
+            --ks-pass env:MUSIFY_SIGNING_PASSWORD \
+            --key-pass env:MUSIFY_SIGNING_PASSWORD \
+            --v1-signing-enabled true \
+            --v2-signing-enabled true \
+            --v3-signing-enabled true \
+            --out musify-personalized-production.apk \
+            "$unsigned_apk"
+
+          verification="$($apksigner verify --verbose --print-certs musify-personalized-production.apk)"
           printf '%s\n' "$verification"
           grep -Fq 'Verified using v2 scheme (APK Signature Scheme v2): true' <<<"$verification"
           grep -Fq 'Verified using v3 scheme (APK Signature Scheme v3): true' <<<"$verification"
-          signer_sha="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' <<<"$verification" | head -1)"
-          test -n "$signer_sha"
-          aapt="$(find "$ANDROID_SDK_ROOT/build-tools" -mindepth 2 -maxdepth 2 -type f -name aapt | sort -V | tail -1)"
-          badging="$($aapt dump badging "$apk")"
-          grep -Fq "package: name='com.topcat432.musifypersonalized'" <<<"$badging"
+          mapfile -t signer_shas < <(
+            sed -nE \
+              -e 's/^Signer #[0-9]+ certificate SHA-256 digest: ([0-9a-fA-F]+)$/\1/p' \
+              -e 's/^V[0-9.]+ Signer: certificate SHA-256 digest: ([0-9a-fA-F]+)$/\1/p' \
+              <<<"$verification" | tr '[:upper:]' '[:lower:]' | sort -u
+          )
+          test "${#signer_shas[@]}" -eq 1
+          signer_sha="${signer_shas[0]}"
+          test "${signer_sha,,}" = "${expected_signer_sha,,}"
+
+          badging="$($aapt dump badging musify-personalized-production.apk)"
+          package_line="$(head -1 <<<"$badging")"
+          grep -Fq "package: name='com.topcat432.musifypersonalized'" <<<"$package_line"
+          grep -Fq "versionCode='$BUILD_NUMBER'" <<<"$package_line"
           grep -Fq "application-label:'Musify Personalized'" <<<"$badging"
           ! grep -Fq 'application-debuggable' <<<"$badging"
-          cp "$apk" musify-personalized-production.apk
+          unzip -t musify-personalized-production.apk >/dev/null
           sha256sum musify-personalized-production.apk > musify-personalized-production.apk.sha256
-          package_line="$(head -1 <<<"$badging")"
+          apk_sha="$(cut -d' ' -f1 musify-personalized-production.apk.sha256)"
+          tag="personalized-v$VERSION_NAME"
+          apk_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/download/$tag/musify-personalized-production.apk"
+
+          jq -n \
+            --argjson schemaVersion 1 \
+            --argjson versionCode "$BUILD_NUMBER" \
+            --arg versionName "$VERSION_NAME" \
+            --arg packageName 'com.topcat432.musifypersonalized' \
+            --arg signerSha256 "$signer_sha" \
+            --arg apkSha256 "$apk_sha" \
+            --arg apkUrl "$apk_url" \
+            --arg sourceCommit "$CANDIDATE_SHA" \
+            --arg releaseNotes "$RELEASE_NOTES" \
+            '{schemaVersion: $schemaVersion, versionCode: $versionCode, versionName: $versionName, packageName: $packageName, signerSha256: $signerSha256, apkSha256: $apkSha256, apkUrl: $apkUrl, sourceCommit: $sourceCommit, releaseNotes: $releaseNotes}' \
+            > musify-personalized-update.json
+
           {
             echo "Musify Personalized production release proof"
-            echo "Source commit: $GITHUB_SHA"
+            echo "Candidate commit: $CANDIDATE_SHA"
+            echo "Workflow commit: $GITHUB_SHA"
             echo "Workflow run: $GITHUB_RUN_ID"
-            echo "Signer SHA-256: $signer_sha"
-            echo "APK SHA-256: $(cut -d' ' -f1 musify-personalized-production.apk.sha256)"
+            echo "Release tag: $tag"
+            echo "Expected signer SHA-256: $expected_signer_sha"
+            echo "APK signer SHA-256: $signer_sha"
+            echo "APK SHA-256: $apk_sha"
             echo "$package_line"
             echo "Application label: Musify Personalized"
             echo "Debuggable: false"
             echo "Signature schemes: v2=true, v3=true"
           } > release-proof.txt
           cat release-proof.txt
+          jq . musify-personalized-update.json
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
-      - name: Upload verified production candidate
+      - name: Upload verified production artifact
         uses: actions/upload-artifact@v4
         with:
           name: musify-personalized-PRODUCTION-${{ github.run_number }}
           path: |
             musify-personalized-production.apk
             musify-personalized-production.apk.sha256
+            musify-personalized-update.json
             release-proof.txt
           if-no-files-found: error
           retention-days: 30
+
+      - name: Publish permanent personalized release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ steps.signed.outputs.tag }}
+          CANDIDATE_SHA: ${{ needs.build.outputs.candidate_sha }}
+          VERSION_NAME: ${{ needs.build.outputs.version_name }}
+          RELEASE_NOTES: ${{ inputs.release_notes }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create "$RELEASE_TAG" \
+            musify-personalized-production.apk \
+            musify-personalized-production.apk.sha256 \
+            musify-personalized-update.json \
+            release-proof.txt \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$CANDIDATE_SHA" \
+            --title "Musify Personalized $VERSION_NAME" \
+            --notes "$RELEASE_NOTES" \
+            --latest

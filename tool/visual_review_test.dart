@@ -6,9 +6,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:musify/screens/spotify_import_destination_page.dart';
 import 'package:musify/screens/spotify_import_hub_page.dart';
 import 'package:musify/screens/spotify_review_sprint_page.dart';
+import 'package:musify/services/personalized_update_service.dart';
 import 'package:musify/services/review_sprint_audio_player.dart';
 import 'package:musify/services/spotify_import_destination_service.dart';
 import 'package:musify/services/spotify_review_workflow_service.dart';
+import 'package:musify/widgets/personalized_update_dialog.dart';
 
 void main() {
   setUpAll(_loadVisualReviewFonts);
@@ -185,6 +187,32 @@ void main() {
       matchesGoldenFile('visual_review_goldens/quick_review_compact_dark.png'),
     );
   });
+
+  testWidgets('renders the updater on a compact dark phone', (tester) async {
+    final service = PersonalizedUpdateService();
+    addTearDown(service.close);
+    _setViewport(tester, const Size(360, 720));
+    await tester.pumpWidget(
+      MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: _reviewTheme(Brightness.dark),
+        home: Scaffold(
+          body: PersonalizedUpdateDialog(
+            check: _visualUpdateCheck,
+            service: service,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await expectLater(
+      find.byType(AlertDialog),
+      matchesGoldenFile(
+        'visual_review_goldens/personalized_update_compact_dark.png',
+      ),
+    );
+  });
 }
 
 void _setViewport(WidgetTester tester, Size size) {
@@ -354,6 +382,32 @@ final _visualDestinationSnapshot = SpotifyImportDestinationSnapshot(
     {'ytid': 'road-trip', 'title': 'Road Trip'},
     {'ytid': 'late-night', 'title': 'Late Night'},
   ],
+);
+
+final _visualUpdateCheck = PersonalizedUpdateCheck(
+  availability: PersonalizedUpdateAvailability.available,
+  installed: const InstalledAppIdentity(
+    packageName: personalizedProductionPackage,
+    versionCode: 100000198,
+    signerSha256:
+        'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+  ),
+  manifest: PersonalizedUpdateManifest(
+    versionCode: 100000200,
+    versionName: '0.1.100000200',
+    packageName: personalizedProductionPackage,
+    signerSha256:
+        'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    apkSha256:
+        'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+    apkUrl: Uri.parse(
+      'https://github.com/topcat432/musify-personalized/releases/download/'
+      'personalized-v0.1.100000200/musify-personalized-production.apk',
+    ),
+    sourceCommit: 'cccccccccccccccccccccccccccccccccccccccc',
+    releaseNotes:
+        'Faster testing updates, verified package identity, and smoother review motion.',
+  ),
 );
 
 class _VisualDataSource implements SpotifyReviewSprintDataSource {
