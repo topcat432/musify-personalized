@@ -53,6 +53,31 @@ void main() {
     expect(validated.summary.errorItems, 0);
   });
 
+  test('streamed creation remains readable without Base64 copies', () async {
+    final payloads = await _createMatchingPayloads(
+      importedTracks: 2643,
+      matched: 2619,
+      review: 0,
+      unmatched: 24,
+      namePrefix: 'streamed',
+    );
+    final bundleFile =
+        await MusifyBackupService.createStreamedBundleFileForTesting(
+          payloads,
+          hiveRoot,
+        );
+
+    final validated = await MusifyBackupService.inspectBundleBytes(
+      await bundleFile.readAsBytes(),
+      sourceDescription: 'streamed-2643.musifybackup',
+    );
+
+    expect(validated.summary.importedTracks, 2643);
+    expect(validated.summary.matchResults, 2643);
+    expect(validated.summary.strongMatches, 2619);
+    expect(validated.summary.unmatchedItems, 24);
+  });
+
   test('rejects a backup with one required database removed', () async {
     final payloads = await _createMatchingPayloads(
       importedTracks: 2,
