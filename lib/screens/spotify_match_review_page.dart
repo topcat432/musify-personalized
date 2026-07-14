@@ -704,7 +704,6 @@ class _ResolutionCard extends StatelessWidget {
           ),
           const SizedBox(height: 2),
           Align(
-            alignment: Alignment.center,
             child: TextButton.icon(
               key: ValueKey(
                 'exclude-${item['sourceRow'] ?? item['sourceTitle']}',

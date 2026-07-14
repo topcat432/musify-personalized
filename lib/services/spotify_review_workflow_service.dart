@@ -289,8 +289,8 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
     final excludedRows =
         (box.get('spotifyExcludedImportRows') as List? ?? const [])
             .map((value) => value.toString())
-            .toSet();
-    excludedRows.add(sourceRow);
+            .toSet()
+          ..add(sourceRow);
 
     results[index] = Map<String, dynamic>.from(results[index])
       ..['status'] = 'excluded'
