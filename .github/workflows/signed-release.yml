@@ -80,12 +80,67 @@ jobs:
 
       - name: Set monotonic production version
         id: version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MANIFEST_ASSET: musify-personalized-update.json
         shell: bash
         run: |
           set -euo pipefail
           build_number=$((100000000 + GITHUB_RUN_NUMBER))
           test "$build_number" -gt 26195006
           test "$build_number" -le 2100000000
+
+          latest_release="$RUNNER_TEMP/latest-personalized-release.json"
+          latest_manifest="$RUNNER_TEMP/latest-personalized-manifest.json"
+          status="$(curl --silent --show-error --location \
+            --output "$latest_release" \
+            --write-out '%{http_code}' \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/releases/latest")"
+
+          case "$status" in
+            200)
+              asset_count="$(jq --arg name "$MANIFEST_ASSET" \
+                '[.assets[] | select(.name == $name)] | length' \
+                "$latest_release")"
+              test "$asset_count" -eq 1 || {
+                echo "The latest release must contain exactly one $MANIFEST_ASSET asset."
+                exit 1
+              }
+              asset_url="$(jq -er --arg name "$MANIFEST_ASSET" \
+                '.assets[] | select(.name == $name) | .url' \
+                "$latest_release")"
+              curl --fail --silent --show-error --location \
+                --output "$latest_manifest" \
+                --header 'Accept: application/octet-stream' \
+                --header "Authorization: Bearer $GH_TOKEN" \
+                --header 'X-GitHub-Api-Version: 2022-11-28' \
+                "$asset_url"
+              if ! published_build_number="$(jq -er '
+                select(.schemaVersion == 1) |
+                select(.packageName == "com.topcat432.musifypersonalized") |
+                .versionCode |
+                select(type == "number" and . == floor)
+              ' "$latest_manifest")"; then
+                echo "The latest personalized update manifest is invalid."
+                exit 1
+              fi
+              if (( build_number <= published_build_number )); then
+                echo "Refusing stale production versionCode $build_number; latest is $published_build_number."
+                exit 1
+              fi
+              ;;
+            404)
+              echo "No existing production release; accepting initial versionCode $build_number."
+              ;;
+            *)
+              echo "Unable to verify the latest production version (GitHub HTTP $status)."
+              exit 1
+              ;;
+          esac
+
           echo "build_number=$build_number" >> "$GITHUB_OUTPUT"
           echo "version_name=0.1.$build_number" >> "$GITHUB_OUTPUT"
 
