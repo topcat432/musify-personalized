@@ -108,9 +108,15 @@ jobs:
           test -x "$apksigner"
           verification="$($apksigner verify --verbose --print-certs "$apk")"
           printf '%s\n' "$verification"
+          # V2 is the required install/update identity scheme for the target
+          # Android device. V3 is optional and toolchain-dependent.
           grep -Fq 'Verified using v2 scheme (APK Signature Scheme v2): true' <<<"$verification"
-          grep -Fq 'Verified using v3 scheme (APK Signature Scheme v3): true' <<<"$verification"
-          signer_sha="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' <<<"$verification" | head -1)"
+          signer_sha="$(
+            sed -n \\
+              -e 's/^Signer #1 certificate SHA-256 digest: //p' \\
+              -e 's/^V[0-9][^:]*: certificate SHA-256 digest: //p' \\
+              <<<"$verification" | head -1
+          )"
           test -n "$signer_sha"
           aapt="$(find "$ANDROID_SDK_ROOT/build-tools" -mindepth 2 -maxdepth 2 -type f -name aapt | sort -V | tail -1)"
           badging="$($aapt dump badging "$apk")"
@@ -129,7 +135,7 @@ jobs:
             echo "$package_line"
             echo "Application label: Musify Personalized"
             echo "Debuggable: false"
-            echo "Signature schemes: v2=true, v3=true"
+            echo "Signature schemes: v2=true"
           } > release-proof.txt
           cat release-proof.txt
 
