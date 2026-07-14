@@ -10,8 +10,15 @@
 import 'package:hive/hive.dart';
 import 'package:musify/services/spotify_csv_importer.dart';
 
+typedef SpotifyImportSessionWriter = Future<void> Function(
+  Box<dynamic> box,
+  Map<String, dynamic> values,
+);
+
 class SpotifyImportSessionService {
-  const SpotifyImportSessionService();
+  const SpotifyImportSessionService({this.sessionWriter});
+
+  final SpotifyImportSessionWriter? sessionWriter;
 
   static const _sessionKeys = <String>[
     'spotifyImportTracks',
@@ -26,11 +33,11 @@ class SpotifyImportSessionService {
   }) async {
     final box = Hive.box('user');
     final savedAt = (importedAt ?? DateTime.now()).toUtc();
-
-    // Fail closed before installing the new source. Review and destination
-    // screens must never observe a new CSV beside results from an older one.
-    await box.deleteAll(_sessionKeys);
-    await box.putAll({
+    final previousValues = <String, dynamic>{
+      for (final key in _sessionKeys)
+        if (box.containsKey(key)) key: box.get(key),
+    };
+    final newValues = <String, dynamic>{
       'spotifyImportTracks': preview.tracks
           .map((track) => track.toJson())
           .toList(growable: false),
@@ -42,9 +49,27 @@ class SpotifyImportSessionService {
         'rejectedRowCount': preview.rejectedRows.length,
         'totalDataRows': preview.totalDataRows,
         'importedAt': savedAt.toIso8601String(),
+        'importSessionId': savedAt.microsecondsSinceEpoch.toString(),
         'matchingStatus': 'not_started',
         'nextTrackIndex': 0,
       },
-    });
+      'spotifyMatchResults': <dynamic>[],
+      'spotifyExcludedImportRows': <dynamic>[],
+    };
+
+    try {
+      await (sessionWriter ?? _writeSession)(box, newValues);
+    } catch (error, stackTrace) {
+      // A failed replacement must not destroy the user's last reviewable
+      // import. Clear any partial writes, then restore the exact old key set.
+      await box.deleteAll(_sessionKeys);
+      await box.putAll(previousValues);
+      Error.throwWithStackTrace(error, stackTrace);
+    }
   }
+
+  static Future<void> _writeSession(
+    Box<dynamic> box,
+    Map<String, dynamic> values,
+  ) => box.putAll(values);
 }

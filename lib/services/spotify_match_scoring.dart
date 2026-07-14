@@ -213,10 +213,10 @@ class SpotifyMatchScorer {
     }
 
     final sourceMentionsAlternate = _alternateVersionTerms.any(
-      normalizedSourceTitleFull.contains,
+      (term) => _containsWholeTerm(normalizedSourceTitleFull, term),
     );
     final candidateMentionsAlternate = _alternateVersionTerms.any(
-      combinedText.contains,
+      (term) => _containsWholeTerm(combinedText, term),
     );
     if (candidateMentionsAlternate && !sourceMentionsAlternate) {
       penalty += 0.14;
@@ -224,10 +224,10 @@ class SpotifyMatchScorer {
     }
 
     final sourceMentionsMasteringVariant = _masteringVariantTerms.any(
-      normalizedSourceTitleFull.contains,
+      (term) => _containsWholeTerm(normalizedSourceTitleFull, term),
     );
     final candidateMentionsMasteringVariant = _masteringVariantTerms.any(
-      combinedText.contains,
+      (term) => _containsWholeTerm(combinedText, term),
     );
     if (candidateMentionsMasteringVariant && !sourceMentionsMasteringVariant) {
       penalty += 0.05;
@@ -411,6 +411,11 @@ class SpotifyMatchScorer {
         .split(' ')
         .where((token) => token.length > 1 && !_noiseTokens.contains(token))
         .toSet();
+  }
+
+  static bool _containsWholeTerm(String normalizedText, String term) {
+    final normalizedTerm = _normalize(term);
+    return ' $normalizedText '.contains(' $normalizedTerm ');
   }
 
   static String _normalizeTitle(String value) {

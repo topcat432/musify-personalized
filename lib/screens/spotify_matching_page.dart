@@ -37,6 +37,12 @@ class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
     _load();
   }
 
+  @override
+  void dispose() {
+    _stopRequested = true;
+    super.dispose();
+  }
+
   Future<void> _load() async {
     try {
       final snapshot = await _service.loadSnapshot();
@@ -105,7 +111,7 @@ class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
           final before = current.nextTrackIndex;
           current = await _service.matchNextBatch(
             batchSize: SpotifyTrackMatchingService.maximumPilotBatchSize,
-            shouldStop: () => _stopRequested,
+            shouldStop: () => !mounted || _stopRequested,
             onProgress: (progress) {
               if (mounted) setState(() => _snapshot = progress);
             },
@@ -118,7 +124,7 @@ class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
       } else {
         current = await _service.matchNextBatch(
           batchSize: _selectedRunSize,
-          shouldStop: () => _stopRequested,
+          shouldStop: () => !mounted || _stopRequested,
           onProgress: (progress) {
             if (mounted) setState(() => _snapshot = progress);
           },

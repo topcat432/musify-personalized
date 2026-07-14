@@ -188,8 +188,12 @@ class SpotifyTrackMatchingService {
     await _checkpoint(results, metadata, nextIndex, tracks.length);
 
     var sinceCheckpoint = 0;
+    var stopped = false;
     while (nextIndex < stopIndex) {
-      if (shouldStop?.call() ?? false) break;
+      if (shouldStop?.call() ?? false) {
+        stopped = true;
+        break;
+      }
 
       final source = tracks[nextIndex];
       Map<String, dynamic> result;
@@ -213,6 +217,13 @@ class SpotifyTrackMatchingService {
         }
       }
 
+      // A network lookup can finish after the matching page has been
+      // disposed. Do not checkpoint that result into a replacement import.
+      if (shouldStop?.call() ?? false) {
+        stopped = true;
+        break;
+      }
+
       results.add(result);
       nextIndex++;
       sinceCheckpoint++;
@@ -230,6 +241,8 @@ class SpotifyTrackMatchingService {
         await Future<void>.delayed(const Duration(milliseconds: 150));
       }
     }
+
+    if (stopped) return loadSnapshot();
 
     metadata['matchingStatus'] = nextIndex >= tracks.length
         ? 'complete'

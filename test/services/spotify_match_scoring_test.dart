@@ -141,6 +141,23 @@ void main() {
       expect(live.reasons, contains('Alternate version not requested'));
     });
 
+    test('does not treat version-term substrings as alternate versions', () {
+      const input = SpotifyMatchInput(
+        title: 'Life Goes On',
+        artist: 'Oliver Tree',
+      );
+      final result = SpotifyMatchScorer.score(input, {
+        'title': 'Life Goes On',
+        'artist': 'Oliver Tree',
+        'videoAuthor': 'Oliver Tree - Topic',
+        'duration': 161,
+      });
+
+      expect(result.disqualified, isFalse);
+      expect(result.automaticEligible, isTrue);
+      expect(result.reasons, isNot(contains('Alternate version not requested')));
+    });
+
     test('rejects a candidate with an unrelated artist identity', () {
       const input = SpotifyMatchInput(
         title: 'Place',

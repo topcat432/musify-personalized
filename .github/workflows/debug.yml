@@ -56,12 +56,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for workflow in .github/workflows/*.yml; do
+          shopt -s nullglob
+          for workflow in .github/workflows/*.yml .github/workflows/*.yaml; do
             case "$(basename "$workflow")" in
               debug.yml|signed-release.yml) continue ;;
             esac
             if grep -Fq -- '--flavor github' "$workflow" &&
-              grep -Eq -- 'KEYSTORE2|flutter build apk .*--release' "$workflow"; then
+              { grep -Fq -- 'KEYSTORE2' "$workflow" ||
+                { grep -Fq -- 'flutter build apk' "$workflow" &&
+                  grep -Fq -- '--release' "$workflow"; }; }; then
               echo "Legacy production-package build path found in $workflow"
               exit 1
             fi

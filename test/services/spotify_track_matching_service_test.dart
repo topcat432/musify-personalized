@@ -78,4 +78,36 @@ void main() {
       isTrue,
     );
   });
+
+  test('a stop requested after lookup prevents a stale checkpoint', () async {
+    final box = Hive.box('user');
+    await box.put('spotifyImportTracks', [
+      {
+        'sourceRow': 7,
+        'title': 'Voice-over intro',
+        'artist': 'Quincy Jones',
+        'album': 'Off The Wall',
+      },
+    ]);
+    await box.put('spotifyExcludedImportRows', ['7']);
+    await box.put('spotifyImportMetadata', <String, dynamic>{
+      'matchingStatus': 'not_started',
+      'nextTrackIndex': 0,
+    });
+    await box.put('spotifyMatchResults', <dynamic>[]);
+    var stopChecks = 0;
+
+    final snapshot = await const SpotifyTrackMatchingService().matchNextBatch(
+      batchSize: 1,
+      shouldStop: () => ++stopChecks > 1,
+    );
+
+    expect(stopChecks, 2);
+    expect(snapshot.nextTrackIndex, 0);
+    expect(box.get('spotifyMatchResults'), isEmpty);
+    final metadata = Map<String, dynamic>.from(
+      box.get('spotifyImportMetadata') as Map,
+    );
+    expect(metadata['nextTrackIndex'], 0);
+  });
 }
