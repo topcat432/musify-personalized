@@ -573,30 +573,32 @@ class _TransferActionBar extends StatelessWidget {
       child: SafeArea(
         top: false,
         minimum: const EdgeInsets.fromLTRB(18, 12, 18, 12),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Row(
           children: [
-            Text(
-              '$selectedCount ${selectedCount == 1 ? 'song' : 'songs'} selected',
-              style: theme.textTheme.labelLarge?.copyWith(
-                color: colors.onSurfaceVariant,
-                fontWeight: FontWeight.w700,
+            Expanded(
+              child: Text(
+                '$selectedCount ${selectedCount == 1 ? 'song' : 'songs'}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  color: colors.onSurfaceVariant,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
-            const SizedBox(height: 8),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: saving ? null : onPressed,
-                icon: saving
-                    ? const SizedBox.square(
-                        dimension: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.arrow_forward_rounded),
-                label: Text(saving ? 'Saving safely…' : 'Review transfer'),
+            const SizedBox(width: 14),
+            FilledButton.icon(
+              style: FilledButton.styleFrom(
+                minimumSize: const Size(0, 48),
               ),
+              onPressed: saving ? null : onPressed,
+              icon: saving
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.arrow_forward_rounded),
+              label: Text(saving ? 'Saving…' : 'Review'),
             ),
           ],
         ),
