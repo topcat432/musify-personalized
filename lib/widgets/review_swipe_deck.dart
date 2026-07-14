@@ -336,8 +336,6 @@ class _SwipeOverlay extends StatelessWidget {
         Alignment.topLeft,
         const EdgeInsets.only(left: 22, top: 24),
         LinearGradient(
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
           colors: [colors.primary.withValues(alpha: 0.34), Colors.transparent],
         ),
       ),

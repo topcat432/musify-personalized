@@ -172,17 +172,13 @@ final List<Map<String, dynamic>> _visualItems = [
 
 class _VisualDataSource implements SpotifyReviewSprintDataSource {
   _VisualDataSource(List<Map<String, dynamic>> items)
-    : _items = items
-          .map((item) => Map<String, dynamic>.from(item))
-          .toList(growable: true);
+    : _items = items.map(Map<String, dynamic>.from).toList(growable: true);
 
   final List<Map<String, dynamic>> _items;
 
   @override
   Future<List<Map<String, dynamic>>> loadUnresolvedItems() async {
-    return _items
-        .map((item) => Map<String, dynamic>.from(item))
-        .toList(growable: false);
+    return _items.map(Map<String, dynamic>.from).toList(growable: false);
   }
 
   @override
