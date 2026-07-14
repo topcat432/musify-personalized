@@ -159,6 +159,58 @@ void main() {
       expect(result.reasons, contains('Alternate version not requested'));
     });
 
+    test('does not treat ordinary source-title words as version requests', () {
+      const input = SpotifyMatchInput(
+        title: 'Live Forever',
+        artist: 'Oasis',
+        durationMs: 276000,
+      );
+      final result = SpotifyMatchScorer.score(input, {
+        'title': 'Live Forever Live',
+        'rawTitle': 'Live Forever (Live)',
+        'artist': 'Oasis',
+        'videoAuthor': 'Oasis - Topic',
+        'duration': 276,
+      });
+
+      expect(result.automaticEligible, isFalse);
+      expect(result.reasons, contains('Alternate version not requested'));
+    });
+
+    test('keeps an ordinary version word eligible when both titles match', () {
+      const input = SpotifyMatchInput(
+        title: 'Live Forever',
+        artist: 'Oasis',
+        durationMs: 276000,
+      );
+      final result = SpotifyMatchScorer.score(input, {
+        'title': 'Live Forever',
+        'rawTitle': 'Live Forever',
+        'artist': 'Oasis',
+        'videoAuthor': 'Oasis - Topic',
+        'duration': 276,
+      });
+
+      expect(result.automaticEligible, isTrue);
+      expect(result.reasons, isNot(contains('Alternate version not requested')));
+    });
+
+    test('uses a fallback raw title to retain long-form evidence', () {
+      const input = SpotifyMatchInput(
+        title: 'Example Song',
+        artist: 'Example Artist',
+      );
+      final result = SpotifyMatchScorer.score(input, {
+        'title': 'Example Song',
+        'rawTitle': 'Example Song (Official Full Album)',
+        'artist': 'Example Artist',
+        'videoAuthor': 'Example Artist Official',
+      });
+
+      expect(result.automaticEligible, isFalse);
+      expect(result.reasons, contains('Title suggests compilation content'));
+    });
+
     test('does not treat version-term substrings as alternate versions', () {
       const input = SpotifyMatchInput(
         title: 'Life Goes On',

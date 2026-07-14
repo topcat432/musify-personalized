@@ -11,7 +11,6 @@ import 'dart:async';
 
 import 'package:hive/hive.dart';
 import 'package:musify/services/common_services.dart';
-import 'package:musify/services/data_manager.dart';
 import 'package:musify/services/spotify_match_scoring.dart';
 import 'package:youtube_music_explode_dart/youtube_music_explode_dart.dart';
 
@@ -94,7 +93,6 @@ class SpotifyTrackMatchingService {
     final tracks = _readMaps(box.get('spotifyImportTracks'));
     final metadata = _readMap(box.get('spotifyImportMetadata'));
     final excludedRows = _readExcludedRows(box);
-    await deleteData('user', 'spotifyMatchResults');
     metadata
       ..['matchingVersion'] = 3
       ..['matchingStatus'] = 'not_started'
@@ -108,11 +106,10 @@ class SpotifyTrackMatchingService {
       ..['lastMatchingCheckpointAt'] = DateTime.now()
           .toUtc()
           .toIso8601String();
-    await addOrUpdateData<Map<String, dynamic>>(
-      'user',
-      'spotifyImportMetadata',
-      metadata,
-    );
+    await box.putAll({
+      'spotifyMatchResults': <dynamic>[],
+      'spotifyImportMetadata': metadata,
+    });
     return _snapshot(tracks, <Map<String, dynamic>>[], metadata);
   }
 
@@ -288,26 +285,36 @@ class SpotifyTrackMatchingService {
         evaluation.ranked.first['automaticEligible'] == true;
 
     if (!firstMusicAutomatic || firstMusicScore < automaticMatchThreshold) {
-      final officialResults = await fetchSongsList(
-        '$artist $title official audio'.trim(),
-      );
-      candidates.addAll(
-        officialResults.whereType<Map>().map(Map<String, dynamic>.from),
-      );
-      searchSources.add('youtube_official_audio');
-      evaluation = _evaluate(input, candidates);
+      try {
+        final officialResults = await fetchSongsList(
+          '$artist $title official audio'.trim(),
+        ).timeout(_musicSearchTimeout);
+        candidates.addAll(
+          officialResults.whereType<Map>().map(Map<String, dynamic>.from),
+        );
+        searchSources.add('youtube_official_audio');
+        evaluation = _evaluate(input, candidates);
+      } catch (error) {
+        sourceFailures.add('YouTube official-audio search failed: $error');
+      }
     }
 
     final topScore = evaluation.ranked.isEmpty
         ? 0.0
         : evaluation.ranked.first['score'] as double;
     if (topScore < reviewThreshold) {
-      final broadResults = await fetchSongsList('$artist $title'.trim());
-      candidates.addAll(
-        broadResults.whereType<Map>().map(Map<String, dynamic>.from),
-      );
-      searchSources.add('youtube_broad_fallback');
-      evaluation = _evaluate(input, candidates);
+      try {
+        final broadResults = await fetchSongsList(
+          '$artist $title'.trim(),
+        ).timeout(_musicSearchTimeout);
+        candidates.addAll(
+          broadResults.whereType<Map>().map(Map<String, dynamic>.from),
+        );
+        searchSources.add('youtube_broad_fallback');
+        evaluation = _evaluate(input, candidates);
+      } catch (error) {
+        sourceFailures.add('YouTube broad fallback failed: $error');
+      }
     }
 
     final best = evaluation.ranked.isEmpty ? null : evaluation.ranked.first;

@@ -42,6 +42,11 @@ void main() {
 
     const service = SpotifyTrackMatchingService();
     final restarted = await service.restartMatching();
+    expect(box.get('spotifyMatchResults'), isEmpty);
+    expect(
+      (box.get('spotifyImportMetadata') as Map)['nextTrackIndex'],
+      0,
+    );
     final completed = await service.matchNextBatch(batchSize: 1);
     final results = box.get('spotifyMatchResults') as List;
     final saved = Map<String, dynamic>.from(results.single as Map);

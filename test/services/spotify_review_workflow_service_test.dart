@@ -82,6 +82,7 @@ void main() {
     expect(saved['status'], 'excluded');
     expect(saved['reviewDecision'], 'excluded_from_import');
     expect(saved['excludedAt'], isNotNull);
+    expect(box.get('spotifyExcludedImportRows'), ['7']);
     expect(metadata['excludedCount'], 1);
     expect(metadata['pendingResolutionCount'], 0);
   });

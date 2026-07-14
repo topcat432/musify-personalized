@@ -11,7 +11,6 @@ import 'dart:async';
 
 import 'package:hive/hive.dart';
 import 'package:musify/services/common_services.dart';
-import 'package:musify/services/data_manager.dart';
 import 'package:musify/services/spotify_match_scoring.dart';
 import 'package:youtube_music_explode_dart/youtube_music_explode_dart.dart';
 
@@ -327,12 +326,11 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
       ..['excludedAt'] = DateTime.now().toUtc().toIso8601String()
       ..['reviewedAt'] = DateTime.now().toUtc().toIso8601String();
 
-    await addOrUpdateData<List<String>>(
-      'user',
-      'spotifyExcludedImportRows',
-      excludedRows.toList(growable: false)..sort(),
+    await _checkpoint(
+      results,
+      metadata,
+      excludedRows: excludedRows.toList(growable: false)..sort(),
     );
-    await _checkpoint(results, metadata);
     return SpotifyResolutionResult(
       duplicatesApplied: 0,
       remainingUnresolved: results.where(isPendingResolution).length,
@@ -604,6 +602,7 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
     List<Map<String, dynamic>> results,
     Map<String, dynamic> metadata, {
     String? expectedSessionId,
+    List<String>? excludedRows,
   }) async {
     final box = Hive.box('user');
     if (expectedSessionId != null &&
@@ -622,6 +621,7 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
     await box.putAll({
       'spotifyMatchResults': results,
       'spotifyImportMetadata': metadata,
+      if (excludedRows != null) 'spotifyExcludedImportRows': excludedRows,
     });
     return true;
   }

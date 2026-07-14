@@ -147,11 +147,7 @@ class SpotifyMatchScorer {
     final durationScore = _durationScore(input.durationMs, durationSeconds);
     final sourceScore = _sourceScore(candidate, videoAuthor);
 
-    final combinedText = _normalize(candidateTitle);
-    final sourceVersionText = _normalize('${input.title} ${input.album}');
-    final candidateVersionText = _normalize(
-      '$candidateTitle $candidateRawTitle $candidateAlbum',
-    );
+    final combinedText = _normalize('$candidateTitle $candidateRawTitle');
     final reasons = <String>[];
     var disqualified = false;
     var penalty = 0.0;
@@ -222,10 +218,15 @@ class SpotifyMatchScorer {
     }
 
     final sourceMentionsAlternate = _alternateVersionTerms.any(
-      (term) => _containsWholeTerm(sourceVersionText, term),
+      (term) => _sourceRequestsVersion(input, term),
     );
     final candidateMentionsAlternate = _alternateVersionTerms.any(
-      (term) => _containsWholeTerm(candidateVersionText, term),
+      (term) => _candidateMarksVersion(
+        candidateTitle,
+        candidateRawTitle,
+        candidateAlbum,
+        term,
+      ),
     );
     final hasUnrequestedAlternate =
         candidateMentionsAlternate && !sourceMentionsAlternate;
@@ -235,10 +236,15 @@ class SpotifyMatchScorer {
     }
 
     final sourceMentionsMasteringVariant = _masteringVariantTerms.any(
-      (term) => _containsWholeTerm(sourceVersionText, term),
+      (term) => _sourceRequestsVersion(input, term),
     );
     final candidateMentionsMasteringVariant = _masteringVariantTerms.any(
-      (term) => _containsWholeTerm(candidateVersionText, term),
+      (term) => _candidateMarksVersion(
+        candidateTitle,
+        candidateRawTitle,
+        candidateAlbum,
+        term,
+      ),
     );
     final hasUnrequestedMasteringVariant =
         candidateMentionsMasteringVariant && !sourceMentionsMasteringVariant;
@@ -430,6 +436,42 @@ class SpotifyMatchScorer {
   static bool _containsWholeTerm(String normalizedText, String term) {
     final normalizedTerm = _normalize(term);
     return ' $normalizedText '.contains(' $normalizedTerm ');
+  }
+
+  static bool _sourceRequestsVersion(SpotifyMatchInput input, String term) =>
+      _containsContextualTerm(input.title, term) ||
+      _containsContextualTerm(input.album, term);
+
+  static bool _candidateMarksVersion(
+    String title,
+    String rawTitle,
+    String album,
+    String term,
+  ) =>
+      _containsContextualTerm(title, term) ||
+      _containsContextualTerm(rawTitle, term) ||
+      _containsContextualTerm(album, term);
+
+  static bool _containsContextualTerm(String value, String term) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return false;
+
+    for (final match in RegExp(r'[\(\[][\s\S]*?[\)\]]').allMatches(trimmed)) {
+      if (_containsWholeTerm(_normalize(match.group(0) ?? ''), term)) {
+        return true;
+      }
+    }
+
+    final markedSegments = trimmed.split(RegExp(r'\s[-–—:]\s'));
+    if (markedSegments.length > 1 &&
+        _containsWholeTerm(_normalize(markedSegments.last), term)) {
+      return true;
+    }
+
+    final normalized = _normalize(trimmed);
+    final normalizedTerm = _normalize(term);
+    return normalized != normalizedTerm &&
+        normalized.endsWith(' $normalizedTerm');
   }
 
   static String _normalizeTitle(String value) {
