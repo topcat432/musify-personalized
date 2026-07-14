@@ -177,10 +177,21 @@ class SpotifyImportDestinationService {
   }) async {
     final normalizedName = name?.trim() ?? '';
     final title = normalizedName.isEmpty ? fallbackName : normalizedName;
+    for (final existing in userCustomPlaylists.value) {
+      if (existing['source'] == 'user-created' &&
+          existing['title']?.toString() == title &&
+          existing['importSourceName']?.toString() == fallbackName) {
+        return _routeToExistingPlaylist(
+          selected,
+          playlistId: existing['ytid']?.toString(),
+        );
+      }
+    }
     final playlist = <String, dynamic>{
       'ytid': PlaylistUtils.generateCustomPlaylistId(),
       'title': title,
       'source': 'user-created',
+      'importSourceName': fallbackName,
       'list': selected,
       'createdAt': DateTime.now().millisecondsSinceEpoch,
     };
