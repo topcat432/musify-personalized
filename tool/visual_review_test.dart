@@ -1,4 +1,8 @@
+import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:musify/screens/spotify_import_hub_page.dart';
 import 'package:musify/screens/spotify_review_sprint_page.dart';
@@ -6,6 +10,8 @@ import 'package:musify/services/review_sprint_audio_player.dart';
 import 'package:musify/services/spotify_review_workflow_service.dart';
 
 void main() {
+  setUpAll(_loadVisualReviewFonts);
+
   testWidgets('renders the import hub visual review', (tester) async {
     _setViewport(tester, const Size(412, 915));
     await tester.pumpWidget(
@@ -85,6 +91,7 @@ ThemeData _reviewTheme(Brightness brightness) {
   );
   return ThemeData(
     useMaterial3: true,
+    fontFamily: 'visualSans',
     colorScheme: colors,
     scaffoldBackgroundColor: colors.surface,
     appBarTheme: AppBarTheme(
@@ -103,6 +110,34 @@ ThemeData _reviewTheme(Brightness brightness) {
       ),
     ),
   );
+}
+
+Future<void> _loadVisualReviewFonts() async {
+  final paytoneLoader = FontLoader('paytoneOne')
+    ..addFont(rootBundle.load('assets/fonts/paytone/PaytoneOne-Regular.ttf'));
+  final sansBytes = await _visualSansFont().readAsBytes();
+  final sansLoader = FontLoader('visualSans')
+    ..addFont(Future<ByteData>.value(ByteData.sublistView(sansBytes)));
+
+  await Future.wait([paytoneLoader.load(), sansLoader.load()]);
+}
+
+File _visualSansFont() {
+  final flutterRoot = Platform.environment['FLUTTER_ROOT'];
+  final candidates = <String>[
+    if (flutterRoot != null)
+      '$flutterRoot/bin/cache/artifacts/material_fonts/Roboto-Regular.ttf',
+    '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+  ];
+
+  for (final path in candidates) {
+    final file = File(path);
+    if (file.existsSync()) {
+      return file;
+    }
+  }
+
+  throw StateError('No readable sans-serif font found for visual reviews.');
 }
 
 final List<Map<String, dynamic>> _visualItems = [
