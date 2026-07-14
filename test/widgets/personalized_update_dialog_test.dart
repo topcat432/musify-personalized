@@ -43,6 +43,31 @@ void main() {
     expect(service.cancellation?.isCancelled, isTrue);
     expect(find.byType(PersonalizedUpdateDialog), findsNothing);
   });
+
+  testWidgets('disposing the dialog cancels a stalled update download', (
+    tester,
+  ) async {
+    final service = _StallingUpdateService();
+    addTearDown(service.close);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PersonalizedUpdateDialog(
+          check: _updateCheck,
+          service: service,
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Download'));
+    await tester.pump();
+    await service.started.future;
+
+    await tester.pumpWidget(const MaterialApp(home: SizedBox.shrink()));
+    await tester.pump();
+
+    expect(service.cancellation?.isCancelled, isTrue);
+  });
 }
 
 class _StallingUpdateService extends PersonalizedUpdateService {

@@ -28,6 +28,12 @@ class _PersonalizedUpdateDialogState extends State<PersonalizedUpdateDialog> {
 
   bool get _busy => _stage == _UpdateStage.downloading;
 
+  @override
+  void dispose() {
+    _downloadCancellation?.cancel();
+    super.dispose();
+  }
+
   Future<void> _download() async {
     if (_busy) return;
     setState(() {

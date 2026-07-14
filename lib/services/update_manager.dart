@@ -158,9 +158,7 @@ Future<void> fetchAnnouncementOnly() async {
     }
     final map = json.decode(response.body) as Map<String, dynamic>;
     final announcement = map['announcementurl'];
-    if (announcement != null) {
-      announcementURL.value = announcement.toString();
-    }
+    announcementURL.value = announcement?.toString();
   } catch (error, stackTrace) {
     logger.log(
       'Error in fetchAnnouncementOnly',
