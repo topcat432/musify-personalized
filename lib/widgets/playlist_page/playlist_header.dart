@@ -31,6 +31,7 @@ class PlaylistHeader extends StatelessWidget {
     super.key,
     this.isAlbum,
     this.isArtist = false,
+    this.compact = false,
   });
 
   final Widget image;
@@ -38,6 +39,7 @@ class PlaylistHeader extends StatelessWidget {
   final int songsLength;
   final bool? isAlbum;
   final bool isArtist;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -45,7 +47,7 @@ class PlaylistHeader extends StatelessWidget {
     final colorScheme = theme.colorScheme;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
+      padding: EdgeInsets.fromLTRB(24, compact ? 8 : 20, 24, 8),
       child: Column(
         children: [
           if (isArtist)
@@ -62,7 +64,7 @@ class PlaylistHeader extends StatelessWidget {
               ),
               child: image,
             ),
-          const SizedBox(height: 24),
+          SizedBox(height: compact ? 16 : 24),
           Text(
             title,
             style: theme.textTheme.headlineSmall?.copyWith(
@@ -74,7 +76,7 @@ class PlaylistHeader extends StatelessWidget {
             maxLines: 2,
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: compact ? 7 : 10),
           Wrap(
             alignment: WrapAlignment.center,
             spacing: 8,
@@ -108,7 +110,7 @@ class PlaylistHeader extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 20),
+          SizedBox(height: compact ? 14 : 20),
         ],
       ),
     );

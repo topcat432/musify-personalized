@@ -25,6 +25,7 @@ class _SpotifyMatchReviewPageState extends State<SpotifyMatchReviewPage> {
       const SpotifyReviewWorkflowService();
   final Map<String, int> _selectedAlternativeIndex = {};
   final Set<String> _busyRows = {};
+  final Set<String> _removingRows = {};
   List<Map<String, dynamic>> _items = [];
   List<SpotifyReviewCluster> _clusters = [];
   SpotifyRescueProgress? _rescueProgress;
@@ -114,7 +115,9 @@ class _SpotifyMatchReviewPageState extends State<SpotifyMatchReviewPage> {
   Future<void> _openSprint() async {
     if (_rescueRunning || _items.isEmpty) return;
     await Navigator.of(context).push<bool>(
-      MaterialPageRoute<bool>(builder: (_) => const SpotifyReviewSprintPage()),
+      personalizedPageRoute<bool>(
+        builder: (_) => const SpotifyReviewSprintPage(),
+      ),
     );
     await _load();
   }
@@ -164,11 +167,60 @@ class _SpotifyMatchReviewPageState extends State<SpotifyMatchReviewPage> {
   Future<void> _searchManually(Map<String, dynamic> item) async {
     if (_rescueRunning) return;
     final saved = await Navigator.of(context).push<bool>(
-      MaterialPageRoute<bool>(
+      personalizedPageRoute<bool>(
         builder: (_) => SpotifyManualMatchPage(item: item),
       ),
     );
     if (saved == true) await _load();
+  }
+
+  Future<void> _excludePermanently(Map<String, dynamic> item) async {
+    final rowKey = _rowKey(item);
+    if (_busyRows.contains(rowKey) || _rescueRunning) return;
+    final title = item['sourceTitle']?.toString().trim();
+    final confirmed = await showPersonalizedDestructiveConfirmation(
+      context: context,
+      title: 'Exclude “${title?.isNotEmpty == true ? title : 'this track'}”?',
+      message:
+          'This removes the track from review, rescue, and every destination for this import. It will not remove anything already in Liked Songs.',
+      confirmLabel: 'Exclude',
+    );
+    if (!confirmed || !mounted) return;
+
+    setState(() {
+      _busyRows.add(rowKey);
+      _error = null;
+    });
+    try {
+      await _service.excludeItem(item: item);
+      if (!mounted) return;
+      setState(() {
+        _busyRows.remove(rowKey);
+        _removingRows.add(rowKey);
+      });
+      await Future<void>.delayed(const Duration(milliseconds: 260));
+      if (!mounted) return;
+      final clusters = await _service.loadClusters();
+      if (!mounted) return;
+      setState(() {
+        _items.removeWhere((candidate) => _rowKey(candidate) == rowKey);
+        _clusters = clusters;
+        _selectedAlternativeIndex.remove(rowKey);
+        _removingRows.remove(rowKey);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Track excluded from this import workflow.'),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _busyRows.remove(rowKey);
+        _removingRows.remove(rowKey);
+        _error = 'Track was not excluded. $error';
+      });
+    }
   }
 
   @override
@@ -202,30 +254,35 @@ class _SpotifyMatchReviewPageState extends State<SpotifyMatchReviewPage> {
                     title: 'Resolve the hard cases',
                     description:
                         'Run a cautious rescue pass, move quickly through one-at-a-time review, or compare every candidate in detail.',
+                    compact: true,
                   ),
                   const SizedBox(height: 18),
-                  PersonalizedSurface(
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: PersonalizedMetric(
-                            label: 'Review',
-                            value: reviewCount.toString(),
+                  PersonalizedReveal(
+                    delay: const Duration(milliseconds: 70),
+                    child: PersonalizedSurface(
+                      padding: const EdgeInsets.all(16),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: PersonalizedMetric(
+                              label: 'Review',
+                              value: reviewCount.toString(),
+                            ),
                           ),
-                        ),
-                        Expanded(
-                          child: PersonalizedMetric(
-                            label: 'Unmatched',
-                            value: unmatchedCount.toString(),
+                          Expanded(
+                            child: PersonalizedMetric(
+                              label: 'Unmatched',
+                              value: unmatchedCount.toString(),
+                            ),
                           ),
-                        ),
-                        Expanded(
-                          child: PersonalizedMetric(
-                            label: 'Errors',
-                            value: errorCount.toString(),
+                          Expanded(
+                            child: PersonalizedMetric(
+                              label: 'Errors',
+                              value: errorCount.toString(),
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                   if (_error != null) ...[
@@ -399,23 +456,38 @@ class _SpotifyMatchReviewPageState extends State<SpotifyMatchReviewPage> {
                           'Every processed track currently has a saved source decision.',
                     ),
                   ] else
-                    for (final item in _items) ...[
-                      const SizedBox(height: 12),
-                      _ResolutionCard(
-                        item: item,
-                        selectedIndex:
-                            _selectedAlternativeIndex[_rowKey(item)] ?? 0,
-                        busy:
-                            _busyRows.contains(_rowKey(item)) || _rescueRunning,
-                        onSelected: (index) => setState(
-                          () =>
-                              _selectedAlternativeIndex[_rowKey(item)] = index,
-                        ),
-                        onAccept: () => _resolveSuggested(item, accept: true),
-                        onReject: () => _resolveSuggested(item, accept: false),
-                        onManualSearch: () => _searchManually(item),
+                    for (final item in _items)
+                      AnimatedSize(
+                        key: ValueKey(_rowKey(item)),
+                        duration: const Duration(milliseconds: 260),
+                        curve: Curves.easeInOutCubic,
+                        alignment: Alignment.topCenter,
+                        child: _removingRows.contains(_rowKey(item))
+                            ? const SizedBox.shrink()
+                            : Padding(
+                                padding: const EdgeInsets.only(top: 10),
+                                child: _ResolutionCard(
+                                  item: item,
+                                  selectedIndex:
+                                      _selectedAlternativeIndex[_rowKey(item)] ??
+                                      0,
+                                  busy:
+                                      _busyRows.contains(_rowKey(item)) ||
+                                      _rescueRunning,
+                                  onSelected: (index) => setState(
+                                    () => _selectedAlternativeIndex[_rowKey(
+                                      item,
+                                    )] = index,
+                                  ),
+                                  onAccept: () =>
+                                      _resolveSuggested(item, accept: true),
+                                  onReject: () =>
+                                      _resolveSuggested(item, accept: false),
+                                  onManualSearch: () => _searchManually(item),
+                                  onExclude: () => _excludePermanently(item),
+                                ),
+                              ),
                       ),
-                    ],
                 ],
               ),
             ),
@@ -511,6 +583,7 @@ class _ResolutionCard extends StatelessWidget {
     required this.onAccept,
     required this.onReject,
     required this.onManualSearch,
+    required this.onExclude,
   });
 
   final Map<String, dynamic> item;
@@ -520,6 +593,7 @@ class _ResolutionCard extends StatelessWidget {
   final VoidCallback onAccept;
   final VoidCallback onReject;
   final VoidCallback onManualSearch;
+  final VoidCallback onExclude;
 
   @override
   Widget build(BuildContext context) {
@@ -535,10 +609,13 @@ class _ResolutionCard extends StatelessWidget {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
 
-    return PersonalizedSurface(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+    return PersonalizedReveal(
+      offset: const Offset(0, 0.025),
+      child: PersonalizedSurface(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
           Text(
             'IMPORTED TRACK',
             style: theme.textTheme.labelSmall?.copyWith(
@@ -550,9 +627,11 @@ class _ResolutionCard extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             item['sourceTitle']?.toString() ?? 'Unknown track',
-            style: theme.textTheme.titleLarge?.copyWith(
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.w800,
-              height: 1.08,
+              height: 1.12,
             ),
           ),
           const SizedBox(height: 3),
@@ -623,7 +702,21 @@ class _ResolutionCard extends StatelessWidget {
               label: const Text('Accept selected match'),
             ),
           ),
-        ],
+          const SizedBox(height: 2),
+          Align(
+            alignment: Alignment.center,
+            child: TextButton.icon(
+              key: ValueKey(
+                'exclude-${item['sourceRow'] ?? item['sourceTitle']}',
+              ),
+              onPressed: busy ? null : onExclude,
+              style: TextButton.styleFrom(foregroundColor: colors.error),
+              icon: const Icon(Icons.delete_forever_outlined, size: 19),
+              label: const Text('Exclude permanently'),
+            ),
+          ),
+          ],
+        ),
       ),
     );
   }
@@ -662,69 +755,83 @@ class _AlternativeTile extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 7),
-      child: Material(
-        color: selected
-            ? colors.primaryContainer.withValues(alpha: 0.68)
-            : colors.surfaceContainerHigh.withValues(alpha: 0.68),
-        borderRadius: BorderRadius.circular(16),
-        child: InkWell(
-          onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+        decoration: BoxDecoration(
+          color: selected
+              ? colors.primaryContainer.withValues(alpha: 0.68)
+              : colors.surfaceContainerHigh.withValues(alpha: 0.68),
           borderRadius: BorderRadius.circular(16),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 11, 12, 11),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(top: 1, right: 11),
-                  child: Icon(
-                    selected
-                        ? Icons.radio_button_checked_rounded
-                        : Icons.radio_button_unchecked_rounded,
-                    color: selected ? colors.primary : colors.onSurfaceVariant,
-                    size: 21,
+          border: Border.all(
+            color: selected
+                ? colors.primary.withValues(alpha: 0.42)
+                : Colors.transparent,
+          ),
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(16),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 11, 12, 11),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(top: 1, right: 11),
+                    child: Icon(
+                      selected
+                          ? Icons.radio_button_checked_rounded
+                          : Icons.radio_button_unchecked_rounded,
+                      color: selected
+                          ? colors.primary
+                          : colors.onSurfaceVariant,
+                      size: 21,
+                    ),
                   ),
-                ),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        candidate['title']?.toString() ?? 'Unknown candidate',
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          color: colors.onSurface,
-                          fontWeight: FontWeight.w600,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          candidate['title']?.toString() ?? 'Unknown candidate',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            color: colors.onSurface,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        candidate['artist']?.toString() ??
-                            candidate['videoAuthor']?.toString() ??
-                            'Unknown source',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: colors.onSurfaceVariant,
+                        const SizedBox(height: 2),
+                        Text(
+                          candidate['artist']?.toString() ??
+                              candidate['videoAuthor']?.toString() ??
+                              'Unknown source',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: colors.onSurfaceVariant,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 5),
-                      Text(
-                        '${(score * 100).round()}% match${reasons.isEmpty ? '' : ' · $reasons'}',
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: selected
-                              ? colors.primary
-                              : colors.onSurfaceVariant,
-                          fontWeight: FontWeight.w600,
+                        const SizedBox(height: 5),
+                        Text(
+                          '${(score * 100).round()}% match${reasons.isEmpty ? '' : ' · $reasons'}',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: selected
+                                ? colors.primary
+                                : colors.onSurfaceVariant,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

@@ -70,6 +70,10 @@ abstract interface class SpotifyReviewSprintDataSource {
     Map<String, dynamic>? selectedAlternative,
   });
 
+  Future<SpotifyResolutionResult> excludeItem({
+    required Map<String, dynamic> item,
+  });
+
   Future<int> bulkApproveCluster(String key);
 }
 
@@ -260,6 +264,51 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
     await _checkpoint(results, metadata);
     return SpotifyResolutionResult(
       duplicatesApplied: duplicatesApplied,
+      remainingUnresolved: results.where(isPendingResolution).length,
+    );
+  }
+
+  @override
+  Future<SpotifyResolutionResult> excludeItem({
+    required Map<String, dynamic> item,
+  }) async {
+    final box = Hive.box('user');
+    final results = _readMaps(box.get('spotifyMatchResults'));
+    final metadata = _readMap(box.get('spotifyImportMetadata'));
+    final sourceRow = item['sourceRow']?.toString();
+    if (sourceRow == null || sourceRow.isEmpty) {
+      throw StateError('The imported track has no stable source row.');
+    }
+    final index = results.indexWhere(
+      (candidate) => candidate['sourceRow']?.toString() == sourceRow,
+    );
+    if (index == -1) {
+      throw StateError('The imported track is no longer in the match list.');
+    }
+
+    final excludedRows =
+        (box.get('spotifyExcludedImportRows') as List? ?? const [])
+            .map((value) => value.toString())
+            .toSet();
+    excludedRows.add(sourceRow);
+
+    results[index] = Map<String, dynamic>.from(results[index])
+      ..['status'] = 'excluded'
+      ..['score'] = 0.0
+      ..['bestCandidate'] = null
+      ..['matchEvidence'] = null
+      ..['reviewDecision'] = 'excluded_from_import'
+      ..['excludedAt'] = DateTime.now().toUtc().toIso8601String()
+      ..['reviewedAt'] = DateTime.now().toUtc().toIso8601String();
+
+    await addOrUpdateData<List<String>>(
+      'user',
+      'spotifyExcludedImportRows',
+      excludedRows.toList(growable: false)..sort(),
+    );
+    await _checkpoint(results, metadata);
+    return SpotifyResolutionResult(
+      duplicatesApplied: 0,
       remainingUnresolved: results.where(isPendingResolution).length,
     );
   }
@@ -534,6 +583,7 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
       ..['reviewCount'] = results.where((item) => item['status'] == 'needs_review').length
       ..['unmatchedCount'] = results.where(_isUnmatched).length
       ..['errorCount'] = results.where((item) => item['status'] == 'error').length
+      ..['excludedCount'] = results.where(isExcluded).length
       ..['pendingResolutionCount'] = results.where(isPendingResolution).length
       ..['lastMatchingCheckpointAt'] = DateTime.now().toUtc().toIso8601String();
     await addOrUpdateData<List>('user', 'spotifyMatchResults', results);
@@ -569,6 +619,10 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
         status == 'unmatched' ||
         status == 'manual_unmatched' ||
         status == 'error';
+  }
+
+  static bool isExcluded(Map<String, dynamic> item) {
+    return item['status'] == 'excluded';
   }
 
   static bool _isMatched(Map<String, dynamic> item) {

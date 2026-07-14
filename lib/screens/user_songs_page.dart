@@ -33,6 +33,7 @@ import 'package:musify/utilities/playlist_utils.dart';
 import 'package:musify/utilities/song_filtering.dart';
 import 'package:musify/widgets/confirmation_dialog.dart';
 import 'package:musify/widgets/mini_player_bottom_space.dart';
+import 'package:musify/widgets/personalized_ui.dart';
 import 'package:musify/widgets/playlist_cube.dart';
 import 'package:musify/widgets/playlist_page/empty_playlist_state.dart';
 import 'package:musify/widgets/playlist_page/playlist_header.dart';
@@ -156,10 +157,16 @@ class _UserSongsPageState extends State<UserSongsPage> {
   ) {
     final colorScheme = Theme.of(context).colorScheme;
     final isRecentlyPlayed = title == context.l10n!.recentlyPlayed;
+    final isLikedSongs = title == context.l10n!.likedSongs;
 
-    return Column(
+    final content = Column(
       children: [
-        PlaylistHeader(_buildPlaylistImage(title, icon), title, songsLength),
+        PlaylistHeader(
+          _buildPlaylistImage(title, icon),
+          title,
+          songsLength,
+          compact: isLikedSongs,
+        ),
         if (songsLength > 0) ...[
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -262,14 +269,26 @@ class _UserSongsPageState extends State<UserSongsPage> {
         const SizedBox(height: 16),
       ],
     );
+    return isLikedSongs
+        ? PersonalizedReveal(
+            offset: const Offset(0, 0.02),
+            child: content,
+          )
+        : content;
   }
 
   Widget _buildPlaylistImage(String title, IconData icon) {
     final screenWidth = MediaQuery.sizeOf(context).width;
     final isLandscape = screenWidth > MediaQuery.sizeOf(context).height;
+    final isLikedSongs = title == context.l10n!.likedSongs;
+    final likedSize = (screenWidth * 0.43).clamp(132.0, 180.0).toDouble();
     return PlaylistCube(
       {'title': title},
-      size: isLandscape ? 250 : screenWidth / commonPlaylistArtworkDivision,
+      size: isLandscape
+          ? 250.0
+          : isLikedSongs
+          ? likedSize
+          : screenWidth / commonPlaylistArtworkDivision,
       cubeIcon: icon,
     );
   }

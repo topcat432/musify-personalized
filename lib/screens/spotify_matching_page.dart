@@ -142,7 +142,9 @@ class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
   Future<void> _openResolutionQueue() async {
     if (_running) return;
     await Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => const SpotifyMatchReviewPage()),
+      personalizedPageRoute<void>(
+        builder: (_) => const SpotifyMatchReviewPage(),
+      ),
     );
     await _load();
   }
@@ -150,7 +152,9 @@ class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
   Future<void> _openQuickReview() async {
     if (_running) return;
     await Navigator.of(context).push<bool>(
-      MaterialPageRoute<bool>(builder: (_) => const SpotifyReviewSprintPage()),
+      personalizedPageRoute<bool>(
+        builder: (_) => const SpotifyReviewSprintPage(),
+      ),
     );
     await _load();
   }
@@ -652,6 +656,7 @@ class _ResultTile extends StatelessWidget {
       'manually_matched' => (Icons.verified, 'Manually confirmed'),
       'needs_review' => (Icons.help, 'Needs review'),
       'manual_unmatched' => (Icons.block, 'Marked unmatched'),
+      'excluded' => (Icons.delete_forever_outlined, 'Excluded from import'),
       'error' => (Icons.error, 'Error'),
       _ => (Icons.search_off, 'Unmatched'),
     };

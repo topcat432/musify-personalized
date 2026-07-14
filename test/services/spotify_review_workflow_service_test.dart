@@ -1,7 +1,23 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hive/hive.dart';
 import 'package:musify/services/spotify_review_workflow_service.dart';
 
 void main() {
+  late Directory hiveRoot;
+
+  setUp(() async {
+    hiveRoot = await Directory.systemTemp.createTemp('review-workflow-test-');
+    Hive.init(hiveRoot.path);
+    await Hive.openBox('user');
+  });
+
+  tearDown(() async {
+    await Hive.close();
+    if (await hiveRoot.exists()) await hiveRoot.delete(recursive: true);
+  });
+
   group('SpotifyReviewWorkflowService pending decisions', () {
     test('keeps machine-unmatched and review results pending', () {
       expect(
@@ -26,6 +42,48 @@ void main() {
         isTrue,
       );
     });
+
+    test('keeps a permanently excluded result out of every review queue', () {
+      expect(
+        SpotifyReviewWorkflowService.isPendingResolution({
+          'status': 'excluded',
+        }),
+        isFalse,
+      );
+      expect(
+        SpotifyReviewWorkflowService.isExcluded({'status': 'excluded'}),
+        isTrue,
+      );
+    });
+  });
+
+  test('permanent exclusion is audited and leaves pending resolution', () async {
+    final box = Hive.box('user');
+    await box.put('spotifyMatchResults', [
+      {
+        'sourceRow': 7,
+        'sourceTitle': 'Voice-over intro',
+        'status': 'manual_unmatched',
+      },
+    ]);
+    await box.put('spotifyImportMetadata', <String, dynamic>{});
+
+    final result = await const SpotifyReviewWorkflowService().excludeItem(
+      item: {'sourceRow': 7},
+    );
+    final saved = Map<String, dynamic>.from(
+      (box.get('spotifyMatchResults') as List).single as Map,
+    );
+    final metadata = Map<String, dynamic>.from(
+      box.get('spotifyImportMetadata') as Map,
+    );
+
+    expect(result.remainingUnresolved, 0);
+    expect(saved['status'], 'excluded');
+    expect(saved['reviewDecision'], 'excluded_from_import');
+    expect(saved['excludedAt'], isNotNull);
+    expect(metadata['excludedCount'], 1);
+    expect(metadata['pendingResolutionCount'], 0);
   });
 
   group('SpotifyReviewWorkflowService cluster safety', () {

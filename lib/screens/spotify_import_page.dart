@@ -108,6 +108,7 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
           'nextTrackIndex': 0,
         },
       );
+      await deleteData('user', 'spotifyExcludedImportRows');
 
       if (!mounted) return;
       setState(() => _saved = true);

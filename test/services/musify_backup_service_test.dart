@@ -78,6 +78,28 @@ void main() {
     expect(validated.summary.unmatchedItems, 24);
   });
 
+  test('preserves excluded import decisions in verified backups', () async {
+    final payloads = await _createMatchingPayloads(
+      importedTracks: 3,
+      matched: 1,
+      review: 0,
+      unmatched: 1,
+      excluded: 1,
+      namePrefix: 'excluded',
+    );
+    final bundle = await MusifyBackupService.createBundleBytesForTesting(
+      payloads,
+    );
+
+    final validated = await MusifyBackupService.inspectBundleBytes(
+      bundle,
+      sourceDescription: 'excluded.musifybackup',
+    );
+
+    expect(validated.summary.excludedItems, 1);
+    expect(validated.summary.matchResults, 3);
+  });
+
   test('rejects a backup with one required database removed', () async {
     final payloads = await _createMatchingPayloads(
       importedTracks: 2,
@@ -303,9 +325,10 @@ Future<Map<String, Uint8List>> _createMatchingPayloads({
   required int matched,
   required int review,
   required int unmatched,
+  int excluded = 0,
   String namePrefix = 'source',
 }) async {
-  if (matched + review + unmatched != importedTracks) {
+  if (matched + review + unmatched + excluded != importedTracks) {
     throw ArgumentError('Result counts must equal importedTracks.');
   }
   final tracks = List<Map<String, dynamic>>.generate(
@@ -321,6 +344,12 @@ Future<Map<String, Uint8List>> _createMatchingPayloads({
       {
         'sourceRow': matched + review + index + 2,
         'status': 'unmatched',
+      },
+    for (var index = 0; index < excluded; index++)
+      {
+        'sourceRow': matched + review + unmatched + index + 2,
+        'status': 'excluded',
+        'reviewDecision': 'excluded_from_import',
       },
   ];
 

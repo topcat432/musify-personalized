@@ -383,6 +383,19 @@ class _VisualDataSource implements SpotifyReviewSprintDataSource {
   }
 
   @override
+  Future<SpotifyResolutionResult> excludeItem({
+    required Map<String, dynamic> item,
+  }) async {
+    _items.removeWhere(
+      (candidate) => candidate['sourceRow'] == item['sourceRow'],
+    );
+    return SpotifyResolutionResult(
+      duplicatesApplied: 0,
+      remainingUnresolved: _items.length,
+    );
+  }
+
+  @override
   Future<int> bulkApproveCluster(String key) async => 0;
 }
 

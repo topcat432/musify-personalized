@@ -22,6 +22,7 @@ class PersonalizedHero extends StatelessWidget {
     this.eyebrow,
     this.icon,
     this.footer,
+    this.compact = false,
   });
 
   final String? eyebrow;
@@ -29,66 +30,80 @@ class PersonalizedHero extends StatelessWidget {
   final String description;
   final IconData? icon;
   final Widget? footer;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            colors.primaryContainer.withValues(alpha: 0.72),
-            colors.surfaceContainerHigh,
-          ],
-        ),
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(
-          color: colors.outlineVariant.withValues(alpha: 0.45),
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(22),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (icon != null) ...[
-              _HeroIcon(icon: icon!),
-              const SizedBox(height: 20),
+    return PersonalizedReveal(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              colors.primaryContainer.withValues(alpha: 0.72),
+              colors.surfaceContainerHigh,
             ],
-            if (eyebrow != null) ...[
-              Text(
-                eyebrow!.toUpperCase(),
-                style: theme.textTheme.labelMedium?.copyWith(
-                  color: colors.primary,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 1.1,
+          ),
+          borderRadius: BorderRadius.circular(compact ? 24 : 28),
+          border: Border.all(
+            color: colors.outlineVariant.withValues(alpha: 0.45),
+          ),
+        ),
+        child: Padding(
+          padding: EdgeInsets.all(compact ? 18 : 22),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (icon != null) ...[
+                _HeroIcon(icon: icon!, compact: compact),
+                SizedBox(height: compact ? 14 : 20),
+              ],
+              if (eyebrow != null) ...[
+                Text(
+                  eyebrow!.toUpperCase(),
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: colors.primary,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.1,
+                  ),
                 ),
+                SizedBox(height: compact ? 5 : 8),
+              ],
+              Text(
+                title,
+                style:
+                    (compact
+                            ? theme.textTheme.titleLarge
+                            : theme.textTheme.headlineSmall)
+                        ?.copyWith(
+                          color: colors.onSurface,
+                          fontWeight: FontWeight.w800,
+                          height: 1.08,
+                          letterSpacing: -0.5,
+                        ),
               ),
-              const SizedBox(height: 8),
+              SizedBox(height: compact ? 7 : 10),
+              Text(
+                description,
+                style:
+                    (compact
+                            ? theme.textTheme.bodyMedium
+                            : theme.textTheme.bodyLarge)
+                        ?.copyWith(
+                          color: colors.onSurfaceVariant,
+                          height: 1.42,
+                        ),
+              ),
+              if (footer != null) ...[
+                SizedBox(height: compact ? 14 : 18),
+                footer!,
+              ],
             ],
-            Text(
-              title,
-              style: theme.textTheme.headlineSmall?.copyWith(
-                color: colors.onSurface,
-                fontWeight: FontWeight.w800,
-                height: 1.08,
-                letterSpacing: -0.5,
-              ),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              description,
-              style: theme.textTheme.bodyLarge?.copyWith(
-                color: colors.onSurfaceVariant,
-                height: 1.42,
-              ),
-            ),
-            if (footer != null) ...[const SizedBox(height: 18), footer!],
-          ],
+          ),
         ),
       ),
     );
@@ -96,9 +111,10 @@ class PersonalizedHero extends StatelessWidget {
 }
 
 class _HeroIcon extends StatelessWidget {
-  const _HeroIcon({required this.icon});
+  const _HeroIcon({required this.icon, required this.compact});
 
   final IconData icon;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -109,8 +125,8 @@ class _HeroIcon extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
       ),
       child: SizedBox.square(
-        dimension: 48,
-        child: Icon(icon, color: colors.primary, size: 26),
+        dimension: compact ? 42 : 48,
+        child: Icon(icon, color: colors.primary, size: compact ? 23 : 26),
       ),
     );
   }
@@ -133,7 +149,9 @@ class PersonalizedSurface extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    return DecoratedBox(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
       decoration: BoxDecoration(
         color: color ?? colors.surfaceContainerLow,
         borderRadius: BorderRadius.circular(borderRadius),
@@ -308,13 +326,26 @@ class PersonalizedMetric extends StatelessWidget {
             Icon(icon, size: 19, color: colors.primary),
             const SizedBox(height: 10),
           ],
-          Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.4,
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 240),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            transitionBuilder: (child, animation) => FadeTransition(
+              opacity: animation,
+              child: ScaleTransition(
+                scale: Tween<double>(begin: 0.94, end: 1).animate(animation),
+                child: child,
+              ),
+            ),
+            child: Text(
+              value,
+              key: ValueKey(value),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.4,
+              ),
             ),
           ),
           const SizedBox(height: 2),
@@ -330,6 +361,164 @@ class PersonalizedMetric extends StatelessWidget {
       ),
     );
   }
+}
+
+class PersonalizedReveal extends StatelessWidget {
+  const PersonalizedReveal({
+    required this.child,
+    super.key,
+    this.delay = Duration.zero,
+    this.offset = const Offset(0, 0.035),
+  });
+
+  final Widget child;
+  final Duration delay;
+  final Offset offset;
+
+  @override
+  Widget build(BuildContext context) {
+    final disableAnimations =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final duration = disableAnimations
+        ? Duration.zero
+        : Duration(milliseconds: 360 + delay.inMilliseconds);
+    final delayFraction = duration.inMilliseconds == 0
+        ? 0.0
+        : delay.inMilliseconds / duration.inMilliseconds;
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: duration,
+      curve: Interval(
+        delayFraction.clamp(0, 0.8).toDouble(),
+        1,
+        curve: Curves.easeOutCubic,
+      ),
+      builder: (context, value, child) => Opacity(
+        opacity: value,
+        child: Transform.translate(
+          offset: Offset(
+            offset.dx * 240 * (1 - value),
+            offset.dy * 240 * (1 - value),
+          ),
+          child: child,
+        ),
+      ),
+      child: child,
+    );
+  }
+}
+
+Route<T> personalizedPageRoute<T>({required WidgetBuilder builder}) {
+  return PageRouteBuilder<T>(
+    transitionDuration: const Duration(milliseconds: 320),
+    reverseTransitionDuration: const Duration(milliseconds: 240),
+    pageBuilder: (context, animation, secondaryAnimation) => builder(context),
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      if (MediaQuery.maybeOf(context)?.disableAnimations ?? false) {
+        return child;
+      }
+      final curved = CurvedAnimation(
+        parent: animation,
+        curve: Curves.easeOutCubic,
+        reverseCurve: Curves.easeInCubic,
+      );
+      return FadeTransition(
+        opacity: curved,
+        child: SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0.035, 0.025),
+            end: Offset.zero,
+          ).animate(curved),
+          child: child,
+        ),
+      );
+    },
+  );
+}
+
+Future<bool> showPersonalizedDestructiveConfirmation({
+  required BuildContext context,
+  required String title,
+  required String message,
+  required String confirmLabel,
+}) async {
+  final result = await showModalBottomSheet<bool>(
+    context: context,
+    showDragHandle: true,
+    useSafeArea: true,
+    isScrollControlled: true,
+    builder: (sheetContext) {
+      final theme = Theme.of(sheetContext);
+      final colors = theme.colorScheme;
+      return Padding(
+        padding: EdgeInsets.fromLTRB(
+          22,
+          4,
+          22,
+          20 + MediaQuery.viewInsetsOf(sheetContext).bottom,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: colors.errorContainer,
+                shape: BoxShape.circle,
+              ),
+              child: SizedBox.square(
+                dimension: 52,
+                child: Icon(
+                  Icons.delete_forever_outlined,
+                  color: colors.onErrorContainer,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: colors.onSurfaceVariant,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.of(sheetContext).pop(false),
+                    child: const Text('Keep track'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: colors.error,
+                      foregroundColor: colors.onError,
+                    ),
+                    onPressed: () => Navigator.of(sheetContext).pop(true),
+                    icon: const Icon(Icons.delete_forever_outlined),
+                    label: Text(confirmLabel),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+    },
+  );
+  return result ?? false;
 }
 
 class PersonalizedEmptyState extends StatelessWidget {
