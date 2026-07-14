@@ -15,7 +15,9 @@ import 'package:hive/hive.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:musify/services/common_services.dart';
 import 'package:musify/services/data_manager.dart';
+import 'package:musify/services/spotify_manual_source_service.dart';
 import 'package:musify/services/spotify_match_scoring.dart';
+import 'package:musify/services/spotify_review_workflow_service.dart';
 import 'package:musify/widgets/personalized_ui.dart';
 import 'package:youtube_music_explode_dart/youtube_music_explode_dart.dart';
 
@@ -30,6 +32,8 @@ class SpotifyManualMatchPage extends StatefulWidget {
 
 class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
   static final YoutubeMusicExplode _youtubeMusic = YoutubeMusicExplode();
+  static const SpotifyManualSourceService _manualSourceService =
+      SpotifyManualSourceService();
   static const Duration _timeout = Duration(seconds: 18);
   static const Duration _previewLength = Duration(seconds: 30);
 
@@ -86,6 +90,26 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
     });
 
     try {
+      final exactVideoId = SpotifyManualSourceService.parseExactVideoId(query);
+      if (exactVideoId != null) {
+        final candidate = await _manualSourceService
+            .loadExactVideo(query)
+            .timeout(_timeout);
+        final streamUrl = await fetchSongStreamUrl(
+          exactVideoId,
+          false,
+        ).timeout(_timeout);
+        if (streamUrl == null || streamUrl.isEmpty) {
+          throw StateError(
+            'That video exists, but Musify could not find playable audio for it.',
+          );
+        }
+        final result = _rankCandidate(candidate, isDirectUrl: true);
+        if (!mounted) return;
+        setState(() => _results = [result]);
+        return;
+      }
+
       final candidates = <Map<String, dynamic>>[];
       final seen = <String>{};
 
@@ -126,23 +150,9 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
         addCandidate(Map<String, dynamic>.from(raw));
       }
 
-      final input = SpotifyMatchInput(
-        title: widget.item['sourceTitle']?.toString() ?? '',
-        artist: widget.item['sourceArtist']?.toString() ?? '',
-        album: widget.item['sourceAlbum']?.toString() ?? '',
-        isrc: widget.item['sourceIsrc']?.toString() ?? '',
-        durationMs: _asInt(widget.item['sourceDurationMs']),
-      );
-
       final ranked = <Map<String, dynamic>>[];
       for (final candidate in candidates) {
-        final evidence = SpotifyMatchScorer.score(input, candidate);
-        if (evidence.disqualified) continue;
-        ranked.add({
-          'candidate': candidate,
-          'score': evidence.score,
-          'evidence': evidence.toJson(),
-        });
+        ranked.add(_rankCandidate(candidate));
       }
       ranked.sort(
         (left, right) =>
@@ -157,6 +167,26 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
     } finally {
       if (mounted) setState(() => _searching = false);
     }
+  }
+
+  Map<String, dynamic> _rankCandidate(
+    Map<String, dynamic> candidate, {
+    bool isDirectUrl = false,
+  }) {
+    final input = SpotifyMatchInput(
+      title: widget.item['sourceTitle']?.toString() ?? '',
+      artist: widget.item['sourceArtist']?.toString() ?? '',
+      album: widget.item['sourceAlbum']?.toString() ?? '',
+      isrc: widget.item['sourceIsrc']?.toString() ?? '',
+      durationMs: _asInt(widget.item['sourceDurationMs']),
+    );
+    final evidence = SpotifyMatchScorer.score(input, candidate);
+    return {
+      'candidate': candidate,
+      'score': evidence.score,
+      'evidence': evidence.toJson(),
+      'isDirectUrl': isDirectUrl,
+    };
   }
 
   Future<void> _togglePreview(Map<String, dynamic> result) async {
@@ -264,8 +294,13 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
         ..['score'] = result['score']
         ..['bestCandidate'] = Map<String, dynamic>.from(candidate)
         ..['matchEvidence'] = result['evidence']
-        ..['reviewDecision'] = 'manual_search'
+        ..['reviewDecision'] = result['isDirectUrl'] == true
+            ? 'manual_url'
+            : 'manual_search'
         ..['manualSearchQuery'] = _queryController.text.trim()
+        ..['manualSourceUrl'] = result['isDirectUrl'] == true
+            ? _queryController.text.trim()
+            : null
         ..['reviewedAt'] = DateTime.now().toUtc().toIso8601String();
       results[index] = updated;
 
@@ -277,6 +312,9 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
         ..['unmatchedCount'] = results.where(_isUnmatched).length
         ..['errorCount'] = results
             .where((item) => item['status'] == 'error')
+            .length
+        ..['pendingResolutionCount'] = results
+            .where(SpotifyReviewWorkflowService.isPendingResolution)
             .length
         ..['lastMatchingCheckpointAt'] = DateTime.now()
             .toUtc()
@@ -324,9 +362,9 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
           ),
           const SizedBox(height: 24),
           const PersonalizedSectionHeading(
-            title: 'Search the catalog',
+            title: 'Search YouTube',
             description:
-                'Add an album, featured artist, remix, or live version to narrow the results.',
+                'Search freely by words, or paste a YouTube or YouTube Music video link to inspect that exact upload.',
           ),
           const SizedBox(height: 12),
           TextField(
@@ -334,7 +372,7 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
             textInputAction: TextInputAction.search,
             onSubmitted: (_) => _search(),
             decoration: InputDecoration(
-              hintText: 'Title, artist, album, or version',
+              hintText: 'Search terms or YouTube video link',
               prefixIcon: const Icon(Icons.search_rounded),
               suffixIcon: IconButton(
                 onPressed: _searching ? null : _search,
@@ -357,15 +395,15 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
           else if (_results.isEmpty)
             const PersonalizedEmptyState(
               icon: Icons.search_off_rounded,
-              title: 'No safe song results',
+              title: 'No YouTube results',
               description:
-                  'Change the wording or add an album or version name, then search again.',
+                  'Try different words or paste the exact video link you found.',
             )
           else ...[
             PersonalizedSectionHeading(
               title: 'Possible matches',
               description:
-                  'Preview ambiguous recordings before saving your choice.',
+                  'Results are not hidden by automatic confidence rules. Preview and choose the recording yourself.',
               trailing: Text(
                 '${_results.length}',
                 style: Theme.of(
@@ -471,6 +509,8 @@ class _ManualResultTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final candidate = Map<String, dynamic>.from(result['candidate'] as Map);
     final evidence = Map<String, dynamic>.from(result['evidence'] as Map);
+    final isDirectUrl = result['isDirectUrl'] == true;
+    final disqualified = evidence['disqualified'] == true;
     final reasons = evidence['reasons'] is List
         ? (evidence['reasons'] as List)
               .map((reason) => reason.toString())
@@ -478,14 +518,17 @@ class _ManualResultTile extends StatelessWidget {
               .join(' · ')
         : '';
     final score = ((result['score'] as num?)?.toDouble() ?? 0) * 100;
-    final source = candidate['sourceType'] == 'youtube_music_song'
-        ? 'YouTube Music'
-        : 'YouTube fallback';
+    final source = switch (candidate['sourceType']) {
+      'youtube_music_song' => 'YouTube Music',
+      'youtube_exact_video' => 'Exact YouTube video',
+      _ => 'YouTube',
+    };
     final artist =
         candidate['artist']?.toString() ??
         candidate['videoAuthor']?.toString() ??
         'Unknown artist';
     final album = candidate['album']?.toString() ?? '';
+    final duration = _formatManualDuration(candidate['duration']);
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
 
@@ -536,7 +579,11 @@ class _ManualResultTile extends StatelessWidget {
                               vertical: 4,
                             ),
                             child: Text(
-                              '${score.round()}% match',
+                              isDirectUrl
+                                  ? 'Exact link'
+                                  : disqualified
+                                  ? 'Manual choice'
+                                  : '${score.round()}% match',
                               style: theme.textTheme.labelSmall?.copyWith(
                                 color: colors.onPrimaryContainer,
                                 fontWeight: FontWeight.w700,
@@ -547,7 +594,7 @@ class _ManualResultTile extends StatelessWidget {
                         const SizedBox(width: 7),
                         Expanded(
                           child: Text(
-                            source,
+                            duration.isEmpty ? source : '$source · $duration',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: theme.textTheme.labelSmall?.copyWith(
@@ -571,6 +618,14 @@ class _ManualResultTile extends StatelessWidget {
               style: theme.textTheme.bodySmall?.copyWith(
                 color: colors.onSurfaceVariant,
               ),
+            ),
+          ],
+          if (disqualified && !isDirectUrl) ...[
+            const SizedBox(height: 8),
+            PersonalizedStatusBanner(
+              icon: Icons.info_outline_rounded,
+              message:
+                  'The automatic matcher would skip this result, but manual search leaves the decision to you.',
             ),
           ],
           const SizedBox(height: 12),
@@ -598,7 +653,7 @@ class _ManualResultTile extends StatelessWidget {
                 child: FilledButton.icon(
                   onPressed: enabled ? onUse : null,
                   icon: const Icon(Icons.check_rounded, size: 19),
-                  label: const Text('Use match'),
+                  label: Text(isDirectUrl ? 'Use this video' : 'Use match'),
                 ),
               ),
             ],
@@ -651,4 +706,14 @@ String _manualArtworkUrl(Map<String, dynamic> candidate) {
     if (value.isNotEmpty) return value;
   }
   return '';
+}
+
+String _formatManualDuration(dynamic rawSeconds) {
+  final seconds = rawSeconds is num
+      ? rawSeconds.round()
+      : int.tryParse(rawSeconds?.toString() ?? '');
+  if (seconds == null || seconds < 0) return '';
+  final minutes = seconds ~/ 60;
+  final remainder = seconds % 60;
+  return '$minutes:${remainder.toString().padLeft(2, '0')}';
 }
