@@ -160,7 +160,7 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
       );
 
       if (!mounted) return;
-      setState(() => _results = ranked.take(30).toList(growable: false));
+      setState(() => _results = ranked.toList(growable: false));
     } catch (error) {
       if (!mounted) return;
       setState(() => _error = error.toString());
