@@ -2,6 +2,9 @@ name: Build signed production APK
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - 'release/production-candidate-*'
 
 permissions:
   contents: read
