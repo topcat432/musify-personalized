@@ -273,6 +273,7 @@ class SettingsPage extends StatelessWidget {
         ),
 
         _buildToolsSection(context),
+        _buildDataSafetySection(context),
         _buildSponsorSection(context),
       ],
     );
@@ -344,6 +345,9 @@ class SettingsPage extends StatelessWidget {
         CustomBar(
           context.l10n!.deleteDownloads,
           FluentIcons.delete_24_regular,
+          borderRadius: isFdroidBuild
+              ? commonCustomBarRadiusLast
+              : BorderRadius.zero,
           onTap: () => _showConfirmationDialog(
             context: context,
             confirmationMessage: context.l10n!.deleteDownloadsQuestion,
@@ -363,22 +367,6 @@ class SettingsPage extends StatelessWidget {
             },
           ),
         ),
-        CustomBar(
-          context.l10n!.backupUserData,
-          FluentIcons.cloud_sync_24_regular,
-          onTap: () => _backupUserData(context),
-        ),
-        CustomBar(
-          context.l10n!.restoreUserData,
-          FluentIcons.cloud_add_24_regular,
-          onTap: () => _restoreVerifiedBundle(context),
-        ),
-        CustomBar(
-          'Recover legacy debug data',
-          Icons.settings_backup_restore,
-          description: 'Validate and import user.hive plus settings.hive',
-          onTap: () => _restoreLegacyPair(context),
-        ),
         if (!isFdroidBuild)
           CustomBar(
             context.l10n!.downloadAppUpdate,
@@ -386,6 +374,34 @@ class SettingsPage extends StatelessWidget {
             borderRadius: commonCustomBarRadiusLast,
             onTap: checkAppUpdates,
           ),
+      ],
+    );
+  }
+
+  Widget _buildDataSafetySection(BuildContext context) {
+    return Column(
+      children: [
+        const SectionHeader(title: 'Data safety', icon: Icons.shield_outlined),
+        CustomBar(
+          'Create verified backup',
+          FluentIcons.cloud_sync_24_regular,
+          description: 'Save one complete .musifybackup file',
+          borderRadius: commonCustomBarRadiusFirst,
+          onTap: () => _backupUserData(context),
+        ),
+        CustomBar(
+          'Restore from backup',
+          FluentIcons.cloud_add_24_regular,
+          description: 'Inspect and verify a backup before restoring it',
+          onTap: () => _restoreVerifiedBundle(context),
+        ),
+        CustomBar(
+          'Recover legacy debug data',
+          Icons.settings_backup_restore_rounded,
+          description: 'Import a verified user.hive and settings.hive pair',
+          borderRadius: commonCustomBarRadiusLast,
+          onTap: () => _restoreLegacyPair(context),
+        ),
       ],
     );
   }
@@ -802,22 +818,51 @@ class SettingsPage extends StatelessWidget {
         builder: (BuildContext context) {
           return AlertDialog(
             icon: Icon(
-              FluentIcons.info_24_regular,
+              Icons.inventory_2_outlined,
               color: colorScheme.primary,
               size: 32,
             ),
-            content: Text(
-              'Musify will create one .musifybackup file containing both '
-              'required databases, checksums, and verified data counts. '
-              'Success is shown only after the saved file is read back.',
-              style: TextStyle(color: colorScheme.onSurfaceVariant),
-              textAlign: TextAlign.center,
+            title: const Text('Create a verified backup'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Musify will save one .musifybackup file containing your '
+                  'library data, settings, checksums, and verified counts.',
+                  style: TextStyle(
+                    color: colorScheme.onSurfaceVariant,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.verified_outlined,
+                      color: colorScheme.primary,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 9),
+                    Expanded(
+                      child: Text(
+                        'Success appears only after Musify reads the saved '
+                        'file back and verifies it.',
+                        style: TextStyle(
+                          color: colorScheme.onSurfaceVariant,
+                          height: 1.35,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
-            actionsAlignment: MainAxisAlignment.center,
             actions: <Widget>[
               FilledButton(
                 onPressed: () => Navigator.pop(context),
-                child: Text(context.l10n!.understand),
+                child: const Text('Choose save location'),
               ),
             ],
           );
@@ -833,13 +878,19 @@ class SettingsPage extends StatelessWidget {
               result.success
                   ? FluentIcons.shield_checkmark_24_regular
                   : FluentIcons.error_circle_24_regular,
+              color: result.success ? colorScheme.primary : colorScheme.error,
+              size: 34,
             ),
             title: Text(
-              result.success
-                  ? 'Backup verified'
-                  : 'Backup was not created',
+              result.success ? 'Backup verified' : 'Backup was not created',
             ),
-            content: SelectableText(result.message),
+            content: SelectableText(
+              result.message,
+              style: TextStyle(
+                color: colorScheme.onSurfaceVariant,
+                height: 1.4,
+              ),
+            ),
             actions: [
               FilledButton(
                 onPressed: () => Navigator.pop(dialogContext),
@@ -951,18 +1002,9 @@ class SettingsPage extends StatelessWidget {
             scrollable: true,
             icon: const Icon(FluentIcons.shield_checkmark_24_regular),
             title: Text(legacy ? 'Validated legacy data' : 'Validated backup'),
-            content: Text(
-              'Source: ${backup.sourceDescription}\n\n'
-              'Imported tracks: ${summary.importedTracks}\n'
-              'Match results: ${summary.matchResults}\n'
-              'Strong/manual matches: ${summary.strongMatches}\n'
-              'Needs review: ${summary.reviewItems}\n'
-              'Unmatched: ${summary.unmatchedItems}\n'
-              'Errors: ${summary.errorItems}\n'
-              'Favorites: ${summary.favorites}\n'
-              'Playlists: ${summary.playlists}\n\n'
-              'Musify will create and verify a rollback copy before replacing '
-              'live data. Continue only if these counts are correct.',
+            content: _ValidatedBackupSummary(
+              sourceDescription: backup.sourceDescription,
+              summary: summary,
             ),
             actions: [
               TextButton(
@@ -1006,5 +1048,158 @@ class SettingsPage extends StatelessWidget {
         icon: result.success ? null : FluentIcons.error_circle_24_regular,
       );
     }
+  }
+}
+
+class _ValidatedBackupSummary extends StatelessWidget {
+  const _ValidatedBackupSummary({
+    required this.sourceDescription,
+    required this.summary,
+  });
+
+  final String sourceDescription;
+  final BackupSummary summary;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final metrics = <(String, int)>[
+      ('Imported tracks', summary.importedTracks),
+      ('Match results', summary.matchResults),
+      ('Strong matches', summary.strongMatches),
+      ('Needs review', summary.reviewItems),
+      ('Unmatched', summary.unmatchedItems),
+      ('Errors', summary.errorItems),
+      ('Favorites', summary.favorites),
+      ('Playlists', summary.playlists),
+    ];
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        DecoratedBox(
+          decoration: BoxDecoration(
+            color: colors.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(13),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.description_outlined,
+                  color: colors.primary,
+                  size: 21,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Source',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: colors.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        sourceDescription,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final width = (constraints.maxWidth - 8) / 2;
+            return Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final metric in metrics)
+                  SizedBox(
+                    width: width,
+                    child: _BackupMetric(label: metric.$1, value: metric.$2),
+                  ),
+              ],
+            );
+          },
+        ),
+        const SizedBox(height: 14),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.undo_rounded, color: colors.primary, size: 20),
+            const SizedBox(width: 9),
+            Expanded(
+              child: Text(
+                'Musify creates and verifies a rollback copy before replacing '
+                'live data. Continue only if these counts look correct.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colors.onSurfaceVariant,
+                  height: 1.35,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _BackupMetric extends StatelessWidget {
+  const _BackupMetric({required this.label, required this.value});
+
+  final String label;
+  final int value;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: colors.outlineVariant.withValues(alpha: 0.42),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '$value',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: colors.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

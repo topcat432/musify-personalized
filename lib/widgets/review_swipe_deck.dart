@@ -118,7 +118,7 @@ class _ReviewSwipeDeckState extends State<ReviewSwipeDeck>
     if (!widget.enabled || _animating) return;
     setState(() {
       _offset += details.delta;
-      _angle = (_offset.dx / math.max(_deckSize.width, 1)) * 0.10;
+      _angle = (_offset.dx / math.max(_deckSize.width, 1)) * 0.055;
     });
     if (_pastThreshold && !_thresholdHapticSent) {
       _thresholdHapticSent = true;
@@ -132,10 +132,10 @@ class _ReviewSwipeDeckState extends State<ReviewSwipeDeck>
     if (!widget.enabled || _animating) return;
     final velocity = details.velocity.pixelsPerSecond;
     final action = _suggestedAction;
-    final fastHorizontal = velocity.dx.abs() > 900 &&
-        velocity.dx.abs() > velocity.dy.abs() * 0.8;
-    final fastUpward = velocity.dy < -900 &&
-        velocity.dy.abs() > velocity.dx.abs() * 0.8;
+    final fastHorizontal =
+        velocity.dx.abs() > 900 && velocity.dx.abs() > velocity.dy.abs() * 0.8;
+    final fastUpward =
+        velocity.dy < -900 && velocity.dy.abs() > velocity.dx.abs() * 0.8;
     final velocityAction = fastUpward
         ? ReviewSwipeAction.postpone
         : fastHorizontal
@@ -173,8 +173,8 @@ class _ReviewSwipeDeckState extends State<ReviewSwipeDeck>
       ReviewSwipeAction.postpone => Offset(_offset.dx * 0.2, -height * 1.15),
     };
     final targetAngle = switch (action) {
-      ReviewSwipeAction.accept => 0.18,
-      ReviewSwipeAction.reject => -0.18,
+      ReviewSwipeAction.accept => 0.10,
+      ReviewSwipeAction.reject => -0.10,
       ReviewSwipeAction.postpone => 0.0,
     };
     await _animateTo(target, targetAngle, const Duration(milliseconds: 220));
@@ -327,72 +327,108 @@ class _SwipeOverlay extends StatelessWidget {
     if (visibleAction != action || progress <= 0) {
       return const SizedBox.shrink();
     }
-    final (label, icon, color, alignment, padding) = switch (action) {
+    final colors = Theme.of(context).colorScheme;
+    final (label, icon, color, alignment, padding, gradient) = switch (action) {
       ReviewSwipeAction.accept => (
-          enabled ? 'KEEP' : 'NO MATCH',
-          enabled ? Icons.favorite : Icons.block,
-          enabled ? Colors.green : Colors.grey,
-          Alignment.topLeft,
-          const EdgeInsets.only(left: 22, top: 24),
+        enabled ? 'Accept match' : 'No suggestion',
+        enabled ? Icons.check_rounded : Icons.block_rounded,
+        enabled ? colors.primary : colors.onSurfaceVariant,
+        Alignment.topLeft,
+        const EdgeInsets.only(left: 22, top: 24),
+        LinearGradient(
+          colors: [colors.primary.withValues(alpha: 0.34), Colors.transparent],
         ),
+      ),
       ReviewSwipeAction.reject => (
-          'NOPE',
-          Icons.close,
-          Colors.red,
-          Alignment.topRight,
-          const EdgeInsets.only(right: 22, top: 24),
+        'No match',
+        Icons.close_rounded,
+        colors.onSurface,
+        Alignment.topRight,
+        const EdgeInsets.only(right: 22, top: 24),
+        LinearGradient(
+          begin: Alignment.centerRight,
+          end: Alignment.centerLeft,
+          colors: [colors.surface.withValues(alpha: 0.68), Colors.transparent],
         ),
+      ),
       ReviewSwipeAction.postpone => (
-          'LATER',
-          Icons.schedule,
-          Colors.amber.shade800,
-          Alignment.bottomCenter,
-          const EdgeInsets.only(bottom: 30),
+        'Review later',
+        Icons.schedule_rounded,
+        colors.onTertiaryContainer,
+        Alignment.bottomCenter,
+        const EdgeInsets.only(bottom: 30),
+        LinearGradient(
+          begin: Alignment.bottomCenter,
+          end: Alignment.topCenter,
+          colors: [
+            colors.tertiaryContainer.withValues(alpha: 0.72),
+            Colors.transparent,
+          ],
         ),
+      ),
     };
 
     return IgnorePointer(
-      child: Align(
-        alignment: alignment,
-        child: Padding(
-          padding: padding,
-          child: Opacity(
-            opacity: progress,
-            child: Transform.rotate(
-              angle: action == ReviewSwipeAction.accept
-                  ? -0.16
-                  : action == ReviewSwipeAction.reject
-                  ? 0.16
-                  : 0,
-              child: DecoratedBox(
-                key: ValueKey('review-swipe-${action.name}'),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.90),
-                  border: Border.all(color: color, width: 4),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(icon, color: color),
-                      const SizedBox(width: 6),
-                      Text(
-                        label,
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              color: color,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 1.2,
-                            ),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Opacity(
+            opacity: progress * 0.72,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: gradient,
+                borderRadius: BorderRadius.circular(28),
+              ),
+            ),
+          ),
+          Align(
+            alignment: alignment,
+            child: Padding(
+              padding: padding,
+              child: Opacity(
+                opacity: progress,
+                child: Transform.scale(
+                  scale: 0.92 + (progress * 0.08),
+                  child: DecoratedBox(
+                    key: ValueKey('review-swipe-${action.name}'),
+                    decoration: BoxDecoration(
+                      color: colors.surface.withValues(alpha: 0.88),
+                      borderRadius: BorderRadius.circular(99),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.14),
+                          blurRadius: 18,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 13,
+                        vertical: 8,
                       ),
-                    ],
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(icon, color: color, size: 19),
+                          const SizedBox(width: 7),
+                          Text(
+                            label,
+                            style: Theme.of(context).textTheme.labelLarge
+                                ?.copyWith(
+                                  color: color,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }
