@@ -106,6 +106,32 @@ void main() {
     );
   });
 
+  testWidgets('renders four-digit counts in the transfer dialog', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(360, 720));
+    await tester.pumpWidget(
+      MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: _reviewTheme(Brightness.dark),
+        home: SpotifyImportDestinationPage(
+          initialSnapshot: _visualDestinationSnapshot,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Review'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('2619'), findsOneWidget);
+    await expectLater(
+      find.byType(AlertDialog),
+      matchesGoldenFile(
+        'visual_review_goldens/import_destination_dialog_compact_dark.png',
+      ),
+    );
+  });
+
   testWidgets('renders Quick Review on a standard phone', (tester) async {
     final player = _VisualAudioPlayer();
     addTearDown(player.dispose);
