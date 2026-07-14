@@ -566,6 +566,7 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
     final status = item['status'];
     return status == 'needs_review' ||
         status == 'unmatched' ||
+        status == 'manual_unmatched' ||
         status == 'error';
   }
 
