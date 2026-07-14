@@ -18,12 +18,12 @@ void main() {
       );
     });
 
-    test('does not put a user-rejected result back in the queue', () {
+    test('keeps a user-marked unmatched result reopenable', () {
       expect(
         SpotifyReviewWorkflowService.isPendingResolution({
           'status': 'manual_unmatched',
         }),
-        isFalse,
+        isTrue,
       );
     });
   });
