@@ -9,12 +9,14 @@
 
 import 'dart:async';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:musify/services/common_services.dart';
 import 'package:musify/services/data_manager.dart';
 import 'package:musify/services/spotify_match_scoring.dart';
+import 'package:musify/widgets/personalized_ui.dart';
 import 'package:youtube_music_explode_dart/youtube_music_explode_dart.dart';
 
 class SpotifyManualMatchPage extends StatefulWidget {
@@ -23,8 +25,7 @@ class SpotifyManualMatchPage extends StatefulWidget {
   final Map<String, dynamic> item;
 
   @override
-  State<SpotifyManualMatchPage> createState() =>
-      _SpotifyManualMatchPageState();
+  State<SpotifyManualMatchPage> createState() => _SpotifyManualMatchPageState();
 }
 
 class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
@@ -144,9 +145,8 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
         });
       }
       ranked.sort(
-        (left, right) => (right['score'] as double).compareTo(
-          left['score'] as double,
-        ),
+        (left, right) =>
+            (right['score'] as double).compareTo(left['score'] as double),
       );
 
       if (!mounted) return;
@@ -301,31 +301,32 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
 
   @override
   Widget build(BuildContext context) {
+    final sourceTitle =
+        widget.item['sourceTitle']?.toString() ?? 'Unknown track';
+    final sourceArtist = widget.item['sourceArtist']?.toString() ?? '';
+    final sourceAlbum = widget.item['sourceAlbum']?.toString() ?? '';
+    final sourceDescription = sourceAlbum.isEmpty
+        ? sourceArtist
+        : '$sourceArtist · $sourceAlbum';
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Find a match manually')),
+      appBar: AppBar(title: const Text('Manual search')),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+        padding: const EdgeInsets.fromLTRB(18, 12, 18, 32),
         children: [
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    widget.item['sourceTitle']?.toString() ?? 'Unknown track',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 3),
-                  Text(widget.item['sourceArtist']?.toString() ?? ''),
-                  if ((widget.item['sourceAlbum']?.toString() ?? '').isNotEmpty)
-                    Text(
-                      widget.item['sourceAlbum'].toString(),
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                ],
-              ),
-            ),
+          PersonalizedHero(
+            eyebrow: 'Finding a source for',
+            icon: Icons.manage_search_rounded,
+            title: sourceTitle,
+            description: sourceDescription.isEmpty
+                ? 'Search by title, artist, album, or recording version.'
+                : sourceDescription,
+          ),
+          const SizedBox(height: 24),
+          const PersonalizedSectionHeading(
+            title: 'Search the catalog',
+            description:
+                'Add an album, featured artist, remix, or live version to narrow the results.',
           ),
           const SizedBox(height: 12),
           TextField(
@@ -333,55 +334,62 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
             textInputAction: TextInputAction.search,
             onSubmitted: (_) => _search(),
             decoration: InputDecoration(
-              labelText: 'Search title, artist, album, or version',
-              prefixIcon: const Icon(Icons.search),
+              hintText: 'Title, artist, album, or version',
+              prefixIcon: const Icon(Icons.search_rounded),
               suffixIcon: IconButton(
                 onPressed: _searching ? null : _search,
-                icon: const Icon(Icons.arrow_forward),
+                tooltip: 'Search',
+                icon: const Icon(Icons.arrow_forward_rounded),
               ),
             ),
           ),
           if (_error != null) ...[
-            const SizedBox(height: 12),
-            Card(
-              color: Theme.of(context).colorScheme.errorContainer,
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text(_error!),
-              ),
+            const SizedBox(height: 14),
+            PersonalizedStatusBanner(
+              tone: PersonalizedStatusTone.error,
+              title: 'Search interrupted',
+              message: _error!,
             ),
           ],
-          const SizedBox(height: 14),
+          const SizedBox(height: 22),
           if (_searching)
-            const Center(child: CircularProgressIndicator())
+            const _ManualSearchLoading()
           else if (_results.isEmpty)
-            const Card(
-              child: Padding(
-                padding: EdgeInsets.all(18),
-                child: Text(
-                  'No safe song results found. Change the wording, add an album or version name, and search again.',
-                ),
-              ),
+            const PersonalizedEmptyState(
+              icon: Icons.search_off_rounded,
+              title: 'No safe song results',
+              description:
+                  'Change the wording or add an album or version name, then search again.',
             )
           else ...[
-            const Padding(
-              padding: EdgeInsets.only(bottom: 8),
-              child: Text(
-                'Preview plays up to 30 seconds and stops automatically. Listen before saving when titles or versions are ambiguous.',
+            PersonalizedSectionHeading(
+              title: 'Possible matches',
+              description:
+                  'Preview ambiguous recordings before saving your choice.',
+              trailing: Text(
+                '${_results.length}',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
               ),
             ),
-            for (final result in _results)
+            const SizedBox(height: 12),
+            for (final result in _results) ...[
               _ManualResultTile(
                 result: result,
                 enabled: !_saving,
-                previewLoading: _previewLoadingId ==
+                previewLoading:
+                    _previewLoadingId ==
                     (result['candidate'] as Map)['ytid']?.toString(),
-                previewPlaying: _previewPlaying &&
+                previewPlaying:
+                    _previewPlaying &&
                     _previewingId ==
                         (result['candidate'] as Map)['ytid']?.toString(),
                 onPreview: () => _togglePreview(result),
                 onUse: () => _save(result),
               ),
+              const SizedBox(height: 10),
+            ],
           ],
         ],
       ),
@@ -393,7 +401,8 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
   }
 
   static bool _isUnmatched(Map<String, dynamic> item) {
-    return item['status'] == 'unmatched' || item['status'] == 'manual_unmatched';
+    return item['status'] == 'unmatched' ||
+        item['status'] == 'manual_unmatched';
   }
 
   static int? _asInt(dynamic value) {
@@ -403,7 +412,9 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
   }
 
   static Map<String, dynamic> _readMap(dynamic value) {
-    return value is Map ? Map<String, dynamic>.from(value) : <String, dynamic>{};
+    return value is Map
+        ? Map<String, dynamic>.from(value)
+        : <String, dynamic>{};
   }
 
   static List<Map<String, dynamic>> _readMaps(dynamic value) {
@@ -412,6 +423,30 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
         .whereType<Map>()
         .map(Map<String, dynamic>.from)
         .toList(growable: true);
+  }
+}
+
+class _ManualSearchLoading extends StatelessWidget {
+  const _ManualSearchLoading();
+
+  @override
+  Widget build(BuildContext context) {
+    return const PersonalizedSurface(
+      child: Row(
+        children: [
+          SizedBox.square(
+            dimension: 22,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          SizedBox(width: 14),
+          Expanded(
+            child: Text(
+              'Searching YouTube Music first, then checking YouTube…',
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -438,65 +473,182 @@ class _ManualResultTile extends StatelessWidget {
     final evidence = Map<String, dynamic>.from(result['evidence'] as Map);
     final reasons = evidence['reasons'] is List
         ? (evidence['reasons'] as List)
-            .map((reason) => reason.toString())
-            .take(3)
-            .join(' • ')
+              .map((reason) => reason.toString())
+              .take(3)
+              .join(' · ')
         : '';
     final score = ((result['score'] as num?)?.toDouble() ?? 0) * 100;
     final source = candidate['sourceType'] == 'youtube_music_song'
         ? 'YouTube Music'
-        : 'YouTube';
+        : 'YouTube fallback';
+    final artist =
+        candidate['artist']?.toString() ??
+        candidate['videoAuthor']?.toString() ??
+        'Unknown artist';
+    final album = candidate['album']?.toString() ?? '';
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              candidate['title']?.toString() ?? 'Unknown result',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 3),
-            Text(
-              candidate['artist']?.toString() ??
-                  candidate['videoAuthor']?.toString() ??
-                  'Unknown artist',
-            ),
-            const SizedBox(height: 4),
-            Text(
-              '${score.round()}% • $source${reasons.isEmpty ? '' : ' • $reasons'}',
-              style: Theme.of(context).textTheme.bodySmall,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-            ),
+    return PersonalizedSurface(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _ManualArtwork(candidate: candidate),
+              const SizedBox(width: 13),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      candidate['title']?.toString() ?? 'Unknown result',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        height: 1.12,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      album.isEmpty ? artist : '$artist · $album',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colors.onSurfaceVariant,
+                        height: 1.3,
+                      ),
+                    ),
+                    const SizedBox(height: 7),
+                    Row(
+                      children: [
+                        DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: colors.primaryContainer,
+                            borderRadius: BorderRadius.circular(99),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            child: Text(
+                              '${score.round()}% match',
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: colors.onPrimaryContainer,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 7),
+                        Expanded(
+                          child: Text(
+                            source,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: colors.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (reasons.isNotEmpty) ...[
             const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: enabled && !previewLoading ? onPreview : null,
-                    icon: previewLoading
-                        ? const SizedBox.square(
-                            dimension: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : Icon(previewPlaying ? Icons.pause : Icons.play_arrow),
-                    label: Text(previewPlaying ? 'Pause preview' : 'Preview'),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: FilledButton(
-                    onPressed: enabled ? onUse : null,
-                    child: const Text('Use this match'),
-                  ),
-                ),
-              ],
+            Text(
+              reasons,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colors.onSurfaceVariant,
+              ),
             ),
           ],
-        ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: enabled && !previewLoading ? onPreview : null,
+                  icon: previewLoading
+                      ? const SizedBox.square(
+                          dimension: 17,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Icon(
+                          previewPlaying
+                              ? Icons.pause_rounded
+                              : Icons.play_arrow_rounded,
+                          size: 19,
+                        ),
+                  label: Text(previewPlaying ? 'Pause' : 'Preview'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: enabled ? onUse : null,
+                  icon: const Icon(Icons.check_rounded, size: 19),
+                  label: const Text('Use match'),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
+}
+
+class _ManualArtwork extends StatelessWidget {
+  const _ManualArtwork({required this.candidate});
+
+  final Map<String, dynamic> candidate;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final url = _manualArtworkUrl(candidate);
+    final fallback = ColoredBox(
+      color: colors.primaryContainer,
+      child: Icon(
+        Icons.music_note_rounded,
+        color: colors.onPrimaryContainer,
+        size: 29,
+      ),
+    );
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(14),
+      child: SizedBox.square(
+        dimension: 76,
+        child: url.isEmpty
+            ? fallback
+            : CachedNetworkImage(
+                imageUrl: url,
+                fit: BoxFit.cover,
+                fadeInDuration: const Duration(milliseconds: 120),
+                placeholder: (_, __) => fallback,
+                errorWidget: (_, __, ___) => fallback,
+              ),
+      ),
+    );
+  }
+}
+
+String _manualArtworkUrl(Map<String, dynamic> candidate) {
+  for (final key in const ['highResImage', 'image', 'lowResImage']) {
+    final value = candidate[key]?.toString().trim() ?? '';
+    if (value.isNotEmpty) return value;
+  }
+  return '';
 }

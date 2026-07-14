@@ -11,13 +11,13 @@ import 'package:flutter/material.dart';
 import 'package:musify/screens/spotify_manual_match_page.dart';
 import 'package:musify/screens/spotify_review_sprint_page.dart';
 import 'package:musify/services/spotify_review_workflow_service.dart';
+import 'package:musify/widgets/personalized_ui.dart';
 
 class SpotifyMatchReviewPage extends StatefulWidget {
   const SpotifyMatchReviewPage({super.key});
 
   @override
-  State<SpotifyMatchReviewPage> createState() =>
-      _SpotifyMatchReviewPageState();
+  State<SpotifyMatchReviewPage> createState() => _SpotifyMatchReviewPageState();
 }
 
 class _SpotifyMatchReviewPageState extends State<SpotifyMatchReviewPage> {
@@ -114,9 +114,7 @@ class _SpotifyMatchReviewPageState extends State<SpotifyMatchReviewPage> {
   Future<void> _openSprint() async {
     if (_rescueRunning || _items.isEmpty) return;
     await Navigator.of(context).push<bool>(
-      MaterialPageRoute<bool>(
-        builder: (_) => const SpotifyReviewSprintPage(),
-      ),
+      MaterialPageRoute<bool>(builder: (_) => const SpotifyReviewSprintPage()),
     );
     await _load();
   }
@@ -175,8 +173,9 @@ class _SpotifyMatchReviewPageState extends State<SpotifyMatchReviewPage> {
 
   @override
   Widget build(BuildContext context) {
-    final reviewCount =
-        _items.where((item) => item['status'] == 'needs_review').length;
+    final reviewCount = _items
+        .where((item) => item['status'] == 'needs_review')
+        .length;
     final unmatchedCount = _items
         .where(
           (item) =>
@@ -185,203 +184,219 @@ class _SpotifyMatchReviewPageState extends State<SpotifyMatchReviewPage> {
         )
         .length;
     final errorCount = _items.where((item) => item['status'] == 'error').length;
+    final colors = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          _loading ? 'Resolve imported tracks' : 'Resolve (${_items.length})',
-        ),
-      ),
+      appBar: AppBar(title: const Text('Detailed review')),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
               onRefresh: _rescueRunning ? () async {} : _load,
               child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+                padding: const EdgeInsets.fromLTRB(18, 12, 18, 32),
                 children: [
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Finish the import without grinding through every track',
-                            style: Theme.of(context).textTheme.titleMedium,
-                          ),
-                          const SizedBox(height: 8),
-                          const Text(
-                            'Run the rescue pass first. Then use Review Sprint for fast autoplay decisions. Evidence clusters unlock guarded bulk approval only after you personally verify five matching examples without a rejection.',
-                          ),
-                        ],
-                      ),
-                    ),
+                  const PersonalizedHero(
+                    eyebrow: 'Repair workspace',
+                    icon: Icons.tune_rounded,
+                    title: 'Resolve the hard cases',
+                    description:
+                        'Run a cautious rescue pass, move quickly through one-at-a-time review, or compare every candidate in detail.',
                   ),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      Chip(
-                        avatar: const Icon(Icons.help, size: 18),
-                        label: Text('Review $reviewCount'),
-                      ),
-                      Chip(
-                        avatar: const Icon(Icons.search_off, size: 18),
-                        label: Text('Unmatched $unmatchedCount'),
-                      ),
-                      if (errorCount > 0)
-                        Chip(
-                          avatar: const Icon(Icons.error, size: 18),
-                          label: Text('Errors $errorCount'),
+                  const SizedBox(height: 18),
+                  PersonalizedSurface(
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: PersonalizedMetric(
+                            label: 'Review',
+                            value: reviewCount.toString(),
+                          ),
                         ),
-                    ],
+                        Expanded(
+                          child: PersonalizedMetric(
+                            label: 'Unmatched',
+                            value: unmatchedCount.toString(),
+                          ),
+                        ),
+                        Expanded(
+                          child: PersonalizedMetric(
+                            label: 'Errors',
+                            value: errorCount.toString(),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                   if (_error != null) ...[
-                    const SizedBox(height: 12),
-                    Card(
-                      color: Theme.of(context).colorScheme.errorContainer,
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Text(_error!),
-                      ),
+                    const SizedBox(height: 14),
+                    PersonalizedStatusBanner(
+                      tone: PersonalizedStatusTone.error,
+                      title: 'Review paused',
+                      message: _error!,
                     ),
                   ],
+                  const SizedBox(height: 24),
+                  const PersonalizedSectionHeading(
+                    title: 'Recommended path',
+                    description:
+                        'Start with automation, then make only the decisions that still need you.',
+                  ),
                   const SizedBox(height: 12),
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '1. Automated rescue',
-                            style: Theme.of(context).textTheme.titleMedium,
-                          ),
-                          const SizedBox(height: 6),
-                          const Text(
-                            'Promotes only strict near-certain patterns and retries unmatched tracks with additional album-aware searches.',
-                          ),
-                          if (_rescueProgress != null) ...[
-                            const SizedBox(height: 12),
-                            LinearProgressIndicator(
+                  PersonalizedSurface(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const _StageHeading(
+                          number: '01',
+                          icon: Icons.auto_fix_high_rounded,
+                          title: 'Automated rescue',
+                          description:
+                              'Retry unmatched tracks with stricter album-aware searches and promote only near-certain results.',
+                        ),
+                        if (_rescueProgress != null) ...[
+                          const SizedBox(height: 16),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(99),
+                            child: LinearProgressIndicator(
                               value: _rescueProgress!.fraction,
+                              minHeight: 6,
                             ),
-                            const SizedBox(height: 8),
-                            Text(
-                              '${_rescueProgress!.processed} of ${_rescueProgress!.total} checked • ${_rescueProgress!.promotedToStrong} strong • ${_rescueProgress!.promotedToReview} moved to review',
-                            ),
-                          ],
-                          const SizedBox(height: 12),
-                          SizedBox(
-                            width: double.infinity,
-                            child: FilledButton.icon(
-                              onPressed: _items.isEmpty
-                                  ? null
-                                  : _rescueRunning
-                                  ? () => setState(
-                                      () => _stopRescueRequested = true,
-                                    )
-                                  : _runRescuePass,
-                              icon: Icon(
-                                _rescueRunning ? Icons.pause : Icons.auto_fix_high,
-                              ),
-                              label: Text(
-                                _rescueRunning
-                                    ? _stopRescueRequested
-                                          ? 'Pausing after this track…'
-                                          : 'Pause rescue safely'
-                                    : 'Run rescue pass',
-                              ),
-                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            '${_rescueProgress!.processed} of ${_rescueProgress!.total} checked · ${_rescueProgress!.promotedToStrong} strong · ${_rescueProgress!.promotedToReview} to review',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: colors.onSurfaceVariant),
                           ),
                         ],
-                      ),
+                        const SizedBox(height: 16),
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.tonalIcon(
+                            onPressed: _items.isEmpty
+                                ? null
+                                : _rescueRunning
+                                ? () => setState(
+                                    () => _stopRescueRequested = true,
+                                  )
+                                : _runRescuePass,
+                            icon: Icon(
+                              _rescueRunning
+                                  ? Icons.pause_rounded
+                                  : Icons.auto_fix_high_rounded,
+                            ),
+                            label: Text(
+                              _rescueRunning
+                                  ? _stopRescueRequested
+                                        ? 'Pausing after this track…'
+                                        : 'Pause rescue safely'
+                                  : 'Run rescue pass',
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   const SizedBox(height: 12),
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '2. Review Sprint',
-                            style: Theme.of(context).textTheme.titleMedium,
+                  PersonalizedSurface(
+                    color: colors.primaryContainer.withValues(alpha: 0.52),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const _StageHeading(
+                          number: '02',
+                          icon: Icons.swipe_rounded,
+                          title: 'Quick review',
+                          description:
+                              'Hear a short preview and decide one track at a time. Every choice saves immediately.',
+                        ),
+                        const SizedBox(height: 16),
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.icon(
+                            onPressed: _items.isEmpty || _rescueRunning
+                                ? null
+                                : _openSprint,
+                            icon: const Icon(Icons.play_arrow_rounded),
+                            label: const Text('Start quick review'),
                           ),
-                          const SizedBox(height: 6),
-                          const Text(
-                            'Shows one track at a time, pre-resolves upcoming streams, auto-plays a 12-second preview, supports quick gestures, and saves every decision immediately.',
-                          ),
-                          const SizedBox(height: 12),
-                          SizedBox(
-                            width: double.infinity,
-                            child: FilledButton.icon(
-                              onPressed: _items.isEmpty || _rescueRunning
-                                  ? null
-                                  : _openSprint,
-                              icon: const Icon(Icons.bolt),
-                              label: const Text('Start Review Sprint'),
-                            ),
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
                   if (_clusters.isNotEmpty) ...[
-                    const SizedBox(height: 18),
-                    Text(
-                      'Largest evidence clusters',
-                      style: Theme.of(context).textTheme.titleMedium,
+                    const SizedBox(height: 24),
+                    const PersonalizedSectionHeading(
+                      title: 'Evidence groups',
+                      description:
+                          'Patterns Musify found across the unresolved queue.',
                     ),
-                    const SizedBox(height: 8),
-                    for (final cluster in _clusters.take(6)) ...[
-                      Card(
-                        child: ListTile(
-                          leading: Icon(
-                            cluster.safeForBulkApproval
-                                ? Icons.verified_outlined
-                                : Icons.rule,
-                          ),
-                          title: Text(cluster.label),
-                          subtitle: Text(
-                            cluster.safeForBulkApproval
-                                ? 'Strictly safe pattern; audit five examples in Review Sprint to unlock guarded bulk approval.'
-                                : 'This pattern remains manual because one or more identity or version signals need care.',
-                          ),
-                          trailing: Text('${cluster.count}'),
-                        ),
+                    const SizedBox(height: 12),
+                    PersonalizedSurface(
+                      padding: EdgeInsets.zero,
+                      child: Column(
+                        children: [
+                          for (final entry in _clusters.take(6).indexed) ...[
+                            ListTile(
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 5,
+                              ),
+                              leading: Icon(
+                                entry.$2.safeForBulkApproval
+                                    ? Icons.verified_outlined
+                                    : Icons.rule_rounded,
+                                color: colors.primary,
+                              ),
+                              title: Text(
+                                entry.$2.label,
+                                style: TextStyle(
+                                  color: colors.onSurface,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              subtitle: Text(
+                                entry.$2.safeForBulkApproval
+                                    ? 'Safe pattern · verify five examples to unlock grouped approval.'
+                                    : 'Identity or version details still need manual care.',
+                                style: TextStyle(
+                                  color: colors.onSurfaceVariant,
+                                ),
+                              ),
+                              trailing: Text(
+                                '${entry.$2.count}',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                            if (entry.$1 < _clusters.take(6).length - 1)
+                              const Divider(height: 1, indent: 56),
+                          ],
+                        ],
                       ),
-                      const SizedBox(height: 6),
-                    ],
+                    ),
                   ],
-                  const SizedBox(height: 18),
-                  Text(
-                    'Detailed queue',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 6),
-                  const Text(
-                    'Use this slower view when you want to compare several candidates at once.',
+                  const SizedBox(height: 24),
+                  PersonalizedSectionHeading(
+                    title: 'Detailed queue',
+                    description:
+                        'Compare all saved candidates when a track needs closer inspection.',
+                    trailing: Text(
+                      '${_items.length}',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
                   ),
                   if (_items.isEmpty) ...[
                     const SizedBox(height: 12),
-                    const Card(
-                      child: Padding(
-                        padding: EdgeInsets.all(20),
-                        child: Column(
-                          children: [
-                            Icon(Icons.check_circle_outline, size: 42),
-                            SizedBox(height: 10),
-                            Text(
-                              'Every processed track currently has a resolved source.',
-                              textAlign: TextAlign.center,
-                            ),
-                          ],
-                        ),
-                      ),
+                    const PersonalizedEmptyState(
+                      icon: Icons.library_add_check_rounded,
+                      title: 'Everything is resolved',
+                      description:
+                          'Every processed track currently has a saved source decision.',
                     ),
                   ] else
                     for (final item in _items) ...[
@@ -390,15 +405,14 @@ class _SpotifyMatchReviewPageState extends State<SpotifyMatchReviewPage> {
                         item: item,
                         selectedIndex:
                             _selectedAlternativeIndex[_rowKey(item)] ?? 0,
-                        busy: _busyRows.contains(_rowKey(item)) || _rescueRunning,
+                        busy:
+                            _busyRows.contains(_rowKey(item)) || _rescueRunning,
                         onSelected: (index) => setState(
                           () =>
                               _selectedAlternativeIndex[_rowKey(item)] = index,
                         ),
-                        onAccept: () =>
-                            _resolveSuggested(item, accept: true),
-                        onReject: () =>
-                            _resolveSuggested(item, accept: false),
+                        onAccept: () => _resolveSuggested(item, accept: true),
+                        onReject: () => _resolveSuggested(item, accept: false),
                         onManualSearch: () => _searchManually(item),
                       ),
                     ],
@@ -412,15 +426,79 @@ class _SpotifyMatchReviewPageState extends State<SpotifyMatchReviewPage> {
       item['sourceRow']?.toString() ??
       '${item['sourceArtist']}:${item['sourceTitle']}';
 
-  static List<Map<String, dynamic>> _alternatives(
-    Map<String, dynamic> item,
-  ) {
+  static List<Map<String, dynamic>> _alternatives(Map<String, dynamic> item) {
     final raw = item['alternatives'];
     if (raw is! List) return <Map<String, dynamic>>[];
     return raw
         .whereType<Map>()
         .map(Map<String, dynamic>.from)
         .toList(growable: false);
+  }
+}
+
+class _StageHeading extends StatelessWidget {
+  const _StageHeading({
+    required this.number,
+    required this.icon,
+    required this.title,
+    required this.description,
+  });
+
+  final String number;
+  final IconData icon;
+  final String title;
+  final String description;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        DecoratedBox(
+          decoration: BoxDecoration(
+            color: colors.surface.withValues(alpha: 0.72),
+            borderRadius: BorderRadius.circular(15),
+          ),
+          child: SizedBox.square(
+            dimension: 46,
+            child: Icon(icon, color: colors.primary, size: 23),
+          ),
+        ),
+        const SizedBox(width: 13),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                number,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: colors.primary,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1.1,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                title,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                description,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colors.onSurfaceVariant,
+                  height: 1.35,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -448,77 +526,104 @@ class _ResolutionCard extends StatelessWidget {
     final status = item['status']?.toString() ?? 'unmatched';
     final alternatives = _SpotifyMatchReviewPageState._alternatives(item);
     final canAcceptSuggestion = alternatives.isNotEmpty;
-    final reason = item['unmatchedReason']?.toString() ??
+    final reason =
+        item['unmatchedReason']?.toString() ??
         item['error']?.toString() ??
         (status == 'manual_unmatched'
             ? 'Previously marked as having no correct suggestion.'
             : null);
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
 
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+    return PersonalizedSurface(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'IMPORTED TRACK',
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: colors.primary,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            item['sourceTitle']?.toString() ?? 'Unknown track',
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w800,
+              height: 1.08,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            item['sourceArtist']?.toString() ?? 'Unknown artist',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: colors.onSurfaceVariant,
+            ),
+          ),
+          if ((item['sourceAlbum']?.toString() ?? '').isNotEmpty)
             Text(
-              item['sourceTitle']?.toString() ?? 'Unknown track',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 2),
-            Text(item['sourceArtist']?.toString() ?? 'Unknown artist'),
-            if ((item['sourceAlbum']?.toString() ?? '').isNotEmpty)
-              Text(
-                item['sourceAlbum'].toString(),
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            const SizedBox(height: 8),
-            Text(
-              SpotifyReviewWorkflowService.clusterLabel(item),
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-            if (reason != null) ...[
-              const SizedBox(height: 8),
-              Text(reason, style: Theme.of(context).textTheme.bodySmall),
-            ],
-            if (alternatives.isNotEmpty) ...[
-              const Divider(height: 24),
-              for (final entry in alternatives.indexed)
-                _AlternativeTile(
-                  alternative: entry.$2,
-                  selected: entry.$1 == selectedIndex,
-                  onTap: () => onSelected(entry.$1),
-                ),
-            ],
-            const SizedBox(height: 14),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: busy ? null : onManualSearch,
-                icon: const Icon(Icons.manage_search),
-                label: const Text('Search manually'),
+              item['sourceAlbum'].toString(),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colors.onSurfaceVariant,
               ),
             ),
-            const SizedBox(height: 8),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: busy || !canAcceptSuggestion ? null : onAccept,
-                icon: const Icon(Icons.check),
-                label: const Text('Accept selected match'),
-              ),
-            ),
-            const SizedBox(height: 8),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: busy ? null : onReject,
-                icon: const Icon(Icons.close),
-                label: const Text('None are correct'),
-              ),
-            ),
+          const SizedBox(height: 10),
+          Text(
+            SpotifyReviewWorkflowService.clusterLabel(item),
+            style: theme.textTheme.labelMedium?.copyWith(color: colors.primary),
+          ),
+          if (reason != null) ...[
+            const SizedBox(height: 10),
+            PersonalizedStatusBanner(message: reason),
           ],
-        ),
+          if (alternatives.isNotEmpty) ...[
+            const SizedBox(height: 18),
+            Text(
+              'Saved candidates',
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 7),
+            for (final entry in alternatives.indexed)
+              _AlternativeTile(
+                alternative: entry.$2,
+                selected: entry.$1 == selectedIndex,
+                onTap: () => onSelected(entry.$1),
+              ),
+          ],
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: busy ? null : onManualSearch,
+                  icon: const Icon(Icons.manage_search_rounded, size: 19),
+                  label: const Text('Search'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: busy ? null : onReject,
+                  icon: const Icon(Icons.close_rounded, size: 19),
+                  label: const Text('No match'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: busy || !canAcceptSuggestion ? null : onAccept,
+              icon: const Icon(Icons.check_rounded),
+              label: const Text('Accept selected match'),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -537,6 +642,8 @@ class _AlternativeTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
     final candidate = alternative['candidate'] is Map
         ? Map<String, dynamic>.from(alternative['candidate'] as Map)
         : <String, dynamic>{};
@@ -548,53 +655,78 @@ class _AlternativeTile extends StatelessWidget {
         : 0.0;
     final reasons = evidence['reasons'] is List
         ? (evidence['reasons'] as List)
-            .map((reason) => reason.toString())
-            .take(2)
-            .join(' • ')
+              .map((reason) => reason.toString())
+              .take(2)
+              .join(' • ')
         : '';
 
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(top: 2, right: 12),
-              child: Icon(
-                selected
-                    ? Icons.radio_button_checked
-                    : Icons.radio_button_unchecked,
-                color: selected
-                    ? Theme.of(context).colorScheme.primary
-                    : Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 7),
+      child: Material(
+        color: selected
+            ? colors.primaryContainer.withValues(alpha: 0.68)
+            : colors.surfaceContainerHigh.withValues(alpha: 0.68),
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 11, 12, 11),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: 1, right: 11),
+                  child: Icon(
+                    selected
+                        ? Icons.radio_button_checked_rounded
+                        : Icons.radio_button_unchecked_rounded,
+                    color: selected ? colors.primary : colors.onSurfaceVariant,
+                    size: 21,
+                  ),
+                ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        candidate['title']?.toString() ?? 'Unknown candidate',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          color: colors.onSurface,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        candidate['artist']?.toString() ??
+                            candidate['videoAuthor']?.toString() ??
+                            'Unknown source',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colors.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        '${(score * 100).round()}% match${reasons.isEmpty ? '' : ' · $reasons'}',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: selected
+                              ? colors.primary
+                              : colors.onSurfaceVariant,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    candidate['title']?.toString() ?? 'Unknown candidate',
-                    style: Theme.of(context).textTheme.titleSmall,
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    candidate['artist']?.toString() ??
-                        candidate['videoAuthor']?.toString() ??
-                        'Unknown source',
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    '${(score * 100).round()}% confidence${reasons.isEmpty ? '' : ' • $reasons'}',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );

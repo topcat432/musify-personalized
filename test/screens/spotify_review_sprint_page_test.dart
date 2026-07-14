@@ -76,6 +76,51 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     await player.dispose();
   });
+
+  testWidgets('a missing suggestion stays actionable on a compact phone', (
+    tester,
+  ) async {
+    tester.view
+      ..physicalSize = const Size(360, 640)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final source = _FakeReviewDataSource([
+      <String, dynamic>{
+        'sourceRow': 8,
+        'sourceTitle': 'A very long imported track title for a small phone',
+        'sourceArtist': 'Source artist',
+        'sourceAlbum': 'Source album',
+        'status': 'unmatched',
+        'unmatchedReason':
+            'No source passed the identity and recording-version checks.',
+        'alternatives': <Map<String, dynamic>>[],
+      },
+    ]);
+    final player = _FakeAudioPlayer();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SpotifyReviewSprintPage(
+          dataSource: source,
+          audioPlayer: player,
+          streamResolver: (songId) async => 'url-$songId',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('No confident suggestion'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('review-manual-search-button')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('review-reject-button')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await player.dispose();
+  });
 }
 
 Map<String, dynamic> _item({
@@ -120,7 +165,7 @@ class _Decision {
 
 class _FakeReviewDataSource implements SpotifyReviewSprintDataSource {
   _FakeReviewDataSource(List<Map<String, dynamic>> items)
-      : _items = List<Map<String, dynamic>>.from(items);
+    : _items = List<Map<String, dynamic>>.from(items);
 
   final List<Map<String, dynamic>> _items;
   final List<_Decision> decisions = <_Decision>[];
