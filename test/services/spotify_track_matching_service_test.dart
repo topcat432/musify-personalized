@@ -79,6 +79,26 @@ void main() {
     );
   });
 
+  test('a pilot with too few usable attempts cannot unlock the full run', () {
+    const snapshot = SpotifyMatchingSnapshot(
+      totalTracks: 100,
+      nextTrackIndex: 50,
+      matchedCount: 1,
+      reviewCount: 0,
+      unmatchedCount: 0,
+      errorCount: 24,
+      excludedCount: 25,
+      pendingResolutionCount: 0,
+      status: 'paused',
+      recentResults: [],
+    );
+
+    expect(
+      SpotifyTrackMatchingService.isFullLibraryRunUnlocked(snapshot),
+      isFalse,
+    );
+  });
+
   test('a stop requested after lookup prevents a stale checkpoint', () async {
     final box = Hive.box('user');
     await box.put('spotifyImportTracks', [

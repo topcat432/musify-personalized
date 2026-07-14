@@ -123,12 +123,12 @@ class _LibraryPageState extends State<LibraryPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text(context.l10n!.library),
-        actions: offlineMode.value
-            ? null
-            : [
-                LibrarySpotifyImportAction(onPressed: _openSpotifyImportHub),
-                const SizedBox(width: 8),
-              ],
+        actions: [
+          OfflineAwareLibrarySpotifyImportAction(
+            offlineMode: offlineMode,
+            onPressed: _openSpotifyImportHub,
+          ),
+        ],
       ),
       body: AnimatedBuilder(
         animation: Listenable.merge([

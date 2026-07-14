@@ -51,6 +51,7 @@ class SpotifyTrackMatchingService {
 
   static const int defaultBatchSize = 25;
   static const int maximumPilotBatchSize = 50;
+  static const int minimumUsablePilotAttempts = 40;
   static const double automaticMatchThreshold = 0.86;
   static const double reviewThreshold = 0.58;
   static const Duration _musicSearchTimeout = Duration(seconds: 18);
@@ -60,7 +61,7 @@ class SpotifyTrackMatchingService {
     if (snapshot.nextTrackIndex < maximumPilotBatchSize) return false;
     final usableAttempts =
         snapshot.nextTrackIndex - snapshot.errorCount - snapshot.excludedCount;
-    if (usableAttempts <= 0) return false;
+    if (usableAttempts < minimumUsablePilotAttempts) return false;
     final strongOrReview = snapshot.matchedCount + snapshot.reviewCount;
     final usefulRate = strongOrReview / usableAttempts;
     final unmatchedRate = snapshot.unmatchedCount / usableAttempts;
@@ -454,12 +455,10 @@ class SpotifyTrackMatchingService {
         .toUtc()
         .toIso8601String();
 
-    await addOrUpdateData<List>('user', 'spotifyMatchResults', results);
-    await addOrUpdateData<Map<String, dynamic>>(
-      'user',
-      'spotifyImportMetadata',
-      metadata,
-    );
+    await Hive.box('user').putAll({
+      'spotifyMatchResults': results,
+      'spotifyImportMetadata': metadata,
+    });
   }
 
   SpotifyMatchingSnapshot _snapshot(

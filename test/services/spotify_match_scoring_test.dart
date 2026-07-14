@@ -158,6 +158,69 @@ void main() {
       expect(result.reasons, isNot(contains('Alternate version not requested')));
     });
 
+    test('does not treat an artist or Topic channel as version evidence', () {
+      const input = SpotifyMatchInput(
+        title: 'Lightning Crashes',
+        artist: 'Live',
+        durationMs: 325000,
+      );
+      final result = SpotifyMatchScorer.score(input, {
+        'title': 'Lightning Crashes',
+        'artist': 'Live',
+        'videoAuthor': 'Live - Topic',
+        'duration': 325,
+      });
+
+      expect(result.disqualified, isFalse);
+      expect(result.automaticEligible, isTrue);
+      expect(result.reasons, isNot(contains('Alternate version not requested')));
+    });
+
+    test('does not treat a normal song title as compilation content', () {
+      const input = SpotifyMatchInput(
+        title: 'Best of You',
+        artist: 'Foo Fighters',
+        durationMs: 256000,
+      );
+      final result = SpotifyMatchScorer.score(input, {
+        'title': 'Best of You',
+        'artist': 'Foo Fighters',
+        'videoAuthor': 'Foo Fighters - Topic',
+        'duration': 256,
+      });
+
+      expect(result.disqualified, isFalse);
+      expect(result.automaticEligible, isTrue);
+      expect(
+        result.reasons,
+        isNot(contains('Title suggests compilation content')),
+      );
+    });
+
+    test(
+      'accepts a long recording when source and candidate durations match',
+      () {
+        const input = SpotifyMatchInput(
+          title: 'Long Classical Movement',
+          artist: 'Example Orchestra',
+          durationMs: 1200000,
+        );
+        final result = SpotifyMatchScorer.score(input, {
+          'title': 'Long Classical Movement',
+          'artist': 'Example Orchestra',
+          'sourceType': 'youtube_music_song',
+          'duration': 1200,
+        });
+
+        expect(result.disqualified, isFalse);
+        expect(result.automaticEligible, isTrue);
+        expect(
+          result.reasons,
+          isNot(contains('Rejected because duration is far too long')),
+        );
+      },
+    );
+
     test('blocks an album-only mastering variant from automatic approval', () {
       const input = SpotifyMatchInput(
         title: 'Example Song',

@@ -50,4 +50,32 @@ void main() {
     expect(find.text('Spotify import'), findsOneWidget);
     expect(find.byKey(LibrarySpotifyImportAction.compactKey), findsNothing);
   });
+
+  testWidgets('reacts immediately when offline mode changes', (tester) async {
+    final offlineMode = ValueNotifier<bool>(false);
+    addTearDown(offlineMode.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          appBar: AppBar(
+            actions: [
+              OfflineAwareLibrarySpotifyImportAction(
+                offlineMode: offlineMode,
+                onPressed: () {},
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byType(LibrarySpotifyImportAction), findsOneWidget);
+    offlineMode.value = true;
+    await tester.pumpAndSettle();
+    expect(find.byType(LibrarySpotifyImportAction), findsNothing);
+    expect(
+      find.byKey(OfflineAwareLibrarySpotifyImportAction.offlineKey),
+      findsOneWidget,
+    );
+  });
 }

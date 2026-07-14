@@ -47,3 +47,36 @@ class LibrarySpotifyImportAction extends StatelessWidget {
     );
   }
 }
+
+class OfflineAwareLibrarySpotifyImportAction extends StatelessWidget {
+  const OfflineAwareLibrarySpotifyImportAction({
+    required this.offlineMode,
+    required this.onPressed,
+    super.key,
+  });
+
+  static const Key offlineKey = ValueKey<String>('spotify-import-offline');
+  static const Key onlineKey = ValueKey<String>('spotify-import-online');
+
+  final ValueListenable<bool> offlineMode;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: offlineMode,
+      builder: (context, isOffline, _) => AnimatedSwitcher(
+        duration: const Duration(milliseconds: 180),
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInCubic,
+        child: isOffline
+            ? const SizedBox.shrink(key: offlineKey)
+            : Padding(
+                key: onlineKey,
+                padding: const EdgeInsets.only(right: 8),
+                child: LibrarySpotifyImportAction(onPressed: onPressed),
+              ),
+      ),
+    );
+  }
+}

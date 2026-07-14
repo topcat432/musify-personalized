@@ -146,10 +146,10 @@ class SpotifyMatchScorer {
     final durationScore = _durationScore(input.durationMs, durationSeconds);
     final sourceScore = _sourceScore(candidate, videoAuthor);
 
-    final combinedText = _normalize('$candidateTitle $videoAuthor');
+    final combinedText = _normalize(candidateTitle);
     final sourceVersionText = _normalize('${input.title} ${input.album}');
     final candidateVersionText = _normalize(
-      '$candidateTitle $candidateAlbum $videoAuthor',
+      '$candidateTitle $candidateAlbum',
     );
     final reasons = <String>[];
     var disqualified = false;
@@ -194,15 +194,20 @@ class SpotifyMatchScorer {
       reasons.add('ISRC exactly matches');
     }
 
-    final hasLongFormTerm = _longFormTerms.any(combinedText.contains);
+    final hasLongFormTerm = _longFormTerms.any(
+      (term) => _containsWholeTerm(combinedText, term),
+    );
+    final hasStrongLongFormTerm = _longFormTerms
+        .where((term) => term != 'best of')
+        .any((term) => _containsWholeTerm(combinedText, term));
     final expectedSeconds = input.durationMs == null
         ? null
         : input.durationMs! / 1000;
     final durationLooksLong = durationSeconds != null &&
-        (durationSeconds > 900 ||
-            (expectedSeconds != null &&
-                durationSeconds > expectedSeconds * 1.75 &&
-                durationSeconds - expectedSeconds > 90));
+        (expectedSeconds == null
+            ? durationSeconds > 900
+            : durationSeconds > expectedSeconds * 1.75 &&
+                durationSeconds - expectedSeconds > 90);
 
     if (hasLongFormTerm && durationLooksLong) {
       disqualified = true;
@@ -210,7 +215,7 @@ class SpotifyMatchScorer {
     } else if (durationLooksLong) {
       disqualified = true;
       reasons.add('Rejected because duration is far too long');
-    } else if (hasLongFormTerm) {
+    } else if (hasStrongLongFormTerm) {
       penalty += 0.18;
       reasons.add('Title suggests compilation content');
     }
