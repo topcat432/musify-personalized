@@ -139,7 +139,7 @@ class MusifyBackupService {
     _operationInProgress = true;
     Directory? stagingDirectory;
     try {
-      final payloads = <String, Uint8List>{};
+      final sourceFiles = <String, File>{};
       for (final boxName in _requiredBoxNames) {
         final box = await _openRequiredBox(boxName);
         await box.flush();
@@ -155,37 +155,46 @@ class MusifyBackupService {
             'The required $boxName database file does not exist.',
           );
         }
-        final bytes = await source.readAsBytes();
-        if (bytes.isEmpty) {
+        if (await source.length() == 0) {
           throw BackupValidationException(
             'The required $boxName database file is empty.',
           );
         }
-        payloads[boxName] = Uint8List.fromList(bytes);
+        sourceFiles[boxName] = source;
       }
 
       stagingDirectory = await _newTemporaryDirectory('backup-create');
-      final snapshots = await _validatePayloadSet(payloads, stagingDirectory);
-      final summary = _summaryFromSnapshots(snapshots);
-      final manifest = _buildManifest(payloads, snapshots, summary);
-      final bundleBytes = _encodeBundle(manifest, payloads);
-
-      // Validate the exact serialized bytes before writing them outside the app.
-      await inspectBundleBytes(
-        bundleBytes,
-        sourceDescription: 'newly created backup',
+      final payloadFiles = <String, File>{};
+      for (final boxName in _requiredBoxNames) {
+        final frozen = File('${stagingDirectory.path}/source_$boxName.hive');
+        await sourceFiles[boxName]!.openRead().pipe(frozen.openWrite());
+        payloadFiles[boxName] = frozen;
+      }
+      final snapshots = await _validatePayloadFiles(
+        payloadFiles,
+        stagingDirectory,
       );
+      final summary = _summaryFromSnapshots(snapshots);
+      final descriptors = await _describePayloadFiles(payloadFiles);
+      final manifest = _buildManifestFromDescriptors(
+        descriptors,
+        snapshots,
+        summary,
+      );
+      final bundleFile = File(
+        '${stagingDirectory.path}/verified.$musifyBackupExtension',
+      );
+      await _encodeBundleToFile(manifest, payloadFiles, bundleFile);
+      if (!await bundleFile.exists() || await bundleFile.length() == 0) {
+        throw const BackupValidationException(
+          'The verified backup bundle could not be serialized.',
+        );
+      }
 
       final timestamp = _fileTimestamp(DateTime.now().toUtc());
       final fileName =
           'Musify-Personalized-Backup-$timestamp.$musifyBackupExtension';
-      final outputPath = await FilePicker.saveFile(
-        dialogTitle: 'Save verified Musify backup',
-        fileName: fileName,
-        type: FileType.custom,
-        allowedExtensions: const [musifyBackupExtension],
-        bytes: bundleBytes,
-      );
+      final outputPath = await _saveBundleWithPicker(bundleFile, fileName);
       if (outputPath == null) {
         return const BackupOperationResult(
           success: false,
@@ -197,17 +206,17 @@ class MusifyBackupService {
       // Treat the picker return as untrusted until the actual saved file is
       // reopened and proven byte-for-byte identical to the validated bundle.
       final finalFile = File(outputPath);
-      final finalVerification = await _verifySavedBackupFile(
+      await _verifySavedBackupFileAgainstBundle(
         finalFile,
-        expectedBytes: bundleBytes,
+        expectedBundle: bundleFile,
       );
       return BackupOperationResult(
         success: true,
         message:
             'Verified backup saved to ${finalFile.path} '
             '(${finalFile.lengthSync()} bytes; '
-            '${finalVerification.summary.compactDescription}).',
-        summary: finalVerification.summary,
+            '${summary.compactDescription}).',
+        summary: summary,
       );
     } on BackupValidationException catch (error, stackTrace) {
       _logError(
@@ -268,6 +277,53 @@ class MusifyBackupService {
       );
     }
     return inspectBundleBytes(savedBytes, sourceDescription: file.path);
+  }
+
+  static Future<void> _verifySavedBackupFileAgainstBundle(
+    File file, {
+    required File expectedBundle,
+  }) async {
+    final fileName = file.uri.pathSegments.isEmpty
+        ? file.path
+        : file.uri.pathSegments.last;
+    if (!fileName.toLowerCase().endsWith('.$musifyBackupExtension')) {
+      throw const BackupValidationException(
+        'The saved file must keep the .musifybackup extension.',
+      );
+    }
+    if (!await file.exists()) {
+      throw const BackupValidationException(
+        'The selected backup destination did not produce a readable file.',
+      );
+    }
+    final expectedLength = await expectedBundle.length();
+    final actualLength = await file.length();
+    if (actualLength == 0) {
+      throw const BackupValidationException('The saved backup file is empty.');
+    }
+    if (actualLength != expectedLength ||
+        await _streamSha256(file) != await _streamSha256(expectedBundle)) {
+      throw const BackupValidationException(
+        'The saved backup does not exactly match the verified source data.',
+      );
+    }
+  }
+
+  static Future<String?> _saveBundleWithPicker(
+    File bundleFile,
+    String fileName,
+  ) async {
+    // file_picker currently requires mobile save data as a Uint8List. Keep
+    // exactly one in-memory copy, only inside this native save handoff; all
+    // validation, Base64 encoding, and checksum work stays streamed.
+    final pickerBytes = await bundleFile.readAsBytes();
+    return FilePicker.saveFile(
+      dialogTitle: 'Save verified Musify backup',
+      fileName: fileName,
+      type: FileType.custom,
+      allowedExtensions: const [musifyBackupExtension],
+      bytes: pickerBytes,
+    );
   }
 
   static Future<ValidatedBackup?> pickAndInspectBundle() async {
@@ -396,6 +452,43 @@ class MusifyBackupService {
         _buildManifest(payloads, snapshots, summary),
         payloads,
       );
+    } finally {
+      await _deleteDirectoryQuietly(staging);
+    }
+  }
+
+  @visibleForTesting
+  static Future<File> createStreamedBundleFileForTesting(
+    Map<String, Uint8List> payloads,
+    Directory outputDirectory,
+  ) async {
+    final staging = await _newTemporaryDirectory('stream-bundle-test');
+    try {
+      final payloadFiles = <String, File>{};
+      for (final boxName in _requiredBoxNames) {
+        final bytes = payloads[boxName];
+        if (bytes == null) {
+          throw const BackupValidationException(
+            'Both user and settings databases are required.',
+          );
+        }
+        final source = File('${staging.path}/source_$boxName.hive');
+        await source.writeAsBytes(bytes, flush: true);
+        payloadFiles[boxName] = source;
+      }
+      final snapshots = await _validatePayloadFiles(payloadFiles, staging);
+      final summary = _summaryFromSnapshots(snapshots);
+      final descriptors = await _describePayloadFiles(payloadFiles);
+      final manifest = _buildManifestFromDescriptors(
+        descriptors,
+        snapshots,
+        summary,
+      );
+      final output = File(
+        '${outputDirectory.path}/streamed.$musifyBackupExtension',
+      );
+      await _encodeBundleToFile(manifest, payloadFiles, output);
+      return output;
     } finally {
       await _deleteDirectoryQuietly(staging);
     }
@@ -759,14 +852,29 @@ class MusifyBackupService {
     Map<String, _BoxSnapshot> snapshots,
     BackupSummary summary,
   ) {
+    final descriptors = {
+      for (final boxName in _requiredBoxNames)
+        boxName: _PayloadDescriptor(
+          byteLength: payloads[boxName]!.length,
+          sha256: sha256.convert(payloads[boxName]!).toString(),
+        ),
+    };
+    return _buildManifestFromDescriptors(descriptors, snapshots, summary);
+  }
+
+  static Map<String, dynamic> _buildManifestFromDescriptors(
+    Map<String, _PayloadDescriptor> descriptors,
+    Map<String, _BoxSnapshot> snapshots,
+    BackupSummary summary,
+  ) {
     final payloadManifest = <String, dynamic>{};
     for (final boxName in _requiredBoxNames) {
-      final bytes = payloads[boxName]!;
+      final descriptor = descriptors[boxName]!;
       final snapshot = snapshots[boxName]!;
       payloadManifest[boxName] = {
         'fileName': '$boxName.hive',
-        'byteLength': bytes.length,
-        'sha256': sha256.convert(bytes).toString(),
+        'byteLength': descriptor.byteLength,
+        'sha256': descriptor.sha256,
         'keys': snapshot.keys,
         'keyTypes': snapshot.keyTypes,
       };
@@ -786,6 +894,31 @@ class MusifyBackupService {
     };
   }
 
+  static Future<Map<String, _PayloadDescriptor>> _describePayloadFiles(
+    Map<String, File> payloadFiles,
+  ) async {
+    final descriptors = <String, _PayloadDescriptor>{};
+    for (final boxName in _requiredBoxNames) {
+      final file = payloadFiles[boxName];
+      if (file == null || !await file.exists()) {
+        throw BackupValidationException(
+          'The required $boxName database file does not exist.',
+        );
+      }
+      final byteLength = await file.length();
+      if (byteLength == 0) {
+        throw BackupValidationException(
+          'The required $boxName database file is empty.',
+        );
+      }
+      descriptors[boxName] = _PayloadDescriptor(
+        byteLength: byteLength,
+        sha256: await _streamSha256(file),
+      );
+    }
+    return descriptors;
+  }
+
   static Uint8List _encodeBundle(
     Map<String, dynamic> manifest,
     Map<String, Uint8List> payloads,
@@ -798,6 +931,79 @@ class MusifyBackupService {
       },
     };
     return Uint8List.fromList(utf8.encode(jsonEncode(root)));
+  }
+
+  static Future<void> _encodeBundleToFile(
+    Map<String, dynamic> manifest,
+    Map<String, File> payloadFiles,
+    File output,
+  ) async {
+    final sink = output.openWrite();
+    try {
+      sink.write('{"manifest":${jsonEncode(manifest)},"payloads":{');
+      for (var index = 0; index < _requiredBoxNames.length; index++) {
+        final boxName = _requiredBoxNames[index];
+        final source = payloadFiles[boxName];
+        if (source == null) {
+          throw BackupValidationException(
+            'The required $boxName database file is missing.',
+          );
+        }
+        if (index > 0) sink.write(',');
+        sink.write('"$boxName.hive":"');
+        await sink.addStream(
+          source
+              .openRead()
+              .transform(base64.encoder)
+              .transform(utf8.encoder),
+        );
+        sink.write('"');
+      }
+      sink.write('}}');
+      await sink.flush();
+    } finally {
+      await sink.close();
+    }
+  }
+
+  static Future<Map<String, _BoxSnapshot>> _validatePayloadFiles(
+    Map<String, File> payloadFiles,
+    Directory directory,
+  ) async {
+    if (payloadFiles.length != _requiredBoxNames.length ||
+        !_requiredBoxNames.every(payloadFiles.containsKey)) {
+      throw const BackupValidationException(
+        'Both user and settings databases are required.',
+      );
+    }
+    final snapshots = <String, _BoxSnapshot>{};
+    for (final boxName in _requiredBoxNames) {
+      final source = payloadFiles[boxName]!;
+      if (!await source.exists() || await source.length() == 0) {
+        throw BackupValidationException('The $boxName database is empty.');
+      }
+      final uniqueName =
+          'verify_${boxName}_${DateTime.now().microsecondsSinceEpoch}';
+      final staged = File('${directory.path}/$uniqueName.hive');
+      await source.openRead().pipe(staged.openWrite());
+      Box? box;
+      try {
+        box = await Hive.openBox(uniqueName, path: directory.path);
+        snapshots[boxName] = _snapshotOpenBox(boxName, box);
+      } catch (error) {
+        throw BackupValidationException(
+          'The $boxName database cannot be opened as a Hive database: $error',
+        );
+      } finally {
+        await box?.close();
+        try {
+          await Hive.deleteBoxFromDisk(uniqueName, path: directory.path);
+        } catch (_) {
+          if (await staged.exists()) await staged.delete();
+        }
+      }
+    }
+    return snapshots;
   }
 
   static Future<Map<String, _BoxSnapshot>> _validatePayloadSet(
@@ -1068,6 +1274,18 @@ void _logError(
   required StackTrace stackTrace,
 }) {
   debugPrint('$location: $error\n$stackTrace');
+}
+
+Future<String> _streamSha256(File file) async {
+  final digest = await sha256.bind(file.openRead()).first;
+  return digest.toString();
+}
+
+class _PayloadDescriptor {
+  const _PayloadDescriptor({required this.byteLength, required this.sha256});
+
+  final int byteLength;
+  final String sha256;
 }
 
 class _BoxSnapshot {
