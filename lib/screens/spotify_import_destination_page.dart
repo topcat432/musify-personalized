@@ -77,7 +77,7 @@ class _SpotifyImportDestinationPageState
   int _selectedCount(SpotifyImportDestinationSnapshot snapshot) {
     if (_useAll) return snapshot.resolvedSongs.length;
     final parsed = int.tryParse(_countController.text.trim()) ?? 0;
-    return parsed.clamp(0, snapshot.resolvedSongs.length).toInt();
+    return parsed.clamp(0, snapshot.resolvedSongs.length);
   }
 
   Future<void> _route() async {
