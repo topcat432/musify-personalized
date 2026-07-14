@@ -622,7 +622,7 @@ class _ManualResultTile extends StatelessWidget {
           ],
           if (disqualified && !isDirectUrl) ...[
             const SizedBox(height: 8),
-            PersonalizedStatusBanner(
+            const PersonalizedStatusBanner(
               icon: Icons.info_outline_rounded,
               message:
                   'The automatic matcher would skip this result, but manual search leaves the decision to you.',
