@@ -67,7 +67,7 @@ class _SpotifyMatchReviewPageState extends State<SpotifyMatchReviewPage> {
       builder: (dialogContext) => AlertDialog(
         title: const Text('Run automated rescue pass?'),
         content: const Text(
-          'The app will safely promote near-certain review items and retry unmatched or failed tracks using album-aware YouTube Music and official-audio searches. Existing strong and manually confirmed matches will not be changed. Progress saves every five tracks.',
+          'The app will promote only near-certain review items and retry unmatched or failed tracks using album-aware YouTube Music and official-audio searches. Existing strong and manually confirmed matches will not be changed. Progress saves every five tracks.',
         ),
         actions: [
           TextButton(
@@ -300,86 +300,92 @@ class _SpotifyMatchReviewPageState extends State<SpotifyMatchReviewPage> {
                         'Start with automation, then make only the decisions that still need you.',
                   ),
                   const SizedBox(height: 12),
-                  PersonalizedSurface(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const _StageHeading(
-                          number: '01',
-                          icon: Icons.auto_fix_high_rounded,
-                          title: 'Automated rescue',
-                          description:
-                              'Retry unmatched tracks with stricter album-aware searches and promote only near-certain results.',
-                        ),
-                        if (_rescueProgress != null) ...[
-                          const SizedBox(height: 16),
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(99),
-                            child: LinearProgressIndicator(
-                              value: _rescueProgress!.fraction,
-                              minHeight: 6,
-                            ),
+                  PersonalizedReveal(
+                    delay: const Duration(milliseconds: 110),
+                    child: PersonalizedSurface(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const _StageHeading(
+                            number: '01',
+                            icon: Icons.auto_fix_high_rounded,
+                            title: 'Automated rescue',
+                            description:
+                                'Retry unmatched tracks with stricter album-aware searches and promote only near-certain results.',
                           ),
-                          const SizedBox(height: 8),
-                          Text(
-                            '${_rescueProgress!.processed} of ${_rescueProgress!.total} checked · ${_rescueProgress!.promotedToStrong} strong · ${_rescueProgress!.promotedToReview} to review',
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(color: colors.onSurfaceVariant),
+                          if (_rescueProgress != null) ...[
+                            const SizedBox(height: 16),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(99),
+                              child: LinearProgressIndicator(
+                                value: _rescueProgress!.fraction,
+                                minHeight: 6,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              '${_rescueProgress!.processed} of ${_rescueProgress!.total} checked · ${_rescueProgress!.promotedToStrong} strong · ${_rescueProgress!.promotedToReview} to review',
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(color: colors.onSurfaceVariant),
+                            ),
+                          ],
+                          const SizedBox(height: 16),
+                          SizedBox(
+                            width: double.infinity,
+                            child: FilledButton.tonalIcon(
+                              onPressed: _items.isEmpty
+                                  ? null
+                                  : _rescueRunning
+                                  ? () => setState(
+                                      () => _stopRescueRequested = true,
+                                    )
+                                  : _runRescuePass,
+                              icon: Icon(
+                                _rescueRunning
+                                    ? Icons.pause_rounded
+                                    : Icons.auto_fix_high_rounded,
+                              ),
+                              label: Text(
+                                _rescueRunning
+                                    ? _stopRescueRequested
+                                          ? 'Pausing after this track…'
+                                          : 'Pause after this track'
+                                    : 'Run rescue pass',
+                              ),
+                            ),
                           ),
                         ],
-                        const SizedBox(height: 16),
-                        SizedBox(
-                          width: double.infinity,
-                          child: FilledButton.tonalIcon(
-                            onPressed: _items.isEmpty
-                                ? null
-                                : _rescueRunning
-                                ? () => setState(
-                                    () => _stopRescueRequested = true,
-                                  )
-                                : _runRescuePass,
-                            icon: Icon(
-                              _rescueRunning
-                                  ? Icons.pause_rounded
-                                  : Icons.auto_fix_high_rounded,
-                            ),
-                            label: Text(
-                              _rescueRunning
-                                  ? _stopRescueRequested
-                                        ? 'Pausing after this track…'
-                                        : 'Pause rescue safely'
-                                  : 'Run rescue pass',
-                            ),
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
                   const SizedBox(height: 12),
-                  PersonalizedSurface(
-                    color: colors.primaryContainer.withValues(alpha: 0.52),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const _StageHeading(
-                          number: '02',
-                          icon: Icons.swipe_rounded,
-                          title: 'Quick review',
-                          description:
-                              'Hear a short preview and decide one track at a time. Every choice saves immediately.',
-                        ),
-                        const SizedBox(height: 16),
-                        SizedBox(
-                          width: double.infinity,
-                          child: FilledButton.icon(
-                            onPressed: _items.isEmpty || _rescueRunning
-                                ? null
-                                : _openSprint,
-                            icon: const Icon(Icons.play_arrow_rounded),
-                            label: const Text('Start quick review'),
+                  PersonalizedReveal(
+                    delay: const Duration(milliseconds: 160),
+                    child: PersonalizedSurface(
+                      color: colors.primaryContainer.withValues(alpha: 0.52),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const _StageHeading(
+                            number: '02',
+                            icon: Icons.swipe_rounded,
+                            title: 'Quick review',
+                            description:
+                                'Hear a short preview and decide one track at a time. Every choice saves immediately.',
                           ),
-                        ),
-                      ],
+                          const SizedBox(height: 16),
+                          SizedBox(
+                            width: double.infinity,
+                            child: FilledButton.icon(
+                              onPressed: _items.isEmpty || _rescueRunning
+                                  ? null
+                                  : _openSprint,
+                              icon: const Icon(Icons.play_arrow_rounded),
+                              label: const Text('Start quick review'),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                   if (_clusters.isNotEmpty) ...[

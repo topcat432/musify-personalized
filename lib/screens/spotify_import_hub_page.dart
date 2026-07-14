@@ -32,73 +32,87 @@ class SpotifyImportHubPage extends StatelessWidget {
                 'Import a CSV, let Musify find the right recordings, then review only the tracks that need your judgment.',
           ),
           const SizedBox(height: 24),
-          const PersonalizedSectionHeading(
-            title: 'Your transfer',
-            description: 'Continue from whichever stage you last completed.',
-          ),
-          const SizedBox(height: 12),
-          PersonalizedSurface(
-            padding: EdgeInsets.zero,
+          PersonalizedReveal(
+            delay: const Duration(milliseconds: 70),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _WorkflowStep(
-                  number: '01',
-                  icon: Icons.file_upload_outlined,
-                  title: 'Choose your CSV',
+                const PersonalizedSectionHeading(
+                  title: 'Your transfer',
                   description:
-                      'Validate and save tracks from Spotify, Exportify, or Soundiiz.',
-                  onPressed: () => Navigator.of(context).push(
-                    personalizedPageRoute<void>(
-                      builder: (_) => const SpotifyImportPage(),
-                    ),
-                  ),
+                      'Continue from whichever stage you last completed.',
                 ),
-                const Divider(height: 1, indent: 76),
-                _WorkflowStep(
-                  number: '02',
-                  icon: Icons.graphic_eq_rounded,
-                  title: 'Find the recordings',
-                  description: 'Resume catalog matching with safe checkpoints.',
-                  onPressed: () => Navigator.of(context).push(
-                    personalizedPageRoute<void>(
-                      builder: (_) => const SpotifyMatchingPage(),
-                    ),
-                  ),
-                ),
-                const Divider(height: 1, indent: 76),
-                _WorkflowStep(
-                  number: '03',
-                  icon: Icons.swipe_rounded,
-                  title: 'Review the uncertain tracks',
-                  description:
-                      'Preview one suggestion at a time and save each decision.',
-                  onPressed: () => Navigator.of(context).push(
-                    personalizedPageRoute<void>(
-                      builder: (_) => const SpotifyReviewSprintPage(),
-                    ),
-                  ),
-                ),
-                const Divider(height: 1, indent: 76),
-                _WorkflowStep(
-                  number: '04',
-                  icon: Icons.move_to_inbox_rounded,
-                  title: 'Choose a destination',
-                  description:
-                      'Send all or an exact number of resolved songs to Liked Songs or a playlist.',
-                  onPressed: () => Navigator.of(context).push(
-                    personalizedPageRoute<void>(
-                      builder: (_) => const SpotifyImportDestinationPage(),
-                    ),
+                const SizedBox(height: 12),
+                PersonalizedSurface(
+                  padding: EdgeInsets.zero,
+                  child: Column(
+                    children: [
+                      _WorkflowStep(
+                        number: '01',
+                        icon: Icons.file_upload_outlined,
+                        title: 'Choose your CSV',
+                        description:
+                            'Validate and save tracks from Spotify, Exportify, or Soundiiz.',
+                        onPressed: () => Navigator.of(context).push(
+                          personalizedPageRoute<void>(
+                            builder: (_) => const SpotifyImportPage(),
+                          ),
+                        ),
+                      ),
+                      const Divider(height: 1, indent: 76),
+                      _WorkflowStep(
+                        number: '02',
+                        icon: Icons.graphic_eq_rounded,
+                        title: 'Find the recordings',
+                        description:
+                            'Resume catalog matching from your latest saved checkpoint.',
+                        onPressed: () => Navigator.of(context).push(
+                          personalizedPageRoute<void>(
+                            builder: (_) => const SpotifyMatchingPage(),
+                          ),
+                        ),
+                      ),
+                      const Divider(height: 1, indent: 76),
+                      _WorkflowStep(
+                        number: '03',
+                        icon: Icons.swipe_rounded,
+                        title: 'Review the uncertain tracks',
+                        description:
+                            'Preview one suggestion at a time and save each decision.',
+                        onPressed: () => Navigator.of(context).push(
+                          personalizedPageRoute<void>(
+                            builder: (_) => const SpotifyReviewSprintPage(),
+                          ),
+                        ),
+                      ),
+                      const Divider(height: 1, indent: 76),
+                      _WorkflowStep(
+                        number: '04',
+                        icon: Icons.move_to_inbox_rounded,
+                        title: 'Choose a destination',
+                        description:
+                            'Send all or an exact number of resolved songs to Liked Songs or a playlist.',
+                        onPressed: () => Navigator.of(context).push(
+                          personalizedPageRoute<void>(
+                            builder: (_) =>
+                                const SpotifyImportDestinationPage(),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
           ),
           const SizedBox(height: 14),
-          const PersonalizedStatusBanner(
-            icon: Icons.lock_outline_rounded,
-            message:
-                'Your import and review progress stay on this device until you choose to finalize the transfer.',
+          const PersonalizedReveal(
+            delay: Duration(milliseconds: 140),
+            child: PersonalizedStatusBanner(
+              icon: Icons.lock_outline_rounded,
+              message:
+                  'Your import and review progress stay on this device until you choose to finalize the transfer.',
+            ),
           ),
         ],
       ),

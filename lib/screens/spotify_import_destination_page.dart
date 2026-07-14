@@ -208,7 +208,10 @@ class _SpotifyImportDestinationPageState
                           ),
                   )
                 else ...[
-                  _ImportSummary(snapshot: readySnapshot),
+                  PersonalizedReveal(
+                    delay: const Duration(milliseconds: 70),
+                    child: _ImportSummary(snapshot: readySnapshot),
+                  ),
                   const SizedBox(height: 26),
                   const PersonalizedSectionHeading(
                     title: '1. Choose how many',

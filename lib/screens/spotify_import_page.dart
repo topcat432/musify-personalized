@@ -139,22 +139,30 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
         padding: const EdgeInsets.fromLTRB(18, 12, 18, 32),
         children: [
           const PersonalizedHero(
-            eyebrow: 'Step 1 of 3',
+            eyebrow: 'Step 1 of 4',
             icon: Icons.file_upload_outlined,
             title: 'Start with your song list',
             description:
                 'Choose a Spotify, Exportify, or Soundiiz CSV. Musify checks every row before anything is saved.',
           ),
           const SizedBox(height: 24),
-          const PersonalizedSectionHeading(
-            title: 'Source file',
-            description: 'Only compatible .csv files can be selected.',
-          ),
-          const SizedBox(height: 12),
-          _CsvPickerSurface(
-            reading: _isReading,
-            fileName: preview?.fileName,
-            onPressed: _pickCsv,
+          PersonalizedReveal(
+            delay: const Duration(milliseconds: 70),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const PersonalizedSectionHeading(
+                  title: 'Source file',
+                  description: 'Only compatible .csv files can be selected.',
+                ),
+                const SizedBox(height: 12),
+                _CsvPickerSurface(
+                  reading: _isReading,
+                  fileName: preview?.fileName,
+                  onPressed: _pickCsv,
+                ),
+              ],
+            ),
           ),
           if (_errorMessage != null) ...[
             const SizedBox(height: 14),
@@ -166,7 +174,10 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
           ],
           if (preview != null) ...[
             const SizedBox(height: 18),
-            _ImportSummaryCard(preview: preview, saved: _saved),
+            PersonalizedReveal(
+              delay: const Duration(milliseconds: 110),
+              child: _ImportSummaryCard(preview: preview, saved: _saved),
+            ),
             const SizedBox(height: 24),
             PersonalizedSectionHeading(
               title: 'Track preview',

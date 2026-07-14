@@ -1,6 +1,6 @@
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:musify/services/personalized_update_service.dart';
+import 'package:musify/widgets/personalized_ui.dart';
 
 class PersonalizedUpdateDialog extends StatefulWidget {
   const PersonalizedUpdateDialog({
@@ -81,27 +81,30 @@ class _PersonalizedUpdateDialogState extends State<PersonalizedUpdateDialog> {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final manifest = widget.check.manifest;
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    final quickMotion = reduceMotion
+        ? Duration.zero
+        : const Duration(milliseconds: 220);
+    final contentMotion = reduceMotion
+        ? Duration.zero
+        : const Duration(milliseconds: 260);
     return PopScope(
       canPop: !_busy,
       child: AlertDialog(
         icon: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 220),
-          child: _busy
-              ? const SizedBox.square(
-                  key: ValueKey('progress'),
-                  dimension: 40,
-                  child: CircularProgressIndicator(strokeWidth: 3),
-                )
-              : Icon(
-                  _stage == _UpdateStage.error
-                      ? FluentIcons.warning_24_regular
-                      : FluentIcons.arrow_download_24_regular,
-                  key: ValueKey(_stage),
-                  color: _stage == _UpdateStage.error
-                      ? colors.error
-                      : colors.primary,
-                  size: 40,
-                ),
+          duration: quickMotion,
+          transitionBuilder: (child, animation) => FadeTransition(
+            opacity: animation,
+            child: ScaleTransition(
+              scale: Tween<double>(begin: 0.86, end: 1).animate(animation),
+              child: child,
+            ),
+          ),
+          child: _UpdateStageIcon(
+            key: ValueKey(_stage),
+            stage: _stage,
+            busy: _busy,
+          ),
         ),
         title: Text(
           _title,
@@ -109,54 +112,93 @@ class _PersonalizedUpdateDialogState extends State<PersonalizedUpdateDialog> {
           style: const TextStyle(fontWeight: FontWeight.w700),
         ),
         content: AnimatedSize(
-          duration: const Duration(milliseconds: 240),
+          duration: contentMotion,
           curve: Curves.easeOutCubic,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Musify Personalized ${manifest.versionName}',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: colors.primary,
-                  fontWeight: FontWeight.w700,
-                ),
+          child: AnimatedSwitcher(
+            duration: contentMotion,
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            transitionBuilder: (child, animation) => FadeTransition(
+              opacity: animation,
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0, 0.035),
+                  end: Offset.zero,
+                ).animate(animation),
+                child: child,
               ),
-              const SizedBox(height: 12),
-              if (_busy) ...[
-                LinearProgressIndicator(value: _progress),
-                const SizedBox(height: 10),
-                Text(
-                  _progress == null
-                      ? 'Downloading signed APK…'
-                      : 'Downloading ${((_progress ?? 0) * 100).round()}%',
-                ),
-              ] else
-                Text(
-                  _message,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: colors.onSurfaceVariant),
-                ),
-              if (!_busy &&
-                  _stage == _UpdateStage.available &&
-                  manifest.releaseNotes.isNotEmpty) ...[
-                const SizedBox(height: 14),
-                Container(
-                  constraints: const BoxConstraints(maxHeight: 180),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: colors.surfaceContainerLow,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: SingleChildScrollView(
-                    child: Text(
-                      manifest.releaseNotes,
-                      style: Theme.of(context).textTheme.bodySmall,
+            ),
+            child: Semantics(
+              key: ValueKey(_stage),
+              liveRegion: true,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: colors.primaryContainer.withValues(alpha: 0.7),
+                      borderRadius: BorderRadius.circular(99),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      child: Text(
+                        'PRODUCTION  •  ${manifest.versionName}',
+                        style: Theme.of(context).textTheme.labelMedium
+                            ?.copyWith(
+                              color: colors.onPrimaryContainer,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.6,
+                            ),
+                      ),
                     ),
                   ),
-                ),
-              ],
-            ],
+                  const SizedBox(height: 14),
+                  if (_busy) ...[
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(99),
+                      child: LinearProgressIndicator(
+                        value: _progress,
+                        minHeight: 6,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      _progress == null
+                          ? 'Downloading signed APK…'
+                          : 'Downloading ${((_progress ?? 0) * 100).round()}%',
+                      style: Theme.of(context).textTheme.labelLarge,
+                    ),
+                  ] else
+                    PersonalizedStatusBanner(
+                      tone: _tone,
+                      icon: _statusIcon,
+                      message: _message,
+                    ),
+                  if (!_busy &&
+                      _stage == _UpdateStage.available &&
+                      manifest.releaseNotes.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    PersonalizedSurface(
+                      padding: const EdgeInsets.all(13),
+                      borderRadius: 18,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxHeight: 160),
+                        child: SingleChildScrollView(
+                          child: Text(
+                            manifest.releaseNotes,
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(height: 1.4),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
           ),
         ),
         actionsAlignment: MainAxisAlignment.center,
@@ -164,15 +206,25 @@ class _PersonalizedUpdateDialogState extends State<PersonalizedUpdateDialog> {
           if (!_busy)
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Not now'),
+              child: Text(
+                _stage == _UpdateStage.available ? 'Not now' : 'Close',
+              ),
             ),
           if (_stage == _UpdateStage.available ||
               _stage == _UpdateStage.error)
             FilledButton.icon(
-              onPressed: _busy ? null : _download,
-              icon: const Icon(FluentIcons.arrow_download_20_regular),
+              onPressed: _verifiedUpdate == null ? _download : _install,
+              icon: Icon(
+                _verifiedUpdate == null
+                    ? Icons.download_rounded
+                    : Icons.install_mobile_rounded,
+              ),
               label: Text(
-                _stage == _UpdateStage.error ? 'Retry download' : 'Download',
+                _stage == _UpdateStage.error
+                    ? _verifiedUpdate == null
+                          ? 'Retry download'
+                          : 'Retry install'
+                    : 'Download',
               ),
             ),
           if (_stage == _UpdateStage.verified ||
@@ -207,6 +259,85 @@ class _PersonalizedUpdateDialogState extends State<PersonalizedUpdateDialog> {
       'Checksum, package identity, version code, and signing certificate all passed verification.',
     _UpdateStage.permission =>
       'Android opened the “Install unknown apps” setting. Allow Musify Personalized, return here, then try again.',
-    _UpdateStage.error => _error ?? 'The update could not be verified.',
+    _UpdateStage.error => _friendlyError,
   };
+
+  PersonalizedStatusTone get _tone => switch (_stage) {
+    _UpdateStage.verified => PersonalizedStatusTone.success,
+    _UpdateStage.permission => PersonalizedStatusTone.warning,
+    _UpdateStage.error => PersonalizedStatusTone.error,
+    _ => PersonalizedStatusTone.neutral,
+  };
+
+  IconData get _statusIcon => switch (_stage) {
+    _UpdateStage.available => Icons.security_update_good_rounded,
+    _UpdateStage.downloading => Icons.download_rounded,
+    _UpdateStage.verified => Icons.verified_rounded,
+    _UpdateStage.permission => Icons.settings_rounded,
+    _UpdateStage.error => Icons.error_outline_rounded,
+  };
+
+  String get _friendlyError {
+    var message = _error ?? 'The update could not be verified.';
+    for (final prefix in const [
+      'Exception: ',
+      'StateError: ',
+      'FormatException: ',
+    ]) {
+      if (message.startsWith(prefix)) {
+        message = message.substring(prefix.length);
+      }
+    }
+    return message;
+  }
+}
+
+class _UpdateStageIcon extends StatelessWidget {
+  const _UpdateStageIcon({
+    required this.stage,
+    required this.busy,
+    super.key,
+  });
+
+  final _UpdateStage stage;
+  final bool busy;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final isError = stage == _UpdateStage.error;
+    final background = isError
+        ? colors.errorContainer
+        : colors.primaryContainer;
+    final foreground = isError
+        ? colors.onErrorContainer
+        : colors.onPrimaryContainer;
+    return DecoratedBox(
+      decoration: BoxDecoration(color: background, shape: BoxShape.circle),
+      child: SizedBox.square(
+        dimension: 54,
+        child: Center(
+          child: busy
+              ? SizedBox.square(
+                  dimension: 26,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 3,
+                    color: foreground,
+                  ),
+                )
+              : Icon(
+                  stage == _UpdateStage.verified
+                      ? Icons.verified_rounded
+                      : stage == _UpdateStage.permission
+                      ? Icons.settings_rounded
+                      : isError
+                      ? Icons.error_outline_rounded
+                      : Icons.system_update_alt_rounded,
+                  color: foreground,
+                  size: 29,
+                ),
+        ),
+      ),
+    );
+  }
 }

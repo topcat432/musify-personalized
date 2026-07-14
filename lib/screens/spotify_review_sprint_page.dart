@@ -545,7 +545,7 @@ class _SpotifyReviewSprintPageState extends State<SpotifyReviewSprintPage> {
           ),
           FilledButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Approve safe cluster'),
+            child: const Text('Approve verified group'),
           ),
         ],
       ),
@@ -561,7 +561,7 @@ class _SpotifyReviewSprintPageState extends State<SpotifyReviewSprintPage> {
       _sessionResolved += applied;
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Approved $applied safely matching tracks.')),
+        SnackBar(content: Text('Approved $applied verified matches.')),
       );
       await _load(showLoading: false);
     } catch (error) {

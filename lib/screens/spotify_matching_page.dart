@@ -65,7 +65,7 @@ class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
       builder: (dialogContext) => AlertDialog(
         title: Text('Match all ${snapshot.remainingCount} remaining tracks?'),
         content: const Text(
-          'This may take a long time. Keep the app open, preferably on Wi-Fi and charging. Progress is saved every five tracks, and you can pause safely at any time.',
+          'This may take a long time. Keep the app open, preferably on Wi-Fi and charging. Progress is saved every five tracks, and you can pause after the current track at any time.',
         ),
         actions: [
           TextButton(
@@ -209,11 +209,11 @@ class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
               padding: const EdgeInsets.fromLTRB(18, 12, 18, 32),
               children: [
                 const PersonalizedHero(
-                  eyebrow: 'Step 2 of 3',
+                  eyebrow: 'Step 2 of 4',
                   icon: Icons.graphic_eq_rounded,
                   title: 'Find the right recordings',
                   description:
-                      'Musify checks title, artist, album, duration, version, and source quality while saving a safe checkpoint as it works.',
+                      'Musify checks title, artist, album, duration, version, and source quality while saving progress as it works.',
                 ),
                 if (_error != null) ...[
                   const SizedBox(height: 14),
@@ -232,14 +232,18 @@ class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
                         'Return to the CSV importer and save a validated song list first.',
                   )
                 else ...[
-                  _ProgressCard(
-                    snapshot: snapshot,
-                    onReviewTap: snapshot.reviewCount > 0 && !_running
-                        ? _openQuickReview
-                        : null,
-                    onUnmatchedTap: snapshot.unmatchedCount > 0 && !_running
-                        ? _openResolutionQueue
-                        : null,
+                  PersonalizedReveal(
+                    delay: const Duration(milliseconds: 70),
+                    child: _ProgressCard(
+                      snapshot: snapshot,
+                      onReviewTap: snapshot.reviewCount > 0 && !_running
+                          ? _openQuickReview
+                          : null,
+                      onUnmatchedTap:
+                          snapshot.unmatchedCount > 0 && !_running
+                          ? _openResolutionQueue
+                          : null,
+                    ),
                   ),
                   const SizedBox(height: 24),
                   const PersonalizedSectionHeading(
@@ -279,7 +283,7 @@ class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
                             : _running
                             ? _stopRequested
                                   ? 'Pausing after this track…'
-                                  : 'Pause safely'
+                                  : 'Pause after this track'
                             : _selectedRunSize == _allRemaining
                             ? 'Match all ${snapshot.remainingCount} remaining'
                             : 'Match next $_selectedRunSize tracks',
@@ -299,7 +303,7 @@ class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
                     const PersonalizedStatusBanner(
                       icon: Icons.shield_outlined,
                       message:
-                          'The full run works in safe 50-track sections and checkpoints every five tracks.',
+                          'The full run works in 50-track sections and saves progress every five tracks.',
                     ),
                   ],
                   const SizedBox(height: 24),
@@ -446,7 +450,7 @@ class _RunControlsCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   allRemainingUnlocked
-                      ? 'Full-library mode is unlocked because the sample passed its safety check.'
+                      ? 'Full-library mode is unlocked because the sample produced a strong match rate.'
                       : 'Process at least 50 tracks with a strong match rate to unlock the full-library run.',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: colors.onSurfaceVariant,
