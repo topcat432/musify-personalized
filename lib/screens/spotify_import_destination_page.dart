@@ -119,41 +119,10 @@ class _SpotifyImportDestinationPageState
     );
     final approved = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        icon: const Icon(Icons.move_to_inbox_rounded),
-        title: const Text('Ready to transfer?'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _DialogMetric(
-              value: preview.newCount.toString(),
-              label: 'new songs will be added',
-            ),
-            const SizedBox(height: 10),
-            _DialogMetric(
-              value: preview.alreadyPresentCount.toString(),
-              label: 'already there and will be skipped',
-            ),
-            if (preview.unresolvedCount > 0) ...[
-              const SizedBox(height: 10),
-              _DialogMetric(
-                value: preview.unresolvedCount.toString(),
-                label: 'unmatched songs stay available for review',
-              ),
-            ],
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Not yet'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Transfer songs'),
-          ),
-        ],
+      builder: (dialogContext) => SpotifyImportConfirmationDialog(
+        preview: preview,
+        onCancel: () => Navigator.of(dialogContext).pop(false),
+        onConfirm: () => Navigator.of(dialogContext).pop(true),
       ),
     );
     if (approved != true || !mounted) return;
@@ -374,6 +343,56 @@ class _SpotifyImportDestinationPageState
                 ],
               ],
             ),
+    );
+  }
+}
+
+class SpotifyImportConfirmationDialog extends StatelessWidget {
+  const SpotifyImportConfirmationDialog({
+    required this.preview,
+    required this.onCancel,
+    required this.onConfirm,
+    super.key,
+  });
+
+  final SpotifyImportRoutePreview preview;
+  final VoidCallback onCancel;
+  final VoidCallback onConfirm;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      icon: const Icon(Icons.move_to_inbox_rounded),
+      title: const Text('Ready to transfer?'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _DialogMetric(
+            value: preview.newCount.toString(),
+            label: 'new songs will be added',
+          ),
+          const SizedBox(height: 10),
+          _DialogMetric(
+            value: preview.alreadyPresentCount.toString(),
+            label: 'already there and will be skipped',
+          ),
+          if (preview.unresolvedCount > 0) ...[
+            const SizedBox(height: 10),
+            _DialogMetric(
+              value: preview.unresolvedCount.toString(),
+              label: 'unmatched songs stay available for review',
+            ),
+          ],
+        ],
+      ),
+      actions: [
+        TextButton(onPressed: onCancel, child: const Text('Not yet')),
+        FilledButton(
+          onPressed: onConfirm,
+          child: const Text('Transfer songs'),
+        ),
+      ],
     );
   }
 }
@@ -619,15 +638,13 @@ class _DialogMetric extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SizedBox(
-          width: 32,
-          child: Text(
-            value,
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w800,
-            ),
+        Text(
+          value,
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w800,
           ),
         ),
+        const SizedBox(width: 12),
         Expanded(child: Text(label)),
       ],
     );
