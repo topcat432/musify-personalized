@@ -27,6 +27,9 @@ const String _upstreamAnnouncementUrl =
 Future<void> checkAppUpdates({bool showWhenCurrent = false}) async {
   final service = PersonalizedUpdateService();
   try {
+    // Update checks and home-page announcements share the same opt-in. Keep
+    // both channels refreshed without trusting the upstream APK download URL.
+    await fetchAnnouncementOnly();
     final check = await service.check();
     if (check.availability == PersonalizedUpdateAvailability.current) {
       if (showWhenCurrent) {

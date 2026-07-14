@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -15,6 +16,18 @@ const _maximumApkBytes = 200 * 1024 * 1024;
 enum PersonalizedUpdateAvailability { available, current }
 
 enum UpdateInstallStatus { launched, permissionRequired }
+
+class PersonalizedUpdateCancellation {
+  final Completer<void> _abort = Completer<void>();
+
+  Future<void> get abortTrigger => _abort.future;
+
+  bool get isCancelled => _abort.isCompleted;
+
+  void cancel() {
+    if (!_abort.isCompleted) _abort.complete();
+  }
+}
 
 class InstalledAppIdentity {
   const InstalledAppIdentity({
@@ -252,6 +265,7 @@ class PersonalizedUpdateService {
     PersonalizedUpdateManifest manifest, {
     void Function(double? progress)? onProgress,
     Directory? targetRoot,
+    PersonalizedUpdateCancellation? cancellation,
   }) async {
     final root = targetRoot ?? await getTemporaryDirectory();
     final updateDirectory = Directory('${root.path}/updates');
@@ -265,7 +279,11 @@ class PersonalizedUpdateService {
 
     IOSink? sink;
     try {
-      final request = http.Request('GET', manifest.apkUrl)
+      final request = http.AbortableRequest(
+        'GET',
+        manifest.apkUrl,
+        abortTrigger: cancellation?.abortTrigger,
+      )
         ..headers.addAll(_githubHeaders);
       final response = await _client.send(request);
       if (response.statusCode != 200) {

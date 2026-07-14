@@ -150,6 +150,20 @@ void main() {
       throwsA(isA<FormatException>()),
     );
   });
+
+  test('download cancellation completes its abort trigger once', () async {
+    final cancellation = PersonalizedUpdateCancellation();
+    var completionCount = 0;
+    final completion = cancellation.abortTrigger.then((_) => completionCount++);
+
+    cancellation.cancel();
+    cancellation.cancel();
+    await completion;
+    await Future<void>.delayed(Duration.zero);
+
+    expect(cancellation.isCancelled, isTrue);
+    expect(completionCount, 1);
+  });
 }
 
 class _FakeUpdatePlatform implements PersonalizedUpdatePlatform {

@@ -26,7 +26,7 @@ env:
 jobs:
   build:
     name: Test and build unsigned production candidate
-    if: github.ref == 'refs/heads/master'
+    if: github.ref_name == github.event.repository.default_branch
     runs-on: ubuntu-latest
     timeout-minutes: 45
     outputs:
@@ -153,7 +153,9 @@ jobs:
   sign:
     name: Sign, verify, and publish production APK
     needs: build
-    if: needs.build.result == 'success' && github.ref == 'refs/heads/master'
+    if: >-
+      needs.build.result == 'success' &&
+      github.ref_name == github.event.repository.default_branch
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:

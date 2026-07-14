@@ -22,6 +22,7 @@ enum _UpdateStage { available, downloading, verified, permission, error }
 class _PersonalizedUpdateDialogState extends State<PersonalizedUpdateDialog> {
   _UpdateStage _stage = _UpdateStage.available;
   VerifiedPersonalizedUpdate? _verifiedUpdate;
+  PersonalizedUpdateCancellation? _downloadCancellation;
   double? _progress;
   String? _error;
 
@@ -34,9 +35,12 @@ class _PersonalizedUpdateDialogState extends State<PersonalizedUpdateDialog> {
       _progress = 0;
       _error = null;
     });
+    final cancellation = PersonalizedUpdateCancellation();
+    _downloadCancellation = cancellation;
     try {
       final update = await widget.service.downloadAndVerify(
         widget.check.manifest,
+        cancellation: cancellation,
         onProgress: (progress) {
           if (!mounted) return;
           setState(() => _progress = progress);
@@ -49,12 +53,22 @@ class _PersonalizedUpdateDialogState extends State<PersonalizedUpdateDialog> {
         _progress = 1;
       });
     } catch (error) {
+      if (cancellation.isCancelled) return;
       if (!mounted) return;
       setState(() {
         _stage = _UpdateStage.error;
         _error = error.toString();
       });
+    } finally {
+      if (identical(_downloadCancellation, cancellation)) {
+        _downloadCancellation = null;
+      }
     }
+  }
+
+  void _cancelDownload() {
+    _downloadCancellation?.cancel();
+    Navigator.of(context).pop();
   }
 
   Future<void> _install() async {
@@ -203,7 +217,12 @@ class _PersonalizedUpdateDialogState extends State<PersonalizedUpdateDialog> {
         ),
         actionsAlignment: MainAxisAlignment.center,
         actions: [
-          if (!_busy)
+          if (_busy)
+            TextButton(
+              onPressed: _cancelDownload,
+              child: const Text('Cancel'),
+            )
+          else
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
               child: Text(

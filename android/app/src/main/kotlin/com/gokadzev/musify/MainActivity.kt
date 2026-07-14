@@ -147,26 +147,49 @@ class MainActivity : AudioServiceActivity() {
 
   @Suppress("DEPRECATION")
   private fun archivePackageInfo(file: File): PackageInfo? {
-    val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-      PackageManager.GET_SIGNING_CERTIFICATES
-    } else {
-      PackageManager.GET_SIGNATURES
-    }
-    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-      packageManager.getPackageArchiveInfo(
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+      return packageManager.getPackageArchiveInfo(
         file.path,
-        PackageManager.PackageInfoFlags.of(flags.toLong()),
+        PackageManager.PackageInfoFlags.of(
+          PackageManager.GET_SIGNING_CERTIFICATES.toLong(),
+        ),
       )
-    } else {
-      packageManager.getPackageArchiveInfo(file.path, flags)
     }
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+      return packageManager.getPackageArchiveInfo(
+        file.path,
+        PackageManager.GET_SIGNING_CERTIFICATES,
+      )
+    }
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+      val modernInfo = packageManager.getPackageArchiveInfo(
+        file.path,
+        PackageManager.GET_SIGNING_CERTIFICATES,
+      )
+      if (modernInfo?.signingInfo != null) return modernInfo
+
+      // Android 9-11 can omit signingInfo for package archives even when
+      // GET_SIGNING_CERTIFICATES was requested. The legacy field still
+      // exposes the same APK signer certificate on those OS versions.
+      return packageManager.getPackageArchiveInfo(
+        file.path,
+        PackageManager.GET_SIGNATURES,
+      )
+    }
+    return packageManager.getPackageArchiveInfo(
+      file.path,
+      PackageManager.GET_SIGNATURES,
+    )
   }
 
   @Suppress("DEPRECATION")
   private fun signerSha256(packageInfo: PackageInfo): String {
-    val signatures = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-      val signingInfo = packageInfo.signingInfo
-        ?: throw IllegalStateException("Android returned no signing information.")
+    val signingInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+      packageInfo.signingInfo
+    } else {
+      null
+    }
+    val signatures = if (signingInfo != null) {
       signingInfo.apkContentsSigners
     } else {
       packageInfo.signatures
