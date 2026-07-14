@@ -465,8 +465,17 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
       }
     }
 
-    final fallback = await fetchSongsList('$artist $title $album official audio'.trim());
-    candidates.addAll(fallback.whereType<Map>().map(Map<String, dynamic>.from));
+    try {
+      final fallback = await fetchSongsList(
+        '$artist $title $album official audio'.trim(),
+      ).timeout(_searchTimeout);
+      candidates.addAll(
+        fallback.whereType<Map>().map(Map<String, dynamic>.from),
+      );
+    } catch (_) {
+      // Return any structured candidates already found instead of leaving
+      // the review UI blocked on an unbounded ordinary-YouTube request.
+    }
     final ranked = _rankCandidates(input, candidates);
     final best = ranked.isEmpty ? null : ranked.first;
     final score = _asDouble(best?['score']) ?? 0;

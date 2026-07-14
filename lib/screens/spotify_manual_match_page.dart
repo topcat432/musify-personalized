@@ -144,7 +144,7 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
         // Ordinary YouTube fallback below can still succeed.
       }
 
-      final youtubeResults = await fetchSongsList(query);
+      final youtubeResults = await fetchSongsList(query).timeout(_timeout);
       for (final raw in youtubeResults.whereType<Map>()) {
         addCandidate(Map<String, dynamic>.from(raw));
       }

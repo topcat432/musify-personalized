@@ -439,8 +439,8 @@ class SpotifyMatchScorer {
   }
 
   static bool _sourceRequestsVersion(SpotifyMatchInput input, String term) =>
-      _containsContextualTerm(input.title, term) ||
-      _containsContextualTerm(input.album, term);
+      _containsContextualTerm(input.title, term, allowBareSuffix: false) ||
+      _containsContextualTerm(input.album, term, allowBareSuffix: false);
 
   static bool _candidateMarksVersion(
     String title,
@@ -448,11 +448,15 @@ class SpotifyMatchScorer {
     String album,
     String term,
   ) =>
-      _containsContextualTerm(title, term) ||
-      _containsContextualTerm(rawTitle, term) ||
-      _containsContextualTerm(album, term);
+      _containsContextualTerm(title, term, allowBareSuffix: true) ||
+      _containsContextualTerm(rawTitle, term, allowBareSuffix: true) ||
+      _containsContextualTerm(album, term, allowBareSuffix: true);
 
-  static bool _containsContextualTerm(String value, String term) {
+  static bool _containsContextualTerm(
+    String value,
+    String term, {
+    required bool allowBareSuffix,
+  }) {
     final trimmed = value.trim();
     if (trimmed.isEmpty) return false;
 
@@ -470,7 +474,8 @@ class SpotifyMatchScorer {
 
     final normalized = _normalize(trimmed);
     final normalizedTerm = _normalize(term);
-    return normalized != normalizedTerm &&
+    return allowBareSuffix &&
+        normalized != normalizedTerm &&
         normalized.endsWith(' $normalizedTerm');
   }
 

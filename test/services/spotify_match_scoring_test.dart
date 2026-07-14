@@ -195,6 +195,24 @@ void main() {
       expect(result.reasons, isNot(contains('Alternate version not requested')));
     });
 
+    test('does not treat a terminal source word as a version request', () {
+      const input = SpotifyMatchInput(
+        title: 'Under Cover',
+        artist: 'Example Artist',
+        durationMs: 180000,
+      );
+      final result = SpotifyMatchScorer.score(input, {
+        'title': 'Under Cover Cover',
+        'rawTitle': 'Under Cover (Cover)',
+        'artist': 'Example Artist',
+        'duration': 180,
+        'sourceType': 'youtube_music_song',
+      });
+
+      expect(result.automaticEligible, isFalse);
+      expect(result.reasons, contains('Alternate version not requested'));
+    });
+
     test('uses a fallback raw title to retain long-form evidence', () {
       const input = SpotifyMatchInput(
         title: 'Example Song',
@@ -314,13 +332,13 @@ void main() {
       const input = SpotifyMatchInput(
         title: 'Example Song',
         artist: 'Example Artist',
-        album: 'Original Album Remastered',
+        album: 'Original Album (Remastered)',
         durationMs: 180000,
       );
       final result = SpotifyMatchScorer.score(input, {
         'title': 'Example Song',
         'artist': 'Example Artist',
-        'album': 'Original Album Remastered',
+        'album': 'Original Album (Remastered)',
         'duration': 180,
         'sourceType': 'youtube_music_song',
       });
