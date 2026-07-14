@@ -8,6 +8,7 @@
  */
 
 import 'package:flutter/material.dart';
+import 'package:musify/screens/spotify_import_destination_page.dart';
 import 'package:musify/screens/spotify_import_page.dart';
 import 'package:musify/screens/spotify_matching_page.dart';
 import 'package:musify/screens/spotify_review_sprint_page.dart';
@@ -74,6 +75,19 @@ class SpotifyImportHubPage extends StatelessWidget {
                   onPressed: () => Navigator.of(context).push(
                     MaterialPageRoute<void>(
                       builder: (_) => const SpotifyReviewSprintPage(),
+                    ),
+                  ),
+                ),
+                const Divider(height: 1, indent: 76),
+                _WorkflowStep(
+                  number: '04',
+                  icon: Icons.move_to_inbox_rounded,
+                  title: 'Choose a destination',
+                  description:
+                      'Send all or an exact number of resolved songs to Liked Songs or a playlist.',
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const SpotifyImportDestinationPage(),
                     ),
                   ),
                 ),
