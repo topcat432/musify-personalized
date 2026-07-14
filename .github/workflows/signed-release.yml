@@ -60,9 +60,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # The permanent production sequence starts above all earlier 200xxx
-          # test builds and uses the complete, non-wrapping workflow run number.
-          build_number=$((300000 + GITHUB_RUN_NUMBER))
+          # Reserve a permanent production range above legacy YYDDD build
+          # numbers such as 26,195,006 while staying below Android's maximum.
+          build_number=$((100000000 + GITHUB_RUN_NUMBER))
+          test "$build_number" -gt 26195006
           test "$build_number" -le 2100000000
           echo "build_number=$build_number" >> "$GITHUB_OUTPUT"
 
