@@ -13,7 +13,11 @@ import 'package:musify/services/spotify_import_destination_service.dart';
 import 'package:musify/widgets/personalized_ui.dart';
 
 class SpotifyImportDestinationPage extends StatefulWidget {
-  const SpotifyImportDestinationPage({super.key});
+  const SpotifyImportDestinationPage({super.key, this.initialSnapshot});
+
+  /// Supplies deterministic data to screenshot previews without touching the
+  /// user's Hive boxes. Production callers leave this null.
+  final SpotifyImportDestinationSnapshot? initialSnapshot;
 
   @override
   State<SpotifyImportDestinationPage> createState() =>
@@ -37,7 +41,13 @@ class _SpotifyImportDestinationPageState
   @override
   void initState() {
     super.initState();
-    _load();
+    final initialSnapshot = widget.initialSnapshot;
+    if (initialSnapshot != null) {
+      _applySnapshot(initialSnapshot);
+      _loading = false;
+    } else {
+      _load();
+    }
   }
 
   @override
@@ -47,23 +57,25 @@ class _SpotifyImportDestinationPageState
     super.dispose();
   }
 
+  void _applySnapshot(SpotifyImportDestinationSnapshot snapshot) {
+    _snapshot = snapshot;
+    _countController.text = snapshot.resolvedSongs.length.toString();
+    if (_playlistNameController.text.trim().isEmpty) {
+      _playlistNameController.text = snapshot.sourceName;
+    }
+    if (_existingPlaylistId == null && snapshot.customPlaylists.isNotEmpty) {
+      _existingPlaylistId = snapshot.customPlaylists.first['ytid']?.toString();
+    }
+  }
+
   Future<void> _load() async {
     try {
       final snapshot = await _service.loadSnapshot();
       if (!mounted) return;
       setState(() {
-        _snapshot = snapshot;
+        _applySnapshot(snapshot);
         _loading = false;
         _error = null;
-        _countController.text = snapshot.resolvedSongs.length.toString();
-        if (_playlistNameController.text.trim().isEmpty) {
-          _playlistNameController.text = snapshot.sourceName;
-        }
-        if (_existingPlaylistId == null &&
-            snapshot.customPlaylists.isNotEmpty) {
-          _existingPlaylistId = snapshot.customPlaylists.first['ytid']
-              ?.toString();
-        }
       });
     } catch (error) {
       if (!mounted) return;
@@ -108,21 +120,38 @@ class _SpotifyImportDestinationPageState
     final approved = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Send these songs?'),
-        content: Text(
-          '${preview.selectedCount} resolved songs selected.\n'
-          '${preview.newCount} will be added.\n'
-          '${preview.alreadyPresentCount} are already there.\n'
-          '${preview.unresolvedCount} unmatched songs will stay in review.',
+        icon: const Icon(Icons.move_to_inbox_rounded),
+        title: const Text('Ready to transfer?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _DialogMetric(
+              value: preview.newCount.toString(),
+              label: 'new songs will be added',
+            ),
+            const SizedBox(height: 10),
+            _DialogMetric(
+              value: preview.alreadyPresentCount.toString(),
+              label: 'already there and will be skipped',
+            ),
+            if (preview.unresolvedCount > 0) ...[
+              const SizedBox(height: 10),
+              _DialogMetric(
+                value: preview.unresolvedCount.toString(),
+                label: 'unmatched songs stay available for review',
+              ),
+            ],
+          ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancel'),
+            child: const Text('Not yet'),
           ),
           FilledButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Send songs'),
+            child: const Text('Transfer songs'),
           ),
         ],
       ),
@@ -162,19 +191,29 @@ class _SpotifyImportDestinationPageState
   @override
   Widget build(BuildContext context) {
     final snapshot = _snapshot;
+    final readySnapshot = snapshot?.resolvedSongs.isNotEmpty == true
+        ? snapshot
+        : null;
     return Scaffold(
       appBar: AppBar(title: const Text('Choose destination')),
+      bottomNavigationBar: readySnapshot != null
+          ? _TransferActionBar(
+              selectedCount: _selectedCount(readySnapshot),
+              saving: _saving,
+              onPressed: _route,
+            )
+          : null,
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : ListView(
-              padding: const EdgeInsets.fromLTRB(18, 12, 18, 32),
+              padding: const EdgeInsets.fromLTRB(18, 12, 18, 28),
               children: [
                 const PersonalizedHero(
-                  eyebrow: 'Final transfer step',
+                  eyebrow: 'Step 4 of 4',
                   icon: Icons.move_to_inbox_rounded,
-                  title: 'Send matched songs where you want them',
+                  title: 'Finish your music transfer',
                   description:
-                      'Choose all resolved songs or an exact amount, then send them to Liked Songs or a Musify playlist.',
+                      'Choose how many matched songs to move and exactly where they should appear in Musify.',
                 ),
                 if (_error != null) ...[
                   const SizedBox(height: 16),
@@ -185,61 +224,46 @@ class _SpotifyImportDestinationPageState
                   ),
                 ],
                 const SizedBox(height: 22),
-                if (snapshot == null || snapshot.resolvedSongs.isEmpty)
-                  const PersonalizedEmptyState(
+                if (readySnapshot == null)
+                  PersonalizedEmptyState(
                     icon: Icons.hourglass_empty_rounded,
                     title: 'No matched songs are ready',
                     description:
                         'Import and match songs first. Unmatched songs remain available for manual review.',
+                    action: _error == null
+                        ? null
+                        : OutlinedButton.icon(
+                            onPressed: _load,
+                            icon: const Icon(Icons.refresh_rounded),
+                            label: const Text('Try again'),
+                          ),
                   )
                 else ...[
-                  PersonalizedSurface(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        PersonalizedSectionHeading(
-                          title: snapshot.sourceName,
-                          description:
-                              '${snapshot.resolvedSongs.length} unique resolved songs · ${snapshot.unresolvedCount} unmatched remain',
-                        ),
-                        if (snapshot.duplicateMatchCount > 0) ...[
-                          const SizedBox(height: 12),
-                          PersonalizedStatusBanner(
-                            message:
-                                '${snapshot.duplicateMatchCount} duplicate source rows share an existing resolved song and will not be added twice.',
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 22),
+                  _ImportSummary(snapshot: readySnapshot),
+                  const SizedBox(height: 26),
                   const PersonalizedSectionHeading(
-                    title: 'How many songs?',
+                    title: '1. Choose how many',
                     description:
-                        'Source order is preserved. Nothing unmatched is moved.',
+                        'Songs stay in their original CSV order. Unmatched tracks are never moved.',
+                  ),
+                  const SizedBox(height: 12),
+                  _SelectionCard(
+                    icon: Icons.library_add_check_rounded,
+                    title: 'Move every matched song',
+                    description:
+                        '${readySnapshot.resolvedSongs.length} unique songs are ready',
+                    selected: _useAll,
+                    enabled: !_saving,
+                    onTap: () => setState(() => _useAll = true),
                   ),
                   const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      ChoiceChip(
-                        label: Text(
-                          'All ${snapshot.resolvedSongs.length} resolved',
-                        ),
-                        selected: _useAll,
-                        onSelected: _saving
-                            ? null
-                            : (_) => setState(() => _useAll = true),
-                      ),
-                      ChoiceChip(
-                        label: const Text('Choose exact amount'),
-                        selected: !_useAll,
-                        onSelected: _saving
-                            ? null
-                            : (_) => setState(() => _useAll = false),
-                      ),
-                    ],
+                  _SelectionCard(
+                    icon: Icons.tune_rounded,
+                    title: 'Choose an exact amount',
+                    description: 'Move the first songs from this import',
+                    selected: !_useAll,
+                    enabled: !_saving,
+                    onTap: () => setState(() => _useAll = false),
                   ),
                   if (!_useAll) ...[
                     const SizedBox(height: 12),
@@ -248,65 +272,46 @@ class _SpotifyImportDestinationPageState
                       enabled: !_saving,
                       keyboardType: TextInputType.number,
                       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      onChanged: (_) => setState(() => _error = null),
                       decoration: InputDecoration(
+                        prefixIcon: const Icon(Icons.numbers_rounded),
                         labelText: 'Number of songs',
                         helperText:
-                            'Enter 1 through ${snapshot.resolvedSongs.length}.',
+                            'Enter 1 through ${readySnapshot.resolvedSongs.length}.',
                       ),
                     ),
                   ],
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 28),
                   const PersonalizedSectionHeading(
-                    title: 'Where should they go?',
+                    title: '2. Choose a destination',
                     description:
-                        'Existing songs are detected before anything is written.',
+                        'Musify checks for duplicates before adding anything.',
+                  ),
+                  const SizedBox(height: 12),
+                  _SelectionCard(
+                    icon: Icons.favorite_rounded,
+                    title: 'Liked Songs',
+                    description: 'Add them to your heart collection',
+                    selected: _destination ==
+                        SpotifyImportDestinationKind.likedSongs,
+                    enabled: !_saving,
+                    onTap: () => setState(
+                      () => _destination =
+                          SpotifyImportDestinationKind.likedSongs,
+                    ),
                   ),
                   const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      ChoiceChip(
-                        avatar: const Icon(Icons.favorite_rounded, size: 18),
-                        label: const Text('Liked Songs'),
-                        selected: _destination ==
-                            SpotifyImportDestinationKind.likedSongs,
-                        onSelected: _saving
-                            ? null
-                            : (_) => setState(
-                                () => _destination =
-                                    SpotifyImportDestinationKind.likedSongs,
-                              ),
-                      ),
-                      ChoiceChip(
-                        avatar: const Icon(
-                          Icons.playlist_add_rounded,
-                          size: 18,
-                        ),
-                        label: const Text('New playlist'),
-                        selected: _destination ==
-                            SpotifyImportDestinationKind.newPlaylist,
-                        onSelected: _saving
-                            ? null
-                            : (_) => setState(
-                                () => _destination =
-                                    SpotifyImportDestinationKind.newPlaylist,
-                              ),
-                      ),
-                      ChoiceChip(
-                        avatar: const Icon(Icons.playlist_play, size: 18),
-                        label: const Text('Existing playlist'),
-                        selected: _destination ==
-                            SpotifyImportDestinationKind.existingPlaylist,
-                        onSelected:
-                            _saving || snapshot.customPlaylists.isEmpty
-                            ? null
-                            : (_) => setState(
-                                () => _destination = SpotifyImportDestinationKind
-                                    .existingPlaylist,
-                              ),
-                      ),
-                    ],
+                  _SelectionCard(
+                    icon: Icons.playlist_add_rounded,
+                    title: 'Create a new playlist',
+                    description: 'Keep this import together as its own playlist',
+                    selected: _destination ==
+                        SpotifyImportDestinationKind.newPlaylist,
+                    enabled: !_saving,
+                    onTap: () => setState(
+                      () => _destination =
+                          SpotifyImportDestinationKind.newPlaylist,
+                    ),
                   ),
                   if (_destination ==
                       SpotifyImportDestinationKind.newPlaylist) ...[
@@ -315,10 +320,27 @@ class _SpotifyImportDestinationPageState
                       controller: _playlistNameController,
                       enabled: !_saving,
                       decoration: const InputDecoration(
+                        prefixIcon: Icon(Icons.edit_rounded),
                         labelText: 'New playlist name',
                       ),
                     ),
                   ],
+                  const SizedBox(height: 10),
+                  _SelectionCard(
+                    icon: Icons.playlist_play_rounded,
+                    title: 'Add to an existing playlist',
+                    description: readySnapshot.customPlaylists.isEmpty
+                        ? 'No Musify playlists are available yet'
+                        : 'Choose from ${readySnapshot.customPlaylists.length} Musify playlists',
+                    selected: _destination ==
+                        SpotifyImportDestinationKind.existingPlaylist,
+                    enabled:
+                        !_saving && readySnapshot.customPlaylists.isNotEmpty,
+                    onTap: () => setState(
+                      () => _destination =
+                          SpotifyImportDestinationKind.existingPlaylist,
+                    ),
+                  ),
                   if (_destination ==
                       SpotifyImportDestinationKind.existingPlaylist) ...[
                     const SizedBox(height: 12),
@@ -326,8 +348,9 @@ class _SpotifyImportDestinationPageState
                       initialSelection: _existingPlaylistId,
                       enabled: !_saving,
                       expandedInsets: EdgeInsets.zero,
+                      leadingIcon: const Icon(Icons.queue_music_rounded),
                       label: const Text('Destination playlist'),
-                      dropdownMenuEntries: snapshot.customPlaylists
+                      dropdownMenuEntries: readySnapshot.customPlaylists
                           .map(
                             (playlist) => DropdownMenuEntry<String>(
                               value: playlist['ytid'].toString(),
@@ -340,25 +363,273 @@ class _SpotifyImportDestinationPageState
                           setState(() => _existingPlaylistId = value),
                     ),
                   ],
-                  const SizedBox(height: 24),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton.icon(
-                      onPressed: _saving ? null : _route,
-                      icon: _saving
-                          ? const SizedBox.square(
-                              dimension: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.arrow_forward_rounded),
-                      label: Text(
-                        _saving ? 'Saving safely…' : 'Review transfer',
-                      ),
+                  if (readySnapshot.unresolvedCount > 0) ...[
+                    const SizedBox(height: 22),
+                    PersonalizedStatusBanner(
+                      icon: Icons.bookmark_outline_rounded,
+                      message:
+                          '${readySnapshot.unresolvedCount} unmatched songs stay saved in review so you can resolve them later.',
                     ),
-                  ),
+                  ],
                 ],
               ],
             ),
+    );
+  }
+}
+
+class _ImportSummary extends StatelessWidget {
+  const _ImportSummary({required this.snapshot});
+
+  final SpotifyImportDestinationSnapshot snapshot;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    return PersonalizedSurface(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'IMPORT READY',
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: colors.primary,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.1,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            snapshot.sourceName,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              Expanded(
+                child: PersonalizedMetric(
+                  label: 'Matched',
+                  value: snapshot.resolvedSongs.length.toString(),
+                  icon: Icons.check_circle_outline_rounded,
+                ),
+              ),
+              Expanded(
+                child: PersonalizedMetric(
+                  label: 'Unmatched',
+                  value: snapshot.unresolvedCount.toString(),
+                  icon: Icons.search_off_rounded,
+                ),
+              ),
+              Expanded(
+                child: PersonalizedMetric(
+                  label: 'Duplicates',
+                  value: snapshot.duplicateMatchCount.toString(),
+                  icon: Icons.copy_all_rounded,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SelectionCard extends StatelessWidget {
+  const _SelectionCard({
+    required this.icon,
+    required this.title,
+    required this.description,
+    required this.selected,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String description;
+  final bool selected;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final foreground = enabled
+        ? colors.onSurface
+        : colors.onSurface.withValues(alpha: 0.38);
+    return Semantics(
+      button: true,
+      selected: selected,
+      enabled: enabled,
+      label: '$title. $description',
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        decoration: BoxDecoration(
+          color: selected
+              ? colors.primaryContainer.withValues(alpha: 0.72)
+              : colors.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: selected
+                ? colors.primary.withValues(alpha: 0.65)
+                : colors.outlineVariant.withValues(alpha: 0.42),
+            width: selected ? 1.5 : 1,
+          ),
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: enabled ? onTap : null,
+            borderRadius: BorderRadius.circular(20),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(15, 14, 14, 14),
+              child: Row(
+                children: [
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: selected
+                          ? colors.surface.withValues(alpha: 0.74)
+                          : colors.surfaceContainerHigh,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: SizedBox.square(
+                      dimension: 44,
+                      child: Icon(
+                        icon,
+                        size: 23,
+                        color: enabled ? colors.primary : foreground,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 13),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            color: foreground,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          description,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: enabled
+                                ? colors.onSurfaceVariant
+                                : foreground,
+                            height: 1.3,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Icon(
+                    selected
+                        ? Icons.check_circle_rounded
+                        : Icons.circle_outlined,
+                    color: selected ? colors.primary : foreground,
+                    size: 23,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TransferActionBar extends StatelessWidget {
+  const _TransferActionBar({
+    required this.selectedCount,
+    required this.saving,
+    required this.onPressed,
+  });
+
+  final int selectedCount;
+  final bool saving;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    return Material(
+      color: colors.surface,
+      elevation: 10,
+      shadowColor: colors.shadow.withValues(alpha: 0.18),
+      child: SafeArea(
+        top: false,
+        minimum: const EdgeInsets.fromLTRB(18, 12, 18, 12),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                '$selectedCount ${selectedCount == 1 ? 'song' : 'songs'}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  color: colors.onSurfaceVariant,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            const SizedBox(width: 14),
+            FilledButton.icon(
+              style: FilledButton.styleFrom(
+                minimumSize: const Size(0, 48),
+              ),
+              onPressed: saving ? null : onPressed,
+              icon: saving
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.arrow_forward_rounded),
+              label: Text(saving ? 'Saving…' : 'Review'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DialogMetric extends StatelessWidget {
+  const _DialogMetric({required this.value, required this.label});
+
+  final String value;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 32,
+          child: Text(
+            value,
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+        Expanded(child: Text(label)),
+      ],
     );
   }
 }

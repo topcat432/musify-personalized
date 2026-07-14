@@ -3,9 +3,11 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:musify/screens/spotify_import_destination_page.dart';
 import 'package:musify/screens/spotify_import_hub_page.dart';
 import 'package:musify/screens/spotify_review_sprint_page.dart';
 import 'package:musify/services/review_sprint_audio_player.dart';
+import 'package:musify/services/spotify_import_destination_service.dart';
 import 'package:musify/services/spotify_review_workflow_service.dart';
 
 void main() {
@@ -25,6 +27,82 @@ void main() {
     await expectLater(
       find.byType(Scaffold),
       matchesGoldenFile('visual_review_goldens/import_hub_light.png'),
+    );
+  });
+
+  testWidgets('renders the destination flow on a standard phone', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(412, 915));
+    await tester.pumpWidget(
+      MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: _reviewTheme(Brightness.light),
+        home: SpotifyImportDestinationPage(
+          initialSnapshot: _visualDestinationSnapshot,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await expectLater(
+      find.byType(Scaffold),
+      matchesGoldenFile(
+        'visual_review_goldens/import_destination_light.png',
+      ),
+    );
+  });
+
+  testWidgets('renders the destination flow on a compact dark phone', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(360, 720));
+    await tester.pumpWidget(
+      MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: _reviewTheme(Brightness.dark),
+        home: SpotifyImportDestinationPage(
+          initialSnapshot: _visualDestinationSnapshot,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await expectLater(
+      find.byType(Scaffold),
+      matchesGoldenFile(
+        'visual_review_goldens/import_destination_compact_dark.png',
+      ),
+    );
+
+  });
+
+  testWidgets('renders destination choices on a compact dark phone', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(360, 720));
+    await tester.pumpWidget(
+      MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: _reviewTheme(Brightness.dark),
+        home: SpotifyImportDestinationPage(
+          initialSnapshot: _visualDestinationSnapshot,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Add to an existing playlist'),
+      500,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+
+    await expectLater(
+      find.byType(Scaffold),
+      matchesGoldenFile(
+        'visual_review_goldens/import_destination_options_compact_dark.png',
+      ),
     );
   });
 
@@ -225,6 +303,24 @@ final List<Map<String, dynamic>> _visualItems = [
     ],
   },
 ];
+
+final _visualDestinationSnapshot = SpotifyImportDestinationSnapshot(
+  sourceName: 'Liked Songs from Spotify',
+  resolvedSongs: List<Map<String, dynamic>>.generate(
+    2619,
+    (index) => {
+      'ytid': 'visual-song-$index',
+      'title': 'Visual Song $index',
+      'artist': 'Visual Artist',
+    },
+  ),
+  resolvedResultCount: 2619,
+  unresolvedCount: 24,
+  customPlaylists: [
+    {'ytid': 'road-trip', 'title': 'Road Trip'},
+    {'ytid': 'late-night', 'title': 'Late Night'},
+  ],
+);
 
 class _VisualDataSource implements SpotifyReviewSprintDataSource {
   _VisualDataSource(List<Map<String, dynamic>> items)
