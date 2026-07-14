@@ -141,6 +141,24 @@ void main() {
       expect(live.reasons, contains('Alternate version not requested'));
     });
 
+    test('uses a fallback raw title to retain stripped version evidence', () {
+      const input = SpotifyMatchInput(
+        title: 'Example Song',
+        artist: 'Example Artist',
+        durationMs: 180000,
+      );
+      final result = SpotifyMatchScorer.score(input, {
+        'title': 'Example Song',
+        'rawTitle': 'Example Song Karaoke',
+        'artist': 'Example Artist',
+        'videoAuthor': 'Example Artist',
+        'duration': 180,
+      });
+
+      expect(result.automaticEligible, isFalse);
+      expect(result.reasons, contains('Alternate version not requested'));
+    });
+
     test('does not treat version-term substrings as alternate versions', () {
       const input = SpotifyMatchInput(
         title: 'Life Goes On',

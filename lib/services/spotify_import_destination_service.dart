@@ -68,6 +68,7 @@ class SpotifyImportDestinationService {
     final box = Hive.box('user');
     final results = _readMaps(box.get('spotifyMatchResults'))
       ..sort((left, right) => _sourceRow(left).compareTo(_sourceRow(right)));
+    final tracks = _readMaps(box.get('spotifyImportTracks'));
     final metadata = _readMap(box.get('spotifyImportMetadata'));
     final resolved = results.where(_isResolved).toList(growable: false);
     final songs = _uniqueSongs(resolved);
@@ -79,17 +80,13 @@ class SpotifyImportDestinationService {
           (right['title']?.toString() ?? '').toLowerCase(),
         ),
       );
+    final unresolvedCount = countUnresolvedTracks(tracks, results);
 
     return SpotifyImportDestinationSnapshot(
       sourceName: _sourceName(metadata['fileName']?.toString()),
       resolvedSongs: List.unmodifiable(songs),
       resolvedResultCount: resolved.length,
-      unresolvedCount: results
-          .where(
-            (result) =>
-                !_isResolved(result) && result['status'] != 'excluded',
-          )
-          .length,
+      unresolvedCount: unresolvedCount,
       customPlaylists: List.unmodifiable(customPlaylists),
     );
   }
@@ -98,11 +95,14 @@ class SpotifyImportDestinationService {
     required SpotifyImportDestinationSnapshot snapshot,
     required int requestedCount,
     required SpotifyImportDestinationKind destinationKind,
+    String? newPlaylistName,
     String? existingPlaylistId,
   }) {
     final selected = selectSongs(snapshot, requestedCount);
     final existingIds = _destinationSongIds(
       destinationKind,
+      snapshot: snapshot,
+      newPlaylistName: newPlaylistName,
       existingPlaylistId: existingPlaylistId,
     );
     final alreadyPresent = selected
@@ -125,6 +125,26 @@ class SpotifyImportDestinationService {
         .take(count)
         .map(Map<String, dynamic>.from)
         .toList(growable: false);
+  }
+
+  static int countUnresolvedTracks(
+    List<Map<String, dynamic>> tracks,
+    List<Map<String, dynamic>> results,
+  ) {
+    final processedRows = results
+        .map(_sourceRowKey)
+        .where((row) => row.isNotEmpty)
+        .toSet();
+    final unprocessedCount = tracks
+        .map(_sourceRowKey)
+        .where((row) => row.isNotEmpty && !processedRows.contains(row))
+        .length;
+    final unresolvedResultCount = results
+        .where(
+          (result) => !_isResolved(result) && result['status'] != 'excluded',
+        )
+        .length;
+    return unresolvedResultCount + unprocessedCount;
   }
 
   Future<SpotifyImportRouteResult> route({
@@ -152,7 +172,13 @@ class SpotifyImportDestinationService {
           playlistId: existingPlaylistId,
         ),
     };
-    await _recordRouting(snapshot.sourceName, destinationKind, result);
+    try {
+      await _recordRouting(snapshot.sourceName, destinationKind, result);
+    } catch (_) {
+      // The library mutation is already durable. Routing history is helpful
+      // audit metadata, but its failure must not turn a completed transfer
+      // into a reported failure or invite a duplicate retry.
+    }
     return result;
   }
 
@@ -182,7 +208,7 @@ class SpotifyImportDestinationService {
   }) async {
     final normalizedName = name?.trim() ?? '';
     final title = normalizedName.isEmpty ? fallbackName : normalizedName;
-    for (final existing in userCustomPlaylists.value) {
+    for (final existing in getUserCustomPlaylists()) {
       if (existing['source'] == 'user-created' &&
           existing['title']?.toString() == title &&
           existing['importSourceName']?.toString() == fallbackName) {
@@ -281,14 +307,27 @@ class SpotifyImportDestinationService {
 
   Set<String> _destinationSongIds(
     SpotifyImportDestinationKind kind, {
+    required SpotifyImportDestinationSnapshot snapshot,
+    String? newPlaylistName,
     String? existingPlaylistId,
   }) {
     if (kind == SpotifyImportDestinationKind.likedSongs) {
       return _songIds(userLikedSongsList.value);
     }
-    if (kind == SpotifyImportDestinationKind.newPlaylist) return <String>{};
+    if (kind == SpotifyImportDestinationKind.newPlaylist) {
+      final requestedName = newPlaylistName?.trim() ?? '';
+      final title = requestedName.isEmpty ? snapshot.sourceName : requestedName;
+      for (final playlist in snapshot.customPlaylists) {
+        if (playlist['source'] == 'user-created' &&
+            playlist['title']?.toString() == title &&
+            playlist['importSourceName']?.toString() == snapshot.sourceName) {
+          return _songIds(playlist['list'] as List? ?? const []);
+        }
+      }
+      return <String>{};
+    }
     final id = existingPlaylistId?.trim() ?? '';
-    for (final playlist in getUserCustomPlaylists()) {
+    for (final playlist in snapshot.customPlaylists) {
       if (playlist['ytid']?.toString() == id) {
         return _songIds(playlist['list'] as List? ?? const []);
       }
@@ -358,6 +397,9 @@ class SpotifyImportDestinationService {
     if (raw is num) return raw.round();
     return int.tryParse(raw?.toString() ?? '') ?? 0;
   }
+
+  static String _sourceRowKey(Map<String, dynamic> value) =>
+      value['sourceRow']?.toString().trim() ?? '';
 
   static String _sourceName(String? fileName) {
     final value = fileName?.trim() ?? '';

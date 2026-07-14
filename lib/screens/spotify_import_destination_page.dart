@@ -115,6 +115,7 @@ class _SpotifyImportDestinationPageState
       snapshot: snapshot,
       requestedCount: count,
       destinationKind: _destination,
+      newPlaylistName: _playlistNameController.text,
       existingPlaylistId: _existingPlaylistId,
     );
     final approved = await showDialog<bool>(
@@ -340,7 +341,7 @@ class _SpotifyImportDestinationPageState
                     PersonalizedStatusBanner(
                       icon: Icons.bookmark_outline_rounded,
                       message:
-                          '${readySnapshot.unresolvedCount} unmatched songs stay saved in review so you can resolve them later.',
+                          '${readySnapshot.unresolvedCount} unresolved or unprocessed songs stay saved so you can finish them later.',
                     ),
                   ],
                 ],

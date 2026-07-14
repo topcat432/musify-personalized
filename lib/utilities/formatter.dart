@@ -77,6 +77,7 @@ Map<String, dynamic> returnSongLayout(
     'id': index,
     'ytid': song.id.toString(),
     'title': title.isEmpty ? rawTitle.trim() : title,
+    'rawTitle': rawTitle.trim(),
     'artist': artist,
     'artistId': song.channelId.toString(),
     'videoAuthor': song.author,

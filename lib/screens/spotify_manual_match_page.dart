@@ -320,12 +320,10 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
             .toUtc()
             .toIso8601String();
 
-      await addOrUpdateData<List>('user', 'spotifyMatchResults', results);
-      await addOrUpdateData<Map<String, dynamic>>(
-        'user',
-        'spotifyImportMetadata',
-        metadata,
-      );
+      await box.putAll({
+        'spotifyMatchResults': results,
+        'spotifyImportMetadata': metadata,
+      });
 
       if (!mounted) return;
       Navigator.of(context).pop(true);

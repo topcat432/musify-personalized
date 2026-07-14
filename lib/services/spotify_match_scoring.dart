@@ -127,6 +127,7 @@ class SpotifyMatchScorer {
     Map<String, dynamic> candidate,
   ) {
     final candidateTitle = candidate['title']?.toString() ?? '';
+    final candidateRawTitle = candidate['rawTitle']?.toString() ?? '';
     final candidateAlbum = candidate['album']?.toString() ?? '';
     final videoAuthor = candidate['videoAuthor']?.toString() ?? '';
     final durationSeconds = _asInt(candidate['duration']);
@@ -149,7 +150,7 @@ class SpotifyMatchScorer {
     final combinedText = _normalize(candidateTitle);
     final sourceVersionText = _normalize('${input.title} ${input.album}');
     final candidateVersionText = _normalize(
-      '$candidateTitle $candidateAlbum',
+      '$candidateTitle $candidateRawTitle $candidateAlbum',
     );
     final reasons = <String>[];
     var disqualified = false;
