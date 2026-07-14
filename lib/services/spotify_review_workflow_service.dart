@@ -551,8 +551,9 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
     int priority(Map<String, dynamic> item) => switch (item['status']) {
           'needs_review' => 0,
           'unmatched' => 1,
-          'error' => 2,
-          _ => 3,
+          'manual_unmatched' => 2,
+          'error' => 3,
+          _ => 4,
         };
     final statusCompare = priority(left).compareTo(priority(right));
     if (statusCompare != 0) return statusCompare;
