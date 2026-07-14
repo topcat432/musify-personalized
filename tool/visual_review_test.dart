@@ -117,8 +117,15 @@ Future<void> _loadVisualReviewFonts() async {
   final sansBytes = await _visualSansFont().readAsBytes();
   final sansLoader = FontLoader('visualSans')
     ..addFont(Future<ByteData>.value(ByteData.sublistView(sansBytes)));
+  final iconBytes = await _materialIconsFont().readAsBytes();
+  final iconLoader = FontLoader('MaterialIcons')
+    ..addFont(Future<ByteData>.value(ByteData.sublistView(iconBytes)));
 
-  await Future.wait([paytoneLoader.load(), sansLoader.load()]);
+  await Future.wait([
+    paytoneLoader.load(),
+    sansLoader.load(),
+    iconLoader.load(),
+  ]);
 }
 
 File _visualSansFont() {
@@ -137,6 +144,21 @@ File _visualSansFont() {
   }
 
   throw StateError('No readable sans-serif font found for visual reviews.');
+}
+
+File _materialIconsFont() {
+  final flutterRoot = Platform.environment['FLUTTER_ROOT'];
+  if (flutterRoot != null) {
+    final file = File(
+      '$flutterRoot/bin/cache/artifacts/material_fonts/'
+      'MaterialIcons-Regular.otf',
+    );
+    if (file.existsSync()) {
+      return file;
+    }
+  }
+
+  throw StateError('Flutter Material Icons font was not found.');
 }
 
 final List<Map<String, dynamic>> _visualItems = [
