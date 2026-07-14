@@ -56,26 +56,29 @@ void main() {
     });
   }
 
-  test('offers a signed personalized release with a higher version code', () async {
-    final platform = _FakeUpdatePlatform(
-      identity: const InstalledAppIdentity(
-        packageName: personalizedProductionPackage,
-        versionCode: 100000100,
-        signerSha256: signer,
-      ),
-    );
-    final service = PersonalizedUpdateService(
-      client: updateClient(manifestJson()),
-      platform: platform,
-    );
+  test(
+    'offers a signed personalized release with a higher version code',
+    () async {
+      final platform = _FakeUpdatePlatform(
+        identity: const InstalledAppIdentity(
+          packageName: personalizedProductionPackage,
+          versionCode: 100000100,
+          signerSha256: signer,
+        ),
+      );
+      final service = PersonalizedUpdateService(
+        client: updateClient(manifestJson()),
+        platform: platform,
+      );
 
-    final result = await service.check();
+      final result = await service.check();
 
-    expect(result.availability, PersonalizedUpdateAvailability.available);
-    expect(result.manifest.versionCode, 100000200);
-    expect(result.manifest.apkSha256, apkSha);
-    service.close();
-  });
+      expect(result.availability, PersonalizedUpdateAvailability.available);
+      expect(result.manifest.versionCode, 100000200);
+      expect(result.manifest.apkSha256, apkSha);
+      service.close();
+    },
+  );
 
   test('reports current when the published build is already installed', () async {
     final service = PersonalizedUpdateService(

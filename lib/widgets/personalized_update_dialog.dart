@@ -181,7 +181,9 @@ class _PersonalizedUpdateDialogState extends State<PersonalizedUpdateDialog> {
               onPressed: _install,
               icon: const Icon(Icons.install_mobile_rounded),
               label: Text(
-                _stage == _UpdateStage.permission ? 'Try install again' : 'Install',
+                _stage == _UpdateStage.permission
+                    ? 'Try install again'
+                    : 'Install',
               ),
             ),
         ],

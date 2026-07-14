@@ -8,9 +8,9 @@ import 'package:path_provider/path_provider.dart';
 
 const personalizedReleaseApiUrl =
     'https://api.github.com/repos/topcat432/musify-personalized/releases/latest';
-const personalizedUpdateManifestAsset =
-    'musify-personalized-update.json';
+const personalizedUpdateManifestAsset = 'musify-personalized-update.json';
 const personalizedProductionPackage = 'com.topcat432.musifypersonalized';
+const _maximumApkBytes = 200 * 1024 * 1024;
 
 enum PersonalizedUpdateAvailability { available, current }
 
@@ -274,7 +274,7 @@ class PersonalizedUpdateService {
         );
       }
       final contentLength = response.contentLength;
-      if (contentLength != null && contentLength > 200 * 1024 * 1024) {
+      if (contentLength != null && contentLength > _maximumApkBytes) {
         throw const FormatException('The update APK is unexpectedly large.');
       }
 
@@ -282,6 +282,9 @@ class PersonalizedUpdateService {
       var received = 0;
       await for (final chunk in response.stream) {
         received += chunk.length;
+        if (received > _maximumApkBytes) {
+          throw const FormatException('The update APK is unexpectedly large.');
+        }
         sink.add(chunk);
         if (contentLength != null && contentLength > 0) {
           onProgress?.call(received / contentLength);
@@ -352,7 +355,8 @@ Uri _findManifestAsset(Map<String, dynamic> release) {
 
 void _validateReleaseAssetUrl(Uri uri) {
   const prefix = '/topcat432/musify-personalized/releases/download/';
-  if (uri.scheme != 'https' || uri.host != 'github.com' ||
+  if (uri.scheme != 'https' ||
+      uri.host != 'github.com' ||
       !uri.path.startsWith(prefix)) {
     throw const FormatException('The update asset URL is not trusted.');
   }
