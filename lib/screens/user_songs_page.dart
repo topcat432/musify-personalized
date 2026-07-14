@@ -281,7 +281,7 @@ class _UserSongsPageState extends State<UserSongsPage> {
     final screenWidth = MediaQuery.sizeOf(context).width;
     final isLandscape = screenWidth > MediaQuery.sizeOf(context).height;
     final isLikedSongs = title == context.l10n!.likedSongs;
-    final likedSize = (screenWidth * 0.43).clamp(132.0, 180.0).toDouble();
+    final double likedSize = (screenWidth * 0.43).clamp(132.0, 180.0);
     return PlaylistCube(
       {'title': title},
       size: isLandscape
