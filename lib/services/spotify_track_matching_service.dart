@@ -460,7 +460,10 @@ class SpotifyTrackMatchingService {
 
   static bool _isPendingResolution(Map<String, dynamic> result) {
     final status = result['status'];
-    return status == 'needs_review' || status == 'unmatched' || status == 'error';
+    return status == 'needs_review' ||
+        status == 'unmatched' ||
+        status == 'manual_unmatched' ||
+        status == 'error';
   }
 
   static int _count(List<Map<String, dynamic>> results, String status) {

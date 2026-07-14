@@ -228,7 +228,15 @@ class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
                         'Return to the CSV importer and save a validated song list first.',
                   )
                 else ...[
-                  _ProgressCard(snapshot: snapshot),
+                  _ProgressCard(
+                    snapshot: snapshot,
+                    onReviewTap: snapshot.reviewCount > 0 && !_running
+                        ? _openQuickReview
+                        : null,
+                    onUnmatchedTap: snapshot.unmatchedCount > 0 && !_running
+                        ? _openResolutionQueue
+                        : null,
+                  ),
                   const SizedBox(height: 24),
                   const PersonalizedSectionHeading(
                     title: 'Matching run',
@@ -481,9 +489,15 @@ class _RunControlsCard extends StatelessWidget {
 }
 
 class _ProgressCard extends StatelessWidget {
-  const _ProgressCard({required this.snapshot});
+  const _ProgressCard({
+    required this.snapshot,
+    required this.onReviewTap,
+    required this.onUnmatchedTap,
+  });
 
   final SpotifyMatchingSnapshot snapshot;
+  final VoidCallback? onReviewTap;
+  final VoidCallback? onUnmatchedTap;
 
   @override
   Widget build(BuildContext context) {
@@ -529,12 +543,14 @@ class _ProgressCard extends StatelessWidget {
                 child: _CountMetric(
                   label: 'Review',
                   count: snapshot.reviewCount,
+                  onTap: onReviewTap,
                 ),
               ),
               Expanded(
                 child: _CountMetric(
                   label: 'Unmatched',
                   count: snapshot.unmatchedCount,
+                  onTap: onUnmatchedTap,
                 ),
               ),
               if (snapshot.errorCount > 0)
@@ -553,32 +569,63 @@ class _ProgressCard extends StatelessWidget {
 }
 
 class _CountMetric extends StatelessWidget {
-  const _CountMetric({required this.label, required this.count});
+  const _CountMetric({
+    required this.label,
+    required this.count,
+    this.onTap,
+  });
 
   final String label;
   final int count;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Column(
-      children: [
-        Text(
-          '$count',
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.w800,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 3),
+          child: Column(
+            children: [
+              Text(
+                '$count',
+                style: theme.textTheme.titleLarge?.copyWith(
+                  color: onTap == null ? null : theme.colorScheme.primary,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                  if (onTap != null) ...[
+                    const SizedBox(width: 2),
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      size: 14,
+                      color: theme.colorScheme.primary,
+                    ),
+                  ],
+                ],
+              ),
+            ],
           ),
         ),
-        const SizedBox(height: 2),
-        Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: theme.textTheme.labelSmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-        ),
-      ],
+      ),
     );
   }
 }
