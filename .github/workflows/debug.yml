@@ -98,6 +98,19 @@ jobs:
         if: steps.tests.outputs.status != '0'
         run: exit 1
 
+      - name: Render visual review screenshots
+        run: >-
+          flutter test tool/visual_review_test.dart
+          --update-goldens
+
+      - name: Upload visual review screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-review-${{ github.run_number }}
+          path: tool/visual_review_goldens/*.png
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Build universal debug APK
         run: >-
           flutter build apk --debug --flavor github

@@ -14,6 +14,7 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:musify/services/data_manager.dart';
 import 'package:musify/services/spotify_csv_importer.dart';
+import 'package:musify/widgets/personalized_ui.dart';
 
 class SpotifyImportPage extends StatefulWidget {
   const SpotifyImportPage({super.key});
@@ -129,139 +130,104 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     final preview = _preview;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Import Spotify data')),
+      appBar: AppBar(title: const Text('Import CSV')),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+        padding: const EdgeInsets.fromLTRB(18, 12, 18, 32),
         children: [
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(
-                        FluentIcons.arrow_upload_24_filled,
-                        color: colorScheme.primary,
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        'Spotify CSV importer',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Select your Spotify or Soundiiz CSV. This first step validates and stores the tracks locally; it does not search or change your Musify library yet.',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton.icon(
-                      onPressed: _isReading ? null : _pickCsv,
-                      icon: _isReading
-                          ? const SizedBox.square(
-                              dimension: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(FluentIcons.document_24_regular),
-                      label: Text(
-                        _isReading ? 'Reading CSV…' : 'Choose CSV file',
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+          const PersonalizedHero(
+            eyebrow: 'Step 1 of 3',
+            icon: Icons.file_upload_outlined,
+            title: 'Start with your song list',
+            description:
+                'Choose a Spotify, Exportify, or Soundiiz CSV. Musify checks every row before anything is saved.',
+          ),
+          const SizedBox(height: 24),
+          const PersonalizedSectionHeading(
+            title: 'Source file',
+            description: 'Only compatible .csv files can be selected.',
+          ),
+          const SizedBox(height: 12),
+          _CsvPickerSurface(
+            reading: _isReading,
+            fileName: preview?.fileName,
+            onPressed: _pickCsv,
           ),
           if (_errorMessage != null) ...[
-            const SizedBox(height: 12),
-            Card(
-              color: colorScheme.errorContainer,
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(
-                      FluentIcons.error_circle_24_filled,
-                      color: colorScheme.onErrorContainer,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        _errorMessage!,
-                        style: TextStyle(color: colorScheme.onErrorContainer),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+            const SizedBox(height: 14),
+            PersonalizedStatusBanner(
+              tone: PersonalizedStatusTone.error,
+              title: 'This file could not be read',
+              message: _errorMessage!,
             ),
           ],
           if (preview != null) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: 18),
             _ImportSummaryCard(preview: preview, saved: _saved),
-            const SizedBox(height: 12),
-            Text(
-              'Track preview',
-              style: Theme.of(context).textTheme.titleMedium,
+            const SizedBox(height: 24),
+            PersonalizedSectionHeading(
+              title: 'Track preview',
+              description: 'The first 20 validated rows from this file.',
+              trailing: Text(
+                '${preview.tracks.length}',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+              ),
             ),
-            const SizedBox(height: 8),
-            Card(
-              clipBehavior: Clip.antiAlias,
+            const SizedBox(height: 12),
+            PersonalizedSurface(
+              padding: EdgeInsets.zero,
               child: Column(
                 children: [
                   for (final entry in preview.tracks.take(20).indexed)
-                    ListTile(
-                      leading: CircleAvatar(child: Text('${entry.$1 + 1}')),
-                      title: Text(
-                        entry.$2.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      subtitle: Text(
-                        entry.$2.album.isEmpty
-                            ? entry.$2.artist
-                            : '${entry.$2.artist} • ${entry.$2.album}',
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                    _TrackPreviewRow(
+                      index: entry.$1,
+                      title: entry.$2.title,
+                      subtitle: entry.$2.album.isEmpty
+                          ? entry.$2.artist
+                          : '${entry.$2.artist} • ${entry.$2.album}',
+                      showDivider:
+                          entry.$1 < preview.tracks.take(20).length - 1,
                     ),
                   if (preview.tracks.length > 20)
                     Padding(
-                      padding: const EdgeInsets.all(14),
+                      padding: const EdgeInsets.all(16),
                       child: Text(
-                        'Showing 20 of ${preview.tracks.length} valid tracks.',
+                        '${preview.tracks.length - 20} more validated tracks',
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
                       ),
                     ),
                 ],
               ),
             ),
             if (preview.rejectedRows.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              ExpansionTile(
-                title: Text(
-                  '${preview.rejectedRows.length} rejected row${preview.rejectedRows.length == 1 ? '' : 's'}',
+              const SizedBox(height: 14),
+              PersonalizedSurface(
+                padding: EdgeInsets.zero,
+                child: ExpansionTile(
+                  shape: const Border(),
+                  collapsedShape: const Border(),
+                  leading: const Icon(Icons.report_gmailerrorred_rounded),
+                  title: Text(
+                    '${preview.rejectedRows.length} row${preview.rejectedRows.length == 1 ? '' : 's'} need attention',
+                  ),
+                  children: [
+                    for (final rejected in preview.rejectedRows.take(25))
+                      ListTile(
+                        dense: true,
+                        title: Text('CSV row ${rejected.sourceRow}'),
+                        subtitle: Text(rejected.reason),
+                      ),
+                  ],
                 ),
-                children: [
-                  for (final rejected in preview.rejectedRows.take(25))
-                    ListTile(
-                      dense: true,
-                      title: Text('CSV row ${rejected.sourceRow}'),
-                      subtitle: Text(rejected.reason),
-                    ),
-                ],
               ),
             ],
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
@@ -280,9 +246,17 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
                   _isSaving
                       ? 'Saving…'
                       : _saved
-                      ? 'Import saved'
-                      : 'Save tracks for matching',
+                      ? 'Saved for matching'
+                      : 'Save and continue',
                 ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Saving here does not add anything to Favorites.',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
           ],
@@ -300,73 +274,194 @@ class _ImportSummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  saved
-                      ? FluentIcons.checkmark_circle_24_filled
-                      : FluentIcons.document_checkmark_24_filled,
-                  color: saved ? Colors.green : colorScheme.primary,
+    return PersonalizedSurface(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          PersonalizedStatusBanner(
+            tone: PersonalizedStatusTone.success,
+            title: saved ? 'Ready for matching' : 'CSV validated',
+            message: saved
+                ? 'This validated song list is saved on your device.'
+                : 'Review the counts below, then save this list.',
+            icon: saved
+                ? FluentIcons.checkmark_circle_24_filled
+                : FluentIcons.document_checkmark_24_filled,
+          ),
+          const SizedBox(height: 18),
+          Text(
+            preview.fileName,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            preview.format,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              Expanded(
+                child: PersonalizedMetric(
+                  label: 'Valid tracks',
+                  value: preview.tracks.length.toString(),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    saved ? 'Validated and saved' : 'CSV validated',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: PersonalizedMetric(
+                  label: 'Rejected rows',
+                  value: preview.rejectedRows.length.toString(),
                 ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            _SummaryRow(label: 'File', value: preview.fileName),
-            _SummaryRow(label: 'Detected format', value: preview.format),
-            _SummaryRow(
-              label: 'Valid tracks',
-              value: preview.tracks.length.toString(),
-            ),
-            _SummaryRow(
-              label: 'Rejected rows',
-              value: preview.rejectedRows.length.toString(),
-            ),
-          ],
-        ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
 }
 
-class _SummaryRow extends StatelessWidget {
-  const _SummaryRow({required this.label, required this.value});
+class _CsvPickerSurface extends StatelessWidget {
+  const _CsvPickerSurface({
+    required this.reading,
+    required this.fileName,
+    required this.onPressed,
+  });
 
-  final String label;
-  final String value;
+  final bool reading;
+  final String? fileName;
+  final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    return PersonalizedSurface(
+      padding: const EdgeInsets.all(20),
+      child: Column(
         children: [
-          SizedBox(
-            width: 120,
-            child: Text(
-              label,
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: colors.primaryContainer,
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: SizedBox.square(
+              dimension: 58,
+              child: Icon(
+                fileName == null
+                    ? FluentIcons.document_24_regular
+                    : FluentIcons.document_checkmark_24_filled,
+                color: colors.onPrimaryContainer,
+                size: 29,
               ),
             ),
           ),
-          Expanded(child: Text(value)),
+          const SizedBox(height: 14),
+          Text(
+            fileName ?? 'Select a music export',
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            fileName == null
+                ? 'Your original file is never changed.'
+                : 'Choose another file to replace this preview.',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: colors.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 16),
+          FilledButton.tonalIcon(
+            onPressed: reading ? null : onPressed,
+            icon: reading
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.folder_open_outlined),
+            label: Text(reading ? 'Checking file…' : 'Choose .csv file'),
+          ),
         ],
       ),
+    );
+  }
+}
+
+class _TrackPreviewRow extends StatelessWidget {
+  const _TrackPreviewRow({
+    required this.index,
+    required this.title,
+    required this.subtitle,
+    required this.showDivider,
+  });
+
+  final int index;
+  final String title;
+  final String subtitle;
+  final bool showDivider;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 13, 16, 13),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 30,
+                child: Text(
+                  '${index + 1}'.padLeft(2, '0'),
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: colors.primary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colors.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (showDivider) const Divider(height: 1, indent: 46),
+      ],
     );
   }
 }

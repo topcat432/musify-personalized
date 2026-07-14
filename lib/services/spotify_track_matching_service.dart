@@ -23,6 +23,7 @@ class SpotifyMatchingSnapshot {
     required this.reviewCount,
     required this.unmatchedCount,
     required this.errorCount,
+    required this.pendingResolutionCount,
     required this.status,
     required this.recentResults,
   });
@@ -33,6 +34,7 @@ class SpotifyMatchingSnapshot {
   final int reviewCount;
   final int unmatchedCount;
   final int errorCount;
+  final int pendingResolutionCount;
   final String status;
   final List<Map<String, dynamic>> recentResults;
 
@@ -86,6 +88,7 @@ class SpotifyTrackMatchingService {
       ..['reviewCount'] = 0
       ..['unmatchedCount'] = 0
       ..['errorCount'] = 0
+      ..['pendingResolutionCount'] = 0
       ..['lastMatchingCheckpointAt'] = DateTime.now()
           .toUtc()
           .toIso8601String();
@@ -411,6 +414,7 @@ class SpotifyTrackMatchingService {
     metadata['reviewCount'] = _count(results, 'needs_review');
     metadata['unmatchedCount'] = results.where(_isUnmatched).length;
     metadata['errorCount'] = _count(results, 'error');
+    metadata['pendingResolutionCount'] = results.where(_isPendingResolution).length;
     metadata['validTrackCount'] = totalTracks;
     metadata['lastMatchingCheckpointAt'] = DateTime.now()
         .toUtc()
@@ -438,6 +442,7 @@ class SpotifyTrackMatchingService {
       reviewCount: _count(results, 'needs_review'),
       unmatchedCount: results.where(_isUnmatched).length,
       errorCount: _count(results, 'error'),
+      pendingResolutionCount: results.where(_isPendingResolution).length,
       status: metadata['matchingStatus']?.toString() ?? 'not_started',
       recentResults: results.reversed.take(10).toList(growable: false),
     );
@@ -451,6 +456,11 @@ class SpotifyTrackMatchingService {
   static bool _isUnmatched(Map<String, dynamic> result) {
     final status = result['status'];
     return status == 'unmatched' || status == 'manual_unmatched';
+  }
+
+  static bool _isPendingResolution(Map<String, dynamic> result) {
+    final status = result['status'];
+    return status == 'needs_review' || status == 'unmatched' || status == 'error';
   }
 
   static int _count(List<Map<String, dynamic>> results, String status) {

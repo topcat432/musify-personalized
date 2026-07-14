@@ -10,6 +10,8 @@
 import 'package:flutter/material.dart';
 import 'package:musify/screens/spotify_import_page.dart';
 import 'package:musify/screens/spotify_matching_page.dart';
+import 'package:musify/screens/spotify_review_sprint_page.dart';
+import 'package:musify/widgets/personalized_ui.dart';
 
 class SpotifyImportHubPage extends StatelessWidget {
   const SpotifyImportHubPage({super.key});
@@ -19,32 +21,70 @@ class SpotifyImportHubPage extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Spotify import')),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+        padding: const EdgeInsets.fromLTRB(18, 12, 18, 32),
         children: [
-          _WorkflowCard(
-            icon: Icons.upload_file,
-            title: 'Import or replace CSV',
+          const PersonalizedHero(
+            eyebrow: 'Library transfer',
+            icon: Icons.library_music_rounded,
+            title: 'Bring your saved music with you',
             description:
-                'Select a Spotify, Exportify, Soundiiz, or compatible music CSV and save its normalized track records locally.',
-            buttonLabel: 'Open CSV importer',
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => const SpotifyImportPage(),
-              ),
-            ),
+                'Import a CSV, let Musify find the right recordings, then review only the tracks that need your judgment.',
+          ),
+          const SizedBox(height: 24),
+          const PersonalizedSectionHeading(
+            title: 'Your transfer',
+            description: 'Continue from whichever stage you last completed.',
           ),
           const SizedBox(height: 12),
-          _WorkflowCard(
-            icon: Icons.manage_search,
-            title: 'Match saved tracks',
-            description:
-                'Resume the saved import and identify safe individual-song sources without letting compilations or long videos into the library.',
-            buttonLabel: 'Open track matcher',
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => const SpotifyMatchingPage(),
-              ),
+          PersonalizedSurface(
+            padding: EdgeInsets.zero,
+            child: Column(
+              children: [
+                _WorkflowStep(
+                  number: '01',
+                  icon: Icons.file_upload_outlined,
+                  title: 'Choose your CSV',
+                  description:
+                      'Validate and save tracks from Spotify, Exportify, or Soundiiz.',
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const SpotifyImportPage(),
+                    ),
+                  ),
+                ),
+                const Divider(height: 1, indent: 76),
+                _WorkflowStep(
+                  number: '02',
+                  icon: Icons.graphic_eq_rounded,
+                  title: 'Find the recordings',
+                  description: 'Resume catalog matching with safe checkpoints.',
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const SpotifyMatchingPage(),
+                    ),
+                  ),
+                ),
+                const Divider(height: 1, indent: 76),
+                _WorkflowStep(
+                  number: '03',
+                  icon: Icons.swipe_rounded,
+                  title: 'Review the uncertain tracks',
+                  description:
+                      'Preview one suggestion at a time and save each decision.',
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const SpotifyReviewSprintPage(),
+                    ),
+                  ),
+                ),
+              ],
             ),
+          ),
+          const SizedBox(height: 14),
+          const PersonalizedStatusBanner(
+            icon: Icons.lock_outline_rounded,
+            message:
+                'Your import and review progress stay on this device until you choose to finalize the transfer.',
           ),
         ],
       ),
@@ -52,52 +92,84 @@ class SpotifyImportHubPage extends StatelessWidget {
   }
 }
 
-class _WorkflowCard extends StatelessWidget {
-  const _WorkflowCard({
+class _WorkflowStep extends StatelessWidget {
+  const _WorkflowStep({
+    required this.number,
     required this.icon,
     required this.title,
     required this.description,
-    required this.buttonLabel,
     required this.onPressed,
   });
 
+  final String number;
   final IconData icon;
   final String title;
   final String description;
-  final String buttonLabel;
   final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(icon, color: Theme.of(context).colorScheme.primary),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    title,
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    return Semantics(
+      button: true,
+      label: 'Step $number. $title. $description',
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(24),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 17, 12, 17),
+          child: Row(
+            children: [
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: colors.primaryContainer,
+                  borderRadius: BorderRadius.circular(15),
                 ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Text(description),
-            const SizedBox(height: 14),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: onPressed,
-                child: Text(buttonLabel),
+                child: SizedBox.square(
+                  dimension: 46,
+                  child: Icon(icon, color: colors.onPrimaryContainer, size: 24),
+                ),
               ),
-            ),
-          ],
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      number,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: colors.primary,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      title,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      description,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colors.onSurfaceVariant,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                Icons.arrow_forward_ios_rounded,
+                size: 17,
+                color: colors.onSurfaceVariant,
+              ),
+            ],
+          ),
         ),
       ),
     );

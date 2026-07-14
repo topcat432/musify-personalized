@@ -2,6 +2,32 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:musify/services/spotify_review_workflow_service.dart';
 
 void main() {
+  group('SpotifyReviewWorkflowService pending decisions', () {
+    test('keeps machine-unmatched and review results pending', () {
+      expect(
+        SpotifyReviewWorkflowService.isPendingResolution({
+          'status': 'needs_review',
+        }),
+        isTrue,
+      );
+      expect(
+        SpotifyReviewWorkflowService.isPendingResolution({
+          'status': 'unmatched',
+        }),
+        isTrue,
+      );
+    });
+
+    test('does not put a user-rejected result back in the queue', () {
+      expect(
+        SpotifyReviewWorkflowService.isPendingResolution({
+          'status': 'manual_unmatched',
+        }),
+        isFalse,
+      );
+    });
+  });
+
   group('SpotifyReviewWorkflowService cluster safety', () {
     Map<String, dynamic> safeItem() => {
       'status': 'needs_review',

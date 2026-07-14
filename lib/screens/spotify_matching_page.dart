@@ -9,7 +9,9 @@
 
 import 'package:flutter/material.dart';
 import 'package:musify/screens/spotify_match_review_page.dart';
+import 'package:musify/screens/spotify_review_sprint_page.dart';
 import 'package:musify/services/spotify_track_matching_service.dart';
+import 'package:musify/widgets/personalized_ui.dart';
 
 class SpotifyMatchingPage extends StatefulWidget {
   const SpotifyMatchingPage({super.key});
@@ -140,9 +142,15 @@ class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
   Future<void> _openResolutionQueue() async {
     if (_running) return;
     await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => const SpotifyMatchReviewPage(),
-      ),
+      MaterialPageRoute<void>(builder: (_) => const SpotifyMatchReviewPage()),
+    );
+    await _load();
+  }
+
+  Future<void> _openQuickReview() async {
+    if (_running) return;
+    await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(builder: (_) => const SpotifyReviewSprintPage()),
     );
     await _load();
   }
@@ -187,68 +195,46 @@ class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
   @override
   Widget build(BuildContext context) {
     final snapshot = _snapshot;
+    final colors = Theme.of(context).colorScheme;
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Match imported tracks')),
+      appBar: AppBar(title: const Text('Match tracks')),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : ListView(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+              padding: const EdgeInsets.fromLTRB(18, 12, 18, 32),
               children: [
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.library_music_outlined,
-                              color: Theme.of(context).colorScheme.primary,
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                'Catalog-first matching',
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        const Text(
-                          'The finder searches structured YouTube Music song results first, then uses ordinary YouTube only as a fallback. It compares title, artists, album, duration, version, and source reliability.',
-                        ),
-                        const SizedBox(height: 10),
-                        const Text(
-                          'Uncertain or missing tracks can now be searched and saved manually. Nothing is added to Favorites until the import is finalized.',
-                        ),
-                      ],
-                    ),
-                  ),
+                const PersonalizedHero(
+                  eyebrow: 'Step 2 of 3',
+                  icon: Icons.graphic_eq_rounded,
+                  title: 'Find the right recordings',
+                  description:
+                      'Musify checks title, artist, album, duration, version, and source quality while saving a safe checkpoint as it works.',
                 ),
                 if (_error != null) ...[
-                  const SizedBox(height: 12),
-                  Card(
-                    color: Theme.of(context).colorScheme.errorContainer,
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Text(_error!),
-                    ),
+                  const SizedBox(height: 14),
+                  PersonalizedStatusBanner(
+                    tone: PersonalizedStatusTone.error,
+                    title: 'Matching paused',
+                    message: _error!,
                   ),
                 ],
-                const SizedBox(height: 12),
+                const SizedBox(height: 20),
                 if (snapshot == null || !snapshot.hasImport)
-                  const Card(
-                    child: Padding(
-                      padding: EdgeInsets.all(16),
-                      child: Text(
-                        'No saved Spotify import was found. Return to the importer and save a CSV first.',
-                      ),
-                    ),
+                  const PersonalizedEmptyState(
+                    icon: Icons.file_present_outlined,
+                    title: 'No saved import yet',
+                    description:
+                        'Return to the CSV importer and save a validated song list first.',
                   )
                 else ...[
                   _ProgressCard(snapshot: snapshot),
+                  const SizedBox(height: 24),
+                  const PersonalizedSectionHeading(
+                    title: 'Matching run',
+                    description:
+                        'Choose a comfortable batch. You can pause after the current track without losing progress.',
+                  ),
                   const SizedBox(height: 12),
                   _RunControlsCard(
                     selectedRunSize: _selectedRunSize,
@@ -270,10 +256,10 @@ class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
                           : _runSelectedBatch,
                       icon: Icon(
                         snapshot.isComplete
-                            ? Icons.check_circle
+                            ? Icons.check_rounded
                             : _running
-                            ? Icons.pause
-                            : Icons.play_arrow,
+                            ? Icons.pause_rounded
+                            : Icons.play_arrow_rounded,
                       ),
                       label: Text(
                         snapshot.isComplete
@@ -288,56 +274,109 @@ class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 10),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: _unresolvedCount(snapshot) == 0 || _running
-                          ? null
-                          : _openResolutionQueue,
-                      icon: const Icon(Icons.manage_search),
-                      label: Text(
-                        _unresolvedCount(snapshot) == 0
-                            ? 'No unresolved matches waiting'
-                            : 'Review or search ${_unresolvedCount(snapshot)} unresolved',
-                      ),
-                    ),
-                  ),
                   if (_running && _unresolvedCount(snapshot) > 0) ...[
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Pause safely before resolving tracks manually. Matching resumes from the saved checkpoint afterward.',
-                      textAlign: TextAlign.center,
+                    const SizedBox(height: 10),
+                    const PersonalizedStatusBanner(
+                      icon: Icons.sync_rounded,
+                      message:
+                          'Pause matching before reviewing tracks manually. Your checkpoint is already saved.',
                     ),
                   ],
                   if (_selectedRunSize == _allRemaining && !_running) ...[
-                    const SizedBox(height: 8),
-                    const Text(
-                      'All-remaining runs in safe 50-track sections and preserves a checkpoint every five tracks.',
-                      textAlign: TextAlign.center,
+                    const SizedBox(height: 10),
+                    const PersonalizedStatusBanner(
+                      icon: Icons.shield_outlined,
+                      message:
+                          'The full run works in safe 50-track sections and checkpoints every five tracks.',
                     ),
                   ],
+                  const SizedBox(height: 24),
+                  PersonalizedSurface(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        PersonalizedSectionHeading(
+                          title: 'Resolve what remains',
+                          description:
+                              'Review uncertain songs now or open the detailed comparison queue.',
+                          trailing: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: colors.primaryContainer,
+                              borderRadius: BorderRadius.circular(99),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 5,
+                              ),
+                              child: Text(
+                                '${_unresolvedCount(snapshot)}',
+                                style: TextStyle(
+                                  color: colors.onPrimaryContainer,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.icon(
+                            onPressed:
+                                _unresolvedCount(snapshot) == 0 || _running
+                                ? null
+                                : _openQuickReview,
+                            icon: const Icon(Icons.swipe_rounded),
+                            label: Text(
+                              _unresolvedCount(snapshot) == 0
+                                  ? 'Nothing waiting for review'
+                                  : 'Start quick review',
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed:
+                                _unresolvedCount(snapshot) == 0 || _running
+                                ? null
+                                : _openResolutionQueue,
+                            icon: const Icon(Icons.view_list_outlined),
+                            label: const Text('Open detailed queue'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                   if (snapshot.nextTrackIndex > 0 && !_running) ...[
-                    const SizedBox(height: 10),
-                    TextButton.icon(
-                      onPressed: _restartMatching,
-                      icon: const Icon(Icons.restart_alt),
-                      label: const Text('Restart with the newest matcher'),
+                    const SizedBox(height: 8),
+                    Center(
+                      child: TextButton.icon(
+                        onPressed: _restartMatching,
+                        icon: const Icon(Icons.restart_alt_rounded),
+                        label: const Text('Restart with the newest matcher'),
+                      ),
                     ),
                   ],
                   if (snapshot.recentResults.isNotEmpty) ...[
-                    const SizedBox(height: 18),
-                    Text(
-                      'Most recent results',
-                      style: Theme.of(context).textTheme.titleMedium,
+                    const SizedBox(height: 24),
+                    const PersonalizedSectionHeading(
+                      title: 'Recent matches',
+                      description: 'The newest results from this run.',
                     ),
-                    const SizedBox(height: 8),
-                    Card(
-                      clipBehavior: Clip.antiAlias,
+                    const SizedBox(height: 12),
+                    PersonalizedSurface(
+                      padding: EdgeInsets.zero,
                       child: Column(
                         children: [
-                          for (final result in snapshot.recentResults)
-                            _ResultTile(result: result),
+                          for (final entry
+                              in snapshot.recentResults.indexed) ...[
+                            _ResultTile(result: entry.$2),
+                            if (entry.$1 < snapshot.recentResults.length - 1)
+                              const Divider(height: 1, indent: 66),
+                          ],
                         ],
                       ),
                     ),
@@ -349,7 +388,7 @@ class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
   }
 
   static int _unresolvedCount(SpotifyMatchingSnapshot snapshot) {
-    return snapshot.reviewCount + snapshot.unmatchedCount + snapshot.errorCount;
+    return snapshot.pendingResolutionCount;
   }
 
   static bool _allRemainingUnlocked(SpotifyMatchingSnapshot snapshot) {
@@ -382,48 +421,60 @@ class _RunControlsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'How much should run?',
-              style: Theme.of(context).textTheme.titleSmall,
-            ),
-            const SizedBox(height: 6),
-            Text(
-              allRemainingUnlocked
-                  ? 'The first sample passed the safety gate, so all-remaining mode is available.'
-                  : 'Process at least 50 tracks with a strong real-world match rate to unlock all remaining.',
-            ),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                ChoiceChip(
-                  label: const Text('25 tracks'),
-                  selected: selectedRunSize == 25,
-                  onSelected: enabled ? (_) => onSelected(25) : null,
+    final colors = Theme.of(context).colorScheme;
+    return PersonalizedSurface(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                allRemainingUnlocked
+                    ? Icons.lock_open_rounded
+                    : Icons.lock_outline_rounded,
+                size: 20,
+                color: colors.primary,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  allRemainingUnlocked
+                      ? 'Full-library mode is unlocked because the sample passed its safety check.'
+                      : 'Process at least 50 tracks with a strong match rate to unlock the full-library run.',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: colors.onSurfaceVariant,
+                    height: 1.4,
+                  ),
                 ),
-                ChoiceChip(
-                  label: const Text('50 tracks'),
-                  selected: selectedRunSize == 50,
-                  onSelected: enabled ? (_) => onSelected(50) : null,
-                ),
-                ChoiceChip(
-                  label: Text('All remaining ($remainingCount)'),
-                  selected: selectedRunSize == allRemainingValue,
-                  onSelected: enabled && allRemainingUnlocked
-                      ? (_) => onSelected(allRemainingValue)
-                      : null,
-                ),
-              ],
-            ),
-          ],
-        ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              ChoiceChip(
+                label: const Text('25 tracks'),
+                selected: selectedRunSize == 25,
+                onSelected: enabled ? (_) => onSelected(25) : null,
+              ),
+              ChoiceChip(
+                label: const Text('50 tracks'),
+                selected: selectedRunSize == 50,
+                onSelected: enabled ? (_) => onSelected(50) : null,
+              ),
+              ChoiceChip(
+                label: Text('All remaining ($remainingCount)'),
+                selected: selectedRunSize == allRemainingValue,
+                onSelected: enabled && allRemainingUnlocked
+                    ? (_) => onSelected(allRemainingValue)
+                    : null,
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -436,76 +487,98 @@ class _ProgressCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    '${snapshot.nextTrackIndex} of ${snapshot.totalTracks} processed',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                ),
-                Text('${(snapshot.progress * 100).toStringAsFixed(1)}%'),
-              ],
+    final colors = Theme.of(context).colorScheme;
+    return PersonalizedSurface(
+      color: colors.surfaceContainerHigh.withValues(alpha: 0.82),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          PersonalizedSectionHeading(
+            title:
+                '${snapshot.nextTrackIndex} of ${snapshot.totalTracks} processed',
+            description: snapshot.isComplete
+                ? 'Every imported track has passed through the matcher.'
+                : '${snapshot.remainingCount} tracks remain in this run.',
+            trailing: Text(
+              '${(snapshot.progress * 100).toStringAsFixed(1)}%',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                color: colors.primary,
+                fontWeight: FontWeight.w800,
+              ),
             ),
-            const SizedBox(height: 10),
-            LinearProgressIndicator(value: snapshot.progress),
-            const SizedBox(height: 14),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _CountChip(
-                  icon: Icons.check_circle,
+          ),
+          const SizedBox(height: 16),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(99),
+            child: LinearProgressIndicator(
+              value: snapshot.progress,
+              minHeight: 7,
+              backgroundColor: colors.surfaceContainerHighest,
+            ),
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(
+                child: _CountMetric(
                   label: 'Strong',
                   count: snapshot.matchedCount,
                 ),
-                _CountChip(
-                  icon: Icons.help,
+              ),
+              Expanded(
+                child: _CountMetric(
                   label: 'Review',
                   count: snapshot.reviewCount,
                 ),
-                _CountChip(
-                  icon: Icons.search_off,
+              ),
+              Expanded(
+                child: _CountMetric(
                   label: 'Unmatched',
                   count: snapshot.unmatchedCount,
                 ),
-                if (snapshot.errorCount > 0)
-                  _CountChip(
-                    icon: Icons.error,
+              ),
+              if (snapshot.errorCount > 0)
+                Expanded(
+                  child: _CountMetric(
                     label: 'Errors',
                     count: snapshot.errorCount,
                   ),
-              ],
-            ),
-          ],
-        ),
+                ),
+            ],
+          ),
+        ],
       ),
     );
   }
 }
 
-class _CountChip extends StatelessWidget {
-  const _CountChip({
-    required this.icon,
-    required this.label,
-    required this.count,
-  });
+class _CountMetric extends StatelessWidget {
+  const _CountMetric({required this.label, required this.count});
 
-  final IconData icon;
   final String label;
   final int count;
 
   @override
   Widget build(BuildContext context) {
-    return Chip(
-      avatar: Icon(icon, size: 18),
-      label: Text('$label $count'),
+    final theme = Theme.of(context);
+    return Column(
+      children: [
+        Text(
+          '$count',
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -517,6 +590,8 @@ class _ResultTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
     final status = result['status']?.toString() ?? 'unmatched';
     final score = result['score'] is num
         ? (result['score'] as num).toDouble()
@@ -542,11 +617,25 @@ class _ResultTile extends StatelessWidget {
     final unmatchedReason = result['unmatchedReason']?.toString();
 
     return ListTile(
-      leading: Icon(icon),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+      leading: DecoratedBox(
+        decoration: BoxDecoration(
+          color: colors.primaryContainer,
+          borderRadius: BorderRadius.circular(13),
+        ),
+        child: SizedBox.square(
+          dimension: 42,
+          child: Icon(icon, color: colors.onPrimaryContainer, size: 21),
+        ),
+      ),
       title: Text(
         result['sourceTitle']?.toString() ?? 'Unknown track',
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
+        style: theme.textTheme.titleSmall?.copyWith(
+          color: colors.onSurface,
+          fontWeight: FontWeight.w600,
+        ),
       ),
       subtitle: Text(
         candidateTitle == null
@@ -554,6 +643,10 @@ class _ResultTile extends StatelessWidget {
             : '$candidateArtist — $candidateTitle\n$label • ${(score * 100).round()}% • $sourceLabel',
         maxLines: candidateTitle == null && unmatchedReason != null ? 3 : 2,
         overflow: TextOverflow.ellipsis,
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: colors.onSurfaceVariant,
+          height: 1.3,
+        ),
       ),
       isThreeLine: candidateTitle != null || unmatchedReason != null,
     );
