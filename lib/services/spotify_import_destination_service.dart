@@ -72,7 +72,7 @@ class SpotifyImportDestinationService {
     final resolved = results.where(_isResolved).toList(growable: false);
     final songs = _uniqueSongs(resolved);
     final customPlaylists = getUserCustomPlaylists()
-        .map((playlist) => Map<String, dynamic>.from(playlist))
+        .map(Map<String, dynamic>.from)
         .toList(growable: false)
       ..sort(
         (left, right) => (left['title']?.toString() ?? '').toLowerCase().compareTo(
@@ -115,9 +115,7 @@ class SpotifyImportDestinationService {
     SpotifyImportDestinationSnapshot snapshot,
     int requestedCount,
   ) {
-    final count = requestedCount
-        .clamp(0, snapshot.resolvedSongs.length)
-        .toInt();
+    final count = requestedCount.clamp(0, snapshot.resolvedSongs.length);
     return snapshot.resolvedSongs
         .take(count)
         .map(Map<String, dynamic>.from)
@@ -205,7 +203,7 @@ class SpotifyImportDestinationService {
     if (id.isEmpty) throw StateError('Choose a destination playlist.');
 
     final root = userCustomPlaylists.value
-        .map((playlist) => Map<String, dynamic>.from(playlist))
+        .map(Map<String, dynamic>.from)
         .toList(growable: true);
     final rootIndex = root.indexWhere(
       (playlist) => playlist['ytid']?.toString() == id,
@@ -219,13 +217,13 @@ class SpotifyImportDestinationService {
     }
 
     final folders = userPlaylistFolders.value
-        .map((folder) => Map<String, dynamic>.from(folder))
+        .map(Map<String, dynamic>.from)
         .toList(growable: true);
     for (var folderIndex = 0; folderIndex < folders.length; folderIndex++) {
       final folder = Map<String, dynamic>.from(folders[folderIndex]);
       final playlists = (folder['playlists'] as List<dynamic>? ?? [])
           .whereType<Map>()
-          .map((playlist) => Map<String, dynamic>.from(playlist))
+          .map(Map<String, dynamic>.from)
           .toList(growable: true);
       final playlistIndex = playlists.indexWhere(
         (playlist) => playlist['ytid']?.toString() == id,
@@ -289,16 +287,16 @@ class SpotifyImportDestinationService {
   ) async {
     final box = Hive.box('user');
     final metadata = _readMap(box.get('spotifyImportMetadata'));
-    final history = _readMaps(metadata['routingHistory']);
-    history.add({
-      'sourceName': sourceName,
-      'destinationKind': kind.name,
-      'destinationTitle': result.destinationTitle,
-      'selectedCount': result.selectedCount,
-      'addedCount': result.addedCount,
-      'alreadyPresentCount': result.alreadyPresentCount,
-      'routedAt': DateTime.now().toUtc().toIso8601String(),
-    });
+    final history = _readMaps(metadata['routingHistory'])
+      ..add({
+        'sourceName': sourceName,
+        'destinationKind': kind.name,
+        'destinationTitle': result.destinationTitle,
+        'selectedCount': result.selectedCount,
+        'addedCount': result.addedCount,
+        'alreadyPresentCount': result.alreadyPresentCount,
+        'routedAt': DateTime.now().toUtc().toIso8601String(),
+      });
     metadata['routingHistory'] = history;
     await addOrUpdateData<Map<String, dynamic>>(
       'user',
