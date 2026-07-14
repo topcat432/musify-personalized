@@ -75,7 +75,27 @@ void main() {
       ),
     );
 
-    await tester.drag(find.byType(ListView), const Offset(0, -620));
+  });
+
+  testWidgets('renders destination choices on a compact dark phone', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(360, 720));
+    await tester.pumpWidget(
+      MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: _reviewTheme(Brightness.dark),
+        home: SpotifyImportDestinationPage(
+          initialSnapshot: _visualDestinationSnapshot,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Add to an existing playlist'),
+      500,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.pumpAndSettle();
 
     await expectLater(
