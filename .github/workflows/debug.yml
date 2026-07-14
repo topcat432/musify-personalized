@@ -52,6 +52,21 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Enforce the sole production release path
+        shell: bash
+        run: |
+          set -euo pipefail
+          for workflow in .github/workflows/*.yml; do
+            case "$(basename "$workflow")" in
+              debug.yml|signed-release.yml) continue ;;
+            esac
+            if grep -Fq -- '--flavor github' "$workflow" &&
+              grep -Eq -- 'KEYSTORE2|flutter build apk .*--release' "$workflow"; then
+              echo "Legacy production-package build path found in $workflow"
+              exit 1
+            fi
+          done
+
       - name: Analyze Dart code
         id: analyze
         shell: bash

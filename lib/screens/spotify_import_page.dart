@@ -12,12 +12,17 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
-import 'package:musify/services/data_manager.dart';
 import 'package:musify/services/spotify_csv_importer.dart';
+import 'package:musify/services/spotify_import_session_service.dart';
 import 'package:musify/widgets/personalized_ui.dart';
 
 class SpotifyImportPage extends StatefulWidget {
-  const SpotifyImportPage({super.key});
+  const SpotifyImportPage({
+    super.key,
+    this.sessionService = const SpotifyImportSessionService(),
+  });
+
+  final SpotifyImportSessionService sessionService;
 
   @override
   State<SpotifyImportPage> createState() => _SpotifyImportPageState();
@@ -87,28 +92,7 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
 
     setState(() => _isSaving = true);
     try {
-      final importedAt = DateTime.now().toUtc();
-      await addOrUpdateData<List<Map<String, dynamic>>>(
-        'user',
-        'spotifyImportTracks',
-        preview.tracks.map((track) => track.toJson()).toList(growable: false),
-      );
-      await addOrUpdateData<Map<String, dynamic>>(
-        'user',
-        'spotifyImportMetadata',
-        {
-          'version': 1,
-          'fileName': preview.fileName,
-          'format': preview.format,
-          'validTrackCount': preview.tracks.length,
-          'rejectedRowCount': preview.rejectedRows.length,
-          'totalDataRows': preview.totalDataRows,
-          'importedAt': importedAt.toIso8601String(),
-          'matchingStatus': 'not_started',
-          'nextTrackIndex': 0,
-        },
-      );
-      await deleteData('user', 'spotifyExcludedImportRows');
+      await widget.sessionService.saveNewImport(preview);
 
       if (!mounted) return;
       setState(() => _saved = true);
