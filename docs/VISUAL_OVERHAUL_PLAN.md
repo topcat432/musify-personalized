@@ -272,6 +272,14 @@ accessibility-focused):
    PR, and **`musify-visual-auditor`** after every visual change. Both are
    read-only and now reference `master` as the baseline (see agent-file
    corrections below).
+6. **Visual-phase test boundary** (`docs/DECISIONS.md` D-013): presentation-
+   only phases validate rendering, visual states, semantics, accessibility,
+   responsive layouts, and goldens. They do not add new end-to-end
+   interaction tests for unchanged persistence, network, playback, sharing,
+   routing, updater, import, or recovery behavior — that belongs in a
+   separately scoped functional/test-infrastructure change. A newly
+   introduced test that hangs in an unchanged subsystem is removed or
+   isolated rather than turning the visual phase into subsystem debugging.
 
 ### 9.1 Phase 2A coverage (completed 2026-07-15)
 

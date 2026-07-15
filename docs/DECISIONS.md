@@ -194,6 +194,30 @@ changes.
 - **Evidence:** `docs/VISUAL_OVERHAUL_BASELINE.md` icon inventory;
   `docs/VISUAL_OVERHAUL_PLAN.md` §2.7 and §10.
 
+## D-013 — Visual-phase test boundary
+
+- **Status:** accepted
+- **Recorded:** 2026-07-15, Phase 3 implementation
+- **Decision:** Presentation-only phases validate rendering, visual states,
+  semantics, accessibility, responsive layouts, and goldens. They do not add
+  new end-to-end interaction tests for unchanged persistence, network,
+  playback, sharing, routing, updater, import, or recovery behavior. Such
+  coverage belongs in a separately scoped functional/test-infrastructure
+  change. A newly introduced test that hangs in an unchanged subsystem is
+  removed or isolated rather than turning the visual phase into subsystem
+  debugging.
+- **Consequence:** Phase 3 dropped a Time Machine "view more" bottom-sheet
+  interaction test and two Playlist Folder add/delete interaction tests after
+  confirming (by diff inspection) that the underlying persistence/routing
+  logic those tests exercised was unmodified by the visual pass, and that the
+  hangs were isolated to test-harness/teardown timing, not the production
+  code. Direct-call and presentation-only coverage for the same screens was
+  kept. Any future phase that intentionally changes that behavior should add
+  its own scoped interaction tests as part of that change, not retrofit them
+  onto an unrelated visual pass.
+- **Evidence:** `docs/VISUAL_OVERHAUL_PLAN.md` §9 and §16; Phase 3 PR #20
+  discussion.
+
 ## New decision template
 
 ```text

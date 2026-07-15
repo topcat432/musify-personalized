@@ -3,11 +3,17 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
+import 'package:musify/screens/about_page.dart';
 import 'package:musify/screens/home_page.dart';
 import 'package:musify/screens/library_page.dart';
+import 'package:musify/screens/playlist_folder_page.dart';
 import 'package:musify/screens/search_page.dart';
 import 'package:musify/screens/settings_page.dart';
 import 'package:musify/screens/spotify_matching_page.dart';
+import 'package:musify/screens/time_machine_page.dart';
+import 'package:musify/services/playlists_manager.dart';
+import 'package:musify/services/settings_manager.dart';
+import 'package:musify/widgets/listening_recap_card.dart';
 import 'package:musify/widgets/offline_search_placeholder.dart';
 
 import 'visual_review_harness.dart';
@@ -300,6 +306,204 @@ void main() {
         find.byType(Scaffold),
         matchesGoldenFile(
           'visual_review_goldens/priority_spotify_matching_empty_dark_compact.png',
+        ),
+      );
+      await completePriorityReviewTest(tester);
+    });
+  });
+
+  group('Phase 3 low-risk screens visual regression', () {
+    testWidgets('about page (light)', (tester) async {
+      debugNetworkImageHttpClientProvider = PriorityFakeHttpClient.new;
+      await pumpPriorityGolden(
+        tester,
+        widget: priorityReviewApp(
+          brightness: Brightness.light,
+          reducedMotion: true,
+          child: const AboutPage(),
+        ),
+        viewport: visualReviewStandardPhone,
+        reducedMotion: true,
+      );
+
+      expect(find.text('Musify'), findsOneWidget);
+      await expectLater(
+        find.byType(Scaffold),
+        matchesGoldenFile('visual_review_goldens/priority_about_light.png'),
+      );
+      await completePriorityReviewTest(tester);
+      debugNetworkImageHttpClientProvider = null;
+    });
+
+    testWidgets('about page (compact dark)', (tester) async {
+      debugNetworkImageHttpClientProvider = PriorityFakeHttpClient.new;
+      await pumpPriorityGolden(
+        tester,
+        widget: priorityReviewApp(
+          brightness: Brightness.dark,
+          reducedMotion: true,
+          child: const AboutPage(),
+        ),
+        viewport: visualReviewCompactPhone,
+        reducedMotion: true,
+      );
+
+      await expectLater(
+        find.byType(Scaffold),
+        matchesGoldenFile(
+          'visual_review_goldens/priority_about_compact_dark.png',
+        ),
+      );
+      await completePriorityReviewTest(tester);
+      debugNetworkImageHttpClientProvider = null;
+    });
+
+    testWidgets('playlist folder populated (light)', (tester) async {
+      userPlaylistFolders.value = [
+        {
+          'id': 'folder-1',
+          'name': 'Road Trip',
+          'playlists': [
+            {
+              'ytid': 'p1',
+              'title': 'Midnight Drive',
+              'source': 'user-created',
+              'image': null,
+            },
+            {
+              'ytid': 'p2',
+              'title': 'Golden Hour',
+              'source': 'user-created',
+              'image': null,
+            },
+          ],
+          'createdAt': 0,
+        },
+      ];
+      await pumpPriorityGolden(
+        tester,
+        widget: priorityReviewApp(
+          brightness: Brightness.light,
+          reducedMotion: true,
+          child: const PlaylistFolderPage(
+            folderId: 'folder-1',
+            folderName: 'Road Trip',
+          ),
+        ),
+        viewport: visualReviewStandardPhone,
+        reducedMotion: true,
+      );
+
+      expect(find.text('Midnight Drive'), findsOneWidget);
+      await expectLater(
+        find.byType(Scaffold),
+        matchesGoldenFile(
+          'visual_review_goldens/priority_playlist_folder_populated_light.png',
+        ),
+      );
+      await completePriorityReviewTest(tester);
+    });
+
+    testWidgets('playlist folder empty state (compact dark)', (tester) async {
+      userPlaylistFolders.value = [
+        {
+          'id': 'folder-1',
+          'name': 'Road Trip',
+          'playlists': [],
+          'createdAt': 0,
+        },
+      ];
+      await pumpPriorityGolden(
+        tester,
+        widget: priorityReviewApp(
+          brightness: Brightness.dark,
+          reducedMotion: true,
+          child: const PlaylistFolderPage(
+            folderId: 'folder-1',
+            folderName: 'Road Trip',
+          ),
+        ),
+        viewport: visualReviewCompactPhone,
+        reducedMotion: true,
+      );
+
+      expect(
+        find.text(
+          'This folder is empty. Add playlists to organize your music.',
+        ),
+        findsOneWidget,
+      );
+      await expectLater(
+        find.byType(Scaffold),
+        matchesGoldenFile(
+          'visual_review_goldens/priority_playlist_folder_empty_compact_dark.png',
+        ),
+      );
+      await completePriorityReviewTest(tester);
+    });
+
+    testWidgets('time machine empty state (light)', (tester) async {
+      wrappedEnabled.value = false;
+      await pumpPriorityGolden(
+        tester,
+        widget: priorityReviewApp(
+          brightness: Brightness.light,
+          reducedMotion: true,
+          child: const TimeMachinePage(),
+        ),
+        viewport: visualReviewStandardPhone,
+        reducedMotion: true,
+      );
+
+      expect(find.text('No listening stats yet'), findsOneWidget);
+      await expectLater(
+        find.byType(Scaffold),
+        matchesGoldenFile(
+          'visual_review_goldens/priority_time_machine_empty_light.png',
+        ),
+      );
+      await completePriorityReviewTest(tester);
+    });
+
+    testWidgets('listening recap card (compact dark)', (tester) async {
+      // Golden-covers the restyled recap card directly with fixed literal
+      // props, rather than through the full Time Machine page: the page's
+      // period label/month gating is wall-clock driven with no injectable
+      // clock, so a page-level populated golden would silently break every
+      // time the real current month changes.
+      await pumpPriorityGolden(
+        tester,
+        widget: priorityReviewApp(
+          brightness: Brightness.dark,
+          reducedMotion: true,
+          child: Scaffold(
+            body: Padding(
+              padding: const EdgeInsets.all(10),
+              child: ListeningRecapCard(
+                periodLabel: 'July 2026',
+                minutes: 128,
+                songs: const [
+                  {
+                    'ytid': 's1',
+                    'title': 'Midnight Drive',
+                    'artist': 'The Night Signals',
+                  },
+                  {'ytid': 's2', 'title': 'Golden Hour', 'artist': 'Mara June'},
+                ],
+                onSongTap: (_) {},
+              ),
+            ),
+          ),
+        ),
+        viewport: visualReviewCompactPhone,
+        reducedMotion: true,
+      );
+
+      expect(find.text('128'), findsOneWidget);
+      await expectLater(
+        find.byType(Scaffold),
+        matchesGoldenFile(
+          'visual_review_goldens/priority_listening_recap_card_compact_dark.png',
         ),
       );
       await completePriorityReviewTest(tester);

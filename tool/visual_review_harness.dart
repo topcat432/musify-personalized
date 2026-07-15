@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:audio_service/audio_service.dart';
@@ -16,6 +17,7 @@ import 'package:musify/screens/search_page.dart';
 import 'package:musify/screens/settings_page.dart';
 import 'package:musify/services/audio_service.dart';
 import 'package:musify/services/common_services.dart';
+import 'package:musify/services/listening_stats_service.dart';
 import 'package:musify/services/playlists_manager.dart';
 import 'package:musify/services/settings_manager.dart';
 import 'package:musify/theme/app_themes.dart';
@@ -178,6 +180,8 @@ Future<void> initPriorityReviewHive() async {
 void resetPriorityReviewGlobals() {
   offlineMode.value = false;
   wrappedEnabled.value = false;
+  Hive.box('user').delete(ListeningStatsService.storageKey);
+  listeningStatsService.reload();
   announcementURL.value = null;
   externalRecommendations.value = false;
   isFdroidBuild = false;
@@ -550,6 +554,123 @@ Widget priorityCoreConfirmationDialogScreen(Brightness brightness) {
       ),
     ),
   );
+}
+
+// A well-known 1x1 transparent PNG, used to satisfy any `Image.network` call
+// (e.g. the About page's avatar) without depending on real network access.
+final Uint8List _kPriorityTransparentImage = Uint8List.fromList(<int>[
+  0x89,
+  0x50,
+  0x4E,
+  0x47,
+  0x0D,
+  0x0A,
+  0x1A,
+  0x0A,
+  0x00,
+  0x00,
+  0x00,
+  0x0D,
+  0x49,
+  0x48,
+  0x44,
+  0x52,
+  0x00,
+  0x00,
+  0x00,
+  0x01,
+  0x00,
+  0x00,
+  0x00,
+  0x01,
+  0x08,
+  0x06,
+  0x00,
+  0x00,
+  0x00,
+  0x1F,
+  0x15,
+  0xC4,
+  0x89,
+  0x00,
+  0x00,
+  0x00,
+  0x0A,
+  0x49,
+  0x44,
+  0x41,
+  0x54,
+  0x78,
+  0x9C,
+  0x63,
+  0x00,
+  0x01,
+  0x00,
+  0x00,
+  0x05,
+  0x00,
+  0x01,
+  0x0D,
+  0x0A,
+  0x2D,
+  0xB4,
+  0x00,
+  0x00,
+  0x00,
+  0x00,
+  0x49,
+  0x45,
+  0x4E,
+  0x44,
+  0xAE,
+  0x42,
+  0x60,
+  0x82,
+]);
+
+class _PriorityFake {
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _PriorityFakeHttpClientResponse extends _PriorityFake
+    implements HttpClientResponse {
+  @override
+  int get statusCode => 200;
+
+  @override
+  int get contentLength => _kPriorityTransparentImage.length;
+
+  @override
+  HttpClientResponseCompressionState get compressionState =>
+      HttpClientResponseCompressionState.notCompressed;
+
+  @override
+  StreamSubscription<List<int>> listen(
+    void Function(List<int> event)? onData, {
+    Function? onError,
+    void Function()? onDone,
+    bool? cancelOnError,
+  }) {
+    return Stream<List<int>>.value(_kPriorityTransparentImage).listen(
+      onData,
+      onError: onError,
+      onDone: onDone,
+      cancelOnError: cancelOnError ?? false,
+    );
+  }
+}
+
+class _PriorityFakeHttpClientRequest extends _PriorityFake
+    implements HttpClientRequest {
+  @override
+  Future<HttpClientResponse> close() async => _PriorityFakeHttpClientResponse();
+}
+
+class PriorityFakeHttpClient extends _PriorityFake implements HttpClient {
+  @override
+  Future<HttpClientRequest> getUrl(Uri url) async =>
+      _PriorityFakeHttpClientRequest();
 }
 
 /// Mini-player chrome with deterministic fake media metadata.

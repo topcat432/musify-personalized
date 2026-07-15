@@ -21,6 +21,10 @@
 
 import 'package:flutter/material.dart';
 import 'package:musify/extensions/l10n.dart';
+import 'package:musify/theme/app_shape.dart';
+import 'package:musify/theme/app_spacing.dart';
+import 'package:musify/theme/app_typography.dart';
+import 'package:musify/widgets/personalized_ui.dart';
 import 'package:musify/widgets/song_bar.dart';
 
 const _musifyIconAsset = 'assets/icons/musify_icon.png';
@@ -42,77 +46,72 @@ class ListeningRecapCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final typography = AppTypography.of(context);
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  flex: 2,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      SizedBox(
-                        width: double.infinity,
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          alignment: AlignmentDirectional.centerStart,
-                          child: Text(
-                            '$minutes',
-                            maxLines: 1,
-                            style: TextStyle(
-                              color: colorScheme.primary,
-                              fontSize: 36,
-                              fontWeight: FontWeight.w800,
-                              height: 1,
-                            ),
+    return PersonalizedSurface(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                flex: 2,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: double.infinity,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: AlignmentDirectional.centerStart,
+                        child: Text(
+                          '$minutes',
+                          maxLines: 1,
+                          style: typography.numeric?.copyWith(
+                            color: colorScheme.primary,
+                            fontSize: 36,
+                            height: 1,
                           ),
                         ),
                       ),
-                      const SizedBox(height: 5),
-                      Text(
-                        context.l10n!.minutesListened,
-                        maxLines: 2,
-                        style: TextStyle(
-                          color: colorScheme.onSurfaceVariant,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                        ),
+                    ),
+                    const SizedBox(height: AppSpacing.xs + 1),
+                    Text(
+                      context.l10n!.minutesListened,
+                      maxLines: 2,
+                      style: typography.metadata?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 12),
-                Flexible(
-                  flex: 3,
-                  child: Align(
-                    alignment: AlignmentDirectional.centerEnd,
-                    child: _RecapBrandHeader(periodLabel: periodLabel),
-                  ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Flexible(
+                flex: 3,
+                child: Align(
+                  alignment: AlignmentDirectional.centerEnd,
+                  child: _RecapBrandHeader(periodLabel: periodLabel),
                 ),
-              ],
-            ),
-            if (songs.isNotEmpty) ...[
-              for (var i = 0; i < songs.length; i++)
-                SongBar(
-                  songs[i],
-                  false,
-                  showPlayTime: true,
-                  rank: i + 1,
-                  onPlay: () => onSongTap(i),
-                  barPadding: const EdgeInsetsDirectional.symmetric(
-                    vertical: 10,
-                  ),
-                ),
+              ),
             ],
+          ),
+          if (songs.isNotEmpty) ...[
+            for (var i = 0; i < songs.length; i++)
+              SongBar(
+                songs[i],
+                false,
+                showPlayTime: true,
+                rank: i + 1,
+                onPlay: () => onSongTap(i),
+                barPadding: const EdgeInsetsDirectional.symmetric(vertical: 10),
+              ),
           ],
-        ),
+        ],
       ),
     );
   }
@@ -126,6 +125,7 @@ class _RecapBrandHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final typography = AppTypography.of(context);
     final fallbackMaxWidth = MediaQuery.sizeOf(context).width - 64;
 
     return LayoutBuilder(
@@ -142,12 +142,12 @@ class _RecapBrandHeader extends StatelessWidget {
             child: DecoratedBox(
               decoration: BoxDecoration(
                 color: colorScheme.secondaryContainer,
-                borderRadius: BorderRadius.circular(999),
+                borderRadius: AppShape.pill,
               ),
               child: Padding(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
+                  horizontal: AppSpacing.sm + 2,
+                  vertical: AppSpacing.xs + 2,
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -157,11 +157,11 @@ class _RecapBrandHeader extends StatelessWidget {
                       size: 16,
                       color: colorScheme.onSecondaryContainer,
                     ),
-                    const SizedBox(width: 6),
+                    const SizedBox(width: AppSpacing.xs + 2),
                     Text(
                       'Musify',
                       maxLines: 1,
-                      style: TextStyle(
+                      style: typography.metadata?.copyWith(
                         color: colorScheme.onSecondaryContainer,
                         fontWeight: FontWeight.w800,
                         fontSize: 12,
@@ -170,7 +170,7 @@ class _RecapBrandHeader extends StatelessWidget {
                     Text(
                       ' · $periodLabel',
                       maxLines: 1,
-                      style: TextStyle(
+                      style: typography.metadata?.copyWith(
                         color: colorScheme.onSecondaryContainer,
                         fontWeight: FontWeight.w600,
                         fontSize: 12,

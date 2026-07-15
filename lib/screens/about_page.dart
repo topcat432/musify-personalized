@@ -24,132 +24,173 @@ import 'package:flutter/material.dart';
 import 'package:musify/constants/app_constants.dart';
 import 'package:musify/constants/version.dart';
 import 'package:musify/extensions/l10n.dart';
+import 'package:musify/theme/app_shape.dart';
+import 'package:musify/theme/app_spacing.dart';
 import 'package:musify/utilities/url_launcher.dart';
 import 'package:musify/widgets/mini_player_bottom_space.dart';
+import 'package:musify/widgets/personalized_ui.dart';
 
 class AboutPage extends StatelessWidget {
   const AboutPage({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     return Scaffold(
       appBar: AppBar(title: Text(context.l10n!.about)),
       body: SingleChildScrollView(
         padding: commonSingleChildScrollViewPadding,
         child: Column(
           children: <Widget>[
-            const SizedBox(height: 14),
-            Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Musify',
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.primary,
-                      fontSize: 36,
-                      fontWeight: FontWeight.bold,
-                      fontFamily: 'paytoneOne',
-                      letterSpacing: -1.2,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    width: 40,
-                    height: 3,
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primary,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 7,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.secondaryContainer,
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                    child: Text(
-                      'v$appVersion',
+            const SizedBox(height: AppSpacing.md),
+            PersonalizedReveal(
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // The brand wordmark deliberately keeps its own
+                    // `paytoneOne` treatment (matching the app bar's brand
+                    // typography, per `docs/VISUAL_SYSTEM.md`) rather than an
+                    // `AppTypography` role, since none of the shared roles
+                    // model this one-off wordmark size.
+                    Text(
+                      'Musify',
                       style: TextStyle(
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.onSecondaryContainer,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.2,
+                        color: colorScheme.primary,
+                        fontSize: 36,
+                        fontWeight: FontWeight.bold,
+                        fontFamily: 'paytoneOne',
+                        letterSpacing: -1.2,
                       ),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: AppSpacing.sm),
+                    Container(
+                      width: 40,
+                      height: 3,
+                      decoration: BoxDecoration(
+                        color: colorScheme.primary,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.md,
+                        vertical: AppSpacing.xs + 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: colorScheme.secondaryContainer,
+                        borderRadius: AppShape.pill,
+                      ),
+                      child: Text(
+                        'v$appVersion',
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          color: colorScheme.onSecondaryContainer,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.2,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-            const SizedBox(height: 32),
-            Material(
-              color: Theme.of(context).colorScheme.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(20),
-              clipBehavior: Clip.antiAlias,
-              child: Padding(
+            const SizedBox(height: AppSpacing.xxxl),
+            PersonalizedReveal(
+              delay: const Duration(milliseconds: 80),
+              child: PersonalizedSurface(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 14,
+                  horizontal: AppSpacing.lg,
+                  vertical: AppSpacing.md + 2,
                 ),
                 child: Row(
                   children: [
                     ClipRRect(
-                      borderRadius: BorderRadius.circular(14),
-                      child: Image.network(
-                        'https://avatars.githubusercontent.com/u/79704324?v=4',
+                      borderRadius: AppShape.control,
+                      child: SizedBox(
                         width: 52,
                         height: 52,
-                        fit: BoxFit.cover,
+                        child: Image.network(
+                          'https://avatars.githubusercontent.com/u/79704324?v=4',
+                          width: 52,
+                          height: 52,
+                          fit: BoxFit.cover,
+                          // A static placeholder, not a spinner: an
+                          // indeterminate `CircularProgressIndicator` here
+                          // would tick forever, which is fine on a real
+                          // device but makes `pumpAndSettle` hang in any
+                          // widget test that renders this screen mid-load.
+                          loadingBuilder: (context, child, progress) {
+                            if (progress == null) return child;
+                            return ColoredBox(
+                              color: colorScheme.surfaceContainerHigh,
+                              child: Icon(
+                                FluentIcons.person_24_regular,
+                                color: colorScheme.onSurfaceVariant.withValues(
+                                  alpha: 0.5,
+                                ),
+                                size: 24,
+                              ),
+                            );
+                          },
+                          errorBuilder: (context, error, stackTrace) =>
+                              ColoredBox(
+                                color: colorScheme.surfaceContainerHigh,
+                                child: Icon(
+                                  FluentIcons.person_24_filled,
+                                  color: colorScheme.onSurfaceVariant,
+                                  size: 24,
+                                ),
+                              ),
+                        ),
                       ),
                     ),
-                    const SizedBox(width: 14),
+                    const SizedBox(width: AppSpacing.md),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
                             'Valeri Gokadze',
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.onSurface,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              color: colorScheme.onSurface,
                               fontWeight: FontWeight.w600,
-                              fontSize: 15,
                             ),
                           ),
                           const SizedBox(height: 2),
                           Text(
                             'WEB & APP Developer',
-                            style: TextStyle(
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.onSurfaceVariant,
-                              fontSize: 13,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
                               fontWeight: FontWeight.w500,
                             ),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: AppSpacing.sm),
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         _SocialButton(
                           icon: FluentIcons.code_24_filled,
                           tooltip: 'Github',
+                          semanticLabel: 'Open the GitHub profile',
                           onPressed: () {
                             launchURL(Uri.parse('https://github.com/gokadzev'));
                           },
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: AppSpacing.sm),
                         _SocialButton(
                           icon: FluentIcons.globe_24_filled,
                           tooltip: 'Website',
+                          semanticLabel: 'Open the developer website',
                           onPressed: () {
                             launchURL(Uri.parse('https://gokadzev.github.io'));
                           },
@@ -172,29 +213,37 @@ class _SocialButton extends StatelessWidget {
   const _SocialButton({
     required this.icon,
     required this.tooltip,
+    required this.semanticLabel,
     required this.onPressed,
   });
 
   final IconData icon;
   final String tooltip;
+  final String semanticLabel;
   final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    return Material(
-      color: colorScheme.primaryContainer,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        onTap: onPressed,
-        borderRadius: BorderRadius.circular(12),
-        child: Tooltip(
-          message: tooltip,
-          child: Container(
-            width: 40,
-            height: 40,
-            alignment: Alignment.center,
-            child: Icon(icon, size: 20, color: colorScheme.primary),
+    return Semantics(
+      label: semanticLabel,
+      button: true,
+      child: Material(
+        color: colorScheme.primaryContainer,
+        borderRadius: AppShape.control,
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: AppShape.control,
+          child: ExcludeSemantics(
+            child: Tooltip(
+              message: tooltip,
+              child: Container(
+                width: 48,
+                height: 48,
+                alignment: Alignment.center,
+                child: Icon(icon, size: 20, color: colorScheme.primary),
+              ),
+            ),
           ),
         ),
       ),

@@ -32,11 +32,14 @@ import 'package:musify/main.dart';
 import 'package:musify/screens/user_songs_page.dart';
 import 'package:musify/services/listening_stats_service.dart';
 import 'package:musify/services/settings_manager.dart';
+import 'package:musify/theme/app_spacing.dart';
+import 'package:musify/theme/app_typography.dart';
 import 'package:musify/utilities/app_utils.dart';
 import 'package:musify/utilities/flutter_toast.dart';
 import 'package:musify/utilities/listening_stats_utils.dart';
 import 'package:musify/widgets/listening_recap_card.dart';
 import 'package:musify/widgets/mini_player_bottom_space.dart';
+import 'package:musify/widgets/personalized_ui.dart';
 import 'package:musify/widgets/song_bar.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -92,25 +95,21 @@ class _TimeMachinePageState extends State<TimeMachinePage> {
   }
 
   Widget _buildEmptyState(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
     return Scaffold(
       appBar: AppBar(title: Text(context.l10n!.timeMachine)),
       body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              FluentIcons.clock_24_regular,
-              size: 42,
-              color: colorScheme.primary,
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.xxl),
+          child: PersonalizedReveal(
+            child: PersonalizedEmptyState(
+              icon: FluentIcons.clock_24_regular,
+              title: context.l10n!.noListeningStats,
+              // Reuses the existing Settings toggle description rather than
+              // inventing new copy: it is accurate whether Listening Stats is
+              // currently off or on with no qualifying plays yet.
+              description: context.l10n!.listeningStatsDescription,
             ),
-            const SizedBox(height: 12),
-            Text(
-              context.l10n!.noListeningStats,
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -134,14 +133,23 @@ class _TimeMachinePageState extends State<TimeMachinePage> {
         itemCount: sections.length,
         itemBuilder: (context, index) {
           final section = sections[index];
+          // Cap the stagger delay so a long history list still settles
+          // quickly rather than trickling in one section at a time.
+          final delay = Duration(milliseconds: 30 * index.clamp(0, 6));
           return switch (section.kind) {
             _TimeMachineSectionKind.annual => KeyedSubtree(
               key: const ValueKey('annual-recap'),
-              child: _buildAnnualSection(context),
+              child: PersonalizedReveal(
+                delay: delay,
+                child: _buildAnnualSection(context),
+              ),
             ),
             _TimeMachineSectionKind.month => KeyedSubtree(
               key: ValueKey('month-${section.monthKey}'),
-              child: _buildMonthSection(context, section.monthKey!),
+              child: PersonalizedReveal(
+                delay: delay,
+                child: _buildMonthSection(context, section.monthKey!),
+              ),
             ),
             _TimeMachineSectionKind.bottomSpace =>
               const MiniPlayerBottomSpace(),
@@ -426,23 +434,17 @@ class _PeriodSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final typography = AppTypography.of(context);
     return Padding(
-      padding: const EdgeInsets.only(top: 18),
+      padding: const EdgeInsets.only(top: AppSpacing.lg + 2),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
             child: Row(
               children: [
-                Expanded(
-                  child: Text(
-                    title,
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
+                Expanded(child: Text(title, style: typography.heroTitle)),
                 IconButton(
                   tooltip: context.l10n!.shareRecap,
                   onPressed: onShare,
@@ -451,7 +453,7 @@ class _PeriodSection extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.sm),
           child,
         ],
       ),
@@ -467,7 +469,12 @@ class _ViewMoreButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 10, 8, 0),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.sm,
+        AppSpacing.md - 2,
+        AppSpacing.sm,
+        0,
+      ),
       child: SizedBox(
         width: double.infinity,
         child: FilledButton.tonalIcon(
