@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hive/hive.dart';
 import 'package:musify/screens/spotify_import_destination_page.dart';
 import 'package:musify/screens/spotify_import_hub_page.dart';
 import 'package:musify/screens/spotify_review_sprint_page.dart';
@@ -10,10 +11,33 @@ import 'package:musify/services/personalized_update_service.dart';
 import 'package:musify/services/review_sprint_audio_player.dart';
 import 'package:musify/services/spotify_import_destination_service.dart';
 import 'package:musify/services/spotify_review_workflow_service.dart';
+import 'package:musify/theme/app_themes.dart';
+import 'package:musify/widgets/personalized_ui.dart';
 import 'package:musify/widgets/personalized_update_dialog.dart';
 
 void main() {
+  late Directory foundationHiveRoot;
+
   setUpAll(_loadVisualReviewFonts);
+
+  // The Phase 1 foundation-token goldens below render through the real
+  // production `getAppTheme`, which lazily reads the `settings` Hive box
+  // (for the pure-black preference). The rest of this file's goldens
+  // intentionally use the lightweight `_reviewTheme` and do not need this.
+  setUp(() async {
+    foundationHiveRoot = await Directory.systemTemp.createTemp(
+      'visual-review-theme-',
+    );
+    Hive.init(foundationHiveRoot.path);
+    await Hive.openBox('settings');
+  });
+
+  tearDown(() async {
+    await Hive.close();
+    if (await foundationHiveRoot.exists()) {
+      await foundationHiveRoot.delete(recursive: true);
+    }
+  });
 
   testWidgets('renders the import hub visual review', (tester) async {
     _setViewport(tester, const Size(412, 915));
@@ -49,9 +73,7 @@ void main() {
 
     await expectLater(
       find.byType(Scaffold),
-      matchesGoldenFile(
-        'visual_review_goldens/import_destination_light.png',
-      ),
+      matchesGoldenFile('visual_review_goldens/import_destination_light.png'),
     );
   });
 
@@ -76,7 +98,6 @@ void main() {
         'visual_review_goldens/import_destination_compact_dark.png',
       ),
     );
-
   });
 
   testWidgets('renders destination choices on a compact dark phone', (
@@ -213,6 +234,231 @@ void main() {
       ),
     );
   });
+
+  // --- Phase 1 foundation-token evidence -----------------------------------
+  //
+  // Everything above renders through the lightweight `_reviewTheme`. The
+  // goldens below render through the real production `getAppTheme` (see
+  // `lib/theme/app_themes.dart`) so the token system introduced in
+  // `docs/VISUAL_OVERHAUL_PLAN.md` Phase 1 is proven end-to-end: semantic
+  // colors, typography roles, shape roles, and spacing all flow through a
+  // real theme, not a test stand-in. Per that plan's Phase 1 scope, this is
+  // representative foundation evidence, not a screen-by-screen visual
+  // backfill (that is Phase 2+).
+  group('Phase 1 foundation tokens (real getAppTheme)', () {
+    for (final brightness in Brightness.values) {
+      final suffix = brightness == Brightness.light ? 'light' : 'dark';
+
+      testWidgets(
+        'personalized/import surface renders through getAppTheme ($suffix)',
+        (tester) async {
+          _setViewport(tester, const Size(412, 915));
+          await tester.pumpWidget(
+            MaterialApp(
+              debugShowCheckedModeBanner: false,
+              theme: getAppTheme(_foundationScheme(brightness)),
+              home: const SpotifyImportHubPage(),
+            ),
+          );
+          await tester.pumpAndSettle();
+
+          await expectLater(
+            find.byType(Scaffold),
+            matchesGoldenFile(
+              'visual_review_goldens/foundation_import_hub_$suffix.png',
+            ),
+          );
+        },
+      );
+
+      testWidgets('dialog/sheet renders through getAppTheme ($suffix)', (
+        tester,
+      ) async {
+        _setViewport(tester, const Size(412, 915));
+        await tester.pumpWidget(
+          MaterialApp(
+            debugShowCheckedModeBanner: false,
+            theme: getAppTheme(_foundationScheme(brightness)),
+            home: Scaffold(
+              body: Builder(
+                builder: (context) => Center(
+                  child: FilledButton(
+                    onPressed: () => showPersonalizedDestructiveConfirmation(
+                      context: context,
+                      title: 'Remove this track?',
+                      message:
+                          'It will be removed from your library. This '
+                          'cannot be undone.',
+                      confirmLabel: 'Remove track',
+                    ),
+                    child: const Text('Open confirmation'),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Open confirmation'));
+        await tester.pumpAndSettle();
+
+        await expectLater(
+          find.byType(BottomSheet),
+          matchesGoldenFile(
+            'visual_review_goldens/foundation_destructive_sheet_$suffix.png',
+          ),
+        );
+      });
+
+      testWidgets('card/list surface renders through getAppTheme ($suffix)', (
+        tester,
+      ) async {
+        _setViewport(tester, const Size(412, 915));
+        await tester.pumpWidget(
+          MaterialApp(
+            debugShowCheckedModeBanner: false,
+            theme: getAppTheme(_foundationScheme(brightness)),
+            home: const _FoundationCardListScreen(),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        await expectLater(
+          find.byType(Scaffold),
+          matchesGoldenFile(
+            'visual_review_goldens/foundation_card_list_$suffix.png',
+          ),
+        );
+      });
+
+      testWidgets(
+        'general content screen renders through getAppTheme ($suffix)',
+        (tester) async {
+          _setViewport(tester, const Size(412, 915));
+          await tester.pumpWidget(
+            MaterialApp(
+              debugShowCheckedModeBanner: false,
+              theme: getAppTheme(_foundationScheme(brightness)),
+              home: const _FoundationContentScreen(),
+            ),
+          );
+          await tester.pumpAndSettle();
+
+          await expectLater(
+            find.byType(Scaffold),
+            matchesGoldenFile(
+              'visual_review_goldens/foundation_general_content_$suffix.png',
+            ),
+          );
+        },
+      );
+    }
+  });
+}
+
+ColorScheme _foundationScheme(Brightness brightness) => ColorScheme.fromSeed(
+  seedColor: const Color(0xFF9B4F2A),
+  brightness: brightness,
+);
+
+/// A synthetic "general content screen": ordinary Material widgets
+/// (`AppBar`, `ListTile`, `Divider`) relying purely on the theme's default
+/// `textTheme`/`colorScheme`, with no personalized-specific widgets. This
+/// demonstrates the foundation tokens work for plain Material content, not
+/// just the bespoke personalized primitives.
+class _FoundationContentScreen extends StatelessWidget {
+  const _FoundationContentScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Foundation review')),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: const [
+          Text(
+            'Section title',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+          ),
+          SizedBox(height: 8),
+          Text(
+            'Body copy rendered from the theme\'s default text theme, with '
+            'no per-widget font-size overrides.',
+          ),
+          SizedBox(height: 16),
+          Divider(),
+          SizedBox(height: 16),
+          ListTile(
+            leading: Icon(Icons.check_circle_outline_rounded),
+            title: Text('A representative list row'),
+            subtitle: Text('Uses the theme, not a literal color'),
+          ),
+          ListTile(
+            leading: Icon(Icons.info_outline_rounded),
+            title: Text('Another list row'),
+            subtitle: Text('Consistent spacing and radii'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A synthetic "card/list surface": `PersonalizedSurface`/`PersonalizedMetric`
+/// composed into a small list, proving the shared primitives render
+/// correctly against the real theme (not just the lightweight test theme
+/// used elsewhere in this file).
+class _FoundationCardListScreen extends StatelessWidget {
+  const _FoundationCardListScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Card and list surfaces')),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          const PersonalizedSurface(
+            child: Row(
+              children: [
+                Expanded(
+                  child: PersonalizedMetric(label: 'Resolved', value: '2,619'),
+                ),
+                Expanded(
+                  child: PersonalizedMetric(label: 'Needs review', value: '24'),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          const PersonalizedStatusBanner(
+            title: 'Almost done',
+            message: '24 tracks still need your review before importing.',
+            tone: PersonalizedStatusTone.warning,
+          ),
+          const SizedBox(height: 12),
+          const PersonalizedSurface(
+            padding: EdgeInsets.zero,
+            child: Column(
+              children: [
+                ListTile(
+                  leading: Icon(Icons.music_note_rounded),
+                  title: Text('Midnight Drive'),
+                  subtitle: Text('The Night Signals'),
+                ),
+                Divider(height: 1),
+                ListTile(
+                  leading: Icon(Icons.music_note_rounded),
+                  title: Text('Golden Hour'),
+                  subtitle: Text('Mara June'),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 void _setViewport(WidgetTester tester, Size size) {

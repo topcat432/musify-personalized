@@ -1,8 +1,9 @@
 # Musify Personalized — Visual Overhaul Plan
 
-**Status:** Planning/audit only. No application-source implementation has
-started. This plan targets `master` directly (branch
-`agent/full-visual-overhaul-master`). Read
+**Status:** Phase 1 (foundation tokens, §10) implemented 2026-07-15 — see
+`docs/DECISIONS.md` D-011 and D-012. Phases 2-9 remain planning/audit only;
+no other application-source implementation has started. This plan targets
+`master` directly (branch `agent/full-visual-overhaul-master`). Read
 `docs/VISUAL_OVERHAUL_BASELINE.md` first.
 
 ## 0. Branch-lineage decision — resolved
@@ -280,7 +281,7 @@ subagents reporting clean.
 
 | Phase | Scope | Key files (indicative, confirm exact set at phase start) | Depends on |
 |---|---|---|---|
-| 1 | Foundation tokens (color/type/spacing/shape/motion extraction/icon decision) | `lib/theme/app_themes.dart`, `lib/theme/app_colors.dart`, new `lib/theme/motion.dart`, `lib/constants/app_constants.dart` | — (lineage already resolved) |
+| 1 ✅ | Foundation tokens (color/type/spacing/shape/motion extraction/icon decision) — **implemented 2026-07-15**, see `docs/DECISIONS.md` D-011/D-012 | `lib/theme/app_spacing.dart`, `lib/theme/app_shape.dart`, `lib/theme/motion.dart`, `lib/theme/app_semantic_colors.dart`, `lib/theme/app_typography.dart`, `lib/theme/app_themes.dart`, `lib/widgets/personalized_ui.dart`, `test/theme/app_theme_foundation_test.dart` | — (lineage already resolved) |
 | 2 | Golden/test coverage backfill for Home, Settings, Library, Search, Playlist, Now Playing, Mini Player | `test/screens/*`, `tool/visual_review_test.dart` additions | Phase 1 |
 | 3 | Low-risk screens restyle (About, Time Machine, Offline placeholder, Playlist Folder) | `lib/screens/about_page.dart`, `time_machine_page.dart`, `lib/widgets/offline_search_placeholder.dart`, `playlist_folder_page.dart` | Phase 1 |
 | 4 | Core shell + Home/Search/Library restyle | `bottom_navigation_page.dart`, `home_page.dart`, `search_page.dart`, `library_page.dart`, `user_songs_page.dart`, `lib/widgets/library_spotify_import_action.dart`, shared widgets (`SongBar`, `PlaylistBar`, `PlaylistCube`, `ArtistBar`) | Phase 2 |
