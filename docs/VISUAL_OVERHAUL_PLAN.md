@@ -1,8 +1,10 @@
 # Musify Personalized — Visual Overhaul Plan
 
 **Status:** Phase 1 (foundation tokens, §10) implemented 2026-07-15 — see
-`docs/DECISIONS.md` D-011 and D-012. Phases 2-9 remain planning/audit only;
-no other application-source implementation has started. This plan targets
+`docs/DECISIONS.md` D-011 and D-012. **Phase 2A** (priority visual regression
+baseline, bounded test coverage) implemented 2026-07-15 on
+`agent/full-visual-overhaul-master` / draft PR #20. Phases 2B–9 remain
+planning/audit or not started; no screen restyling has begun. This plan targets
 `master` directly (branch `agent/full-visual-overhaul-master`). Read
 `docs/VISUAL_OVERHAUL_BASELINE.md` first.
 
@@ -271,6 +273,29 @@ accessibility-focused):
    read-only and now reference `master` as the baseline (see agent-file
    corrections below).
 
+### 9.1 Phase 2A coverage (completed 2026-07-15)
+
+**Committed goldens (12):** navigation shell (settings light, library compact
+dark), Home populated (light), Search history (light) + offline placeholder
+(compact dark), Library populated (light) + offline empty (compact dark),
+Settings Data Safety (light, compact dark, text scale 2.0), core confirmation
+dialog (light), Spotify Matching empty import (compact dark).
+
+**Widget-only / deferred:** Mini Player shell (`MusifyAudioHandler` hang in
+widget tests), Spotify Matching populated golden (Windows golden capture stall
+with progress/run-control animations — empty state golden + existing Phase 1
+pipeline goldens cover the matching step for now).
+
+**Harness:** `tool/visual_review_harness.dart` centralizes fonts, Hive boxes,
+deterministic library/search/Spotify fixtures, platform-channel mocks, shell
+frame, and golden pump helpers. `priorityReviewShellFrame` mirrors bottom-nav
+destinations without binding the production audio handler.
+
+**Pre-existing local artifacts (not staged):** eight import/review/updater
+PNGs from `tool/visual_review_test.dart` CI runs; three orphan `priority_*`
+PNGs from abandoned local runs (`priority_mini_player_light.png`,
+`priority_shell_home_light.png`, `priority_spotify_matching_populated_light.png`).
+
 ---
 
 ## 10. Implementation phases (independently verifiable)
@@ -282,7 +307,8 @@ subagents reporting clean.
 | Phase | Scope | Key files (indicative, confirm exact set at phase start) | Depends on |
 |---|---|---|---|
 | 1 ✅ | Foundation tokens (color/type/spacing/shape/motion extraction/icon decision) — **implemented 2026-07-15**, see `docs/DECISIONS.md` D-011/D-012 | `lib/theme/app_spacing.dart`, `lib/theme/app_shape.dart`, `lib/theme/motion.dart`, `lib/theme/app_semantic_colors.dart`, `lib/theme/app_typography.dart`, `lib/theme/app_themes.dart`, `lib/widgets/personalized_ui.dart`, `test/theme/app_theme_foundation_test.dart` | — (lineage already resolved) |
-| 2 | Golden/test coverage backfill for Home, Settings, Library, Search, Playlist, Now Playing, Mini Player | `test/screens/*`, `tool/visual_review_test.dart` additions | Phase 1 |
+| 2A ✅ | Priority visual regression baseline (bounded): app shell, Home, Search, Library, Settings Data Safety, core dialog, Spotify Matching empty state; shared harness + fixtures | `tool/visual_review_harness.dart`, `tool/visual_review_priority_test.dart`, `tool/visual_review_goldens/priority_*.png` (12 committed), `lib/widgets/marquee.dart` (reduced-motion/testability seam) | Phase 1 |
+| 2B | Remaining golden backfill: Mini Player, Now Playing, Playlist/Artist detail, User Songs, populated Spotify Matching golden, other §7 gaps | `test/screens/*`, `tool/visual_review_test.dart` / priority suite extensions | Phase 2A |
 | 3 | Low-risk screens restyle (About, Time Machine, Offline placeholder, Playlist Folder) | `lib/screens/about_page.dart`, `time_machine_page.dart`, `lib/widgets/offline_search_placeholder.dart`, `playlist_folder_page.dart` | Phase 1 |
 | 4 | Core shell + Home/Search/Library restyle | `bottom_navigation_page.dart`, `home_page.dart`, `search_page.dart`, `library_page.dart`, `user_songs_page.dart`, `lib/widgets/library_spotify_import_action.dart`, shared widgets (`SongBar`, `PlaylistBar`, `PlaylistCube`, `ArtistBar`) | Phase 2 |
 | 5 | Settings + safety-surface visual pass (paired with the restore-toast fix, §16 item 4, reviewed together) | `settings_page.dart`, backup/restore dialogs, `personalized_update_dialog.dart` | Phase 2, explicit sign-off on pairing visual+behavioral changes |

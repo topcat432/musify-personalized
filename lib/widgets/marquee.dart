@@ -54,7 +54,11 @@ class _MarqueeWidgetState extends State<MarqueeWidget>
   void initState() {
     super.initState();
     _scrollController = ScrollController();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _startAnimation());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _isDisposed) return;
+      if (MediaQuery.of(context).disableAnimations) return;
+      _startAnimation();
+    });
   }
 
   @override
@@ -81,19 +85,21 @@ class _MarqueeWidgetState extends State<MarqueeWidget>
 
   Future<void> _startAnimation() async {
     if (_isDisposed || _isAnimating) return;
+    if (!mounted || MediaQuery.of(context).disableAnimations) return;
 
     _isAnimating = true;
 
     while (_scrollController.hasClients && !_isDisposed) {
+      if (!mounted || MediaQuery.of(context).disableAnimations) break;
       try {
         // Check if content actually needs scrolling
         if (_scrollController.position.maxScrollExtent <= 0) {
-          await Future.delayed(const Duration(seconds: 1));
-          continue;
+          break;
         }
 
         await Future.delayed(widget.pauseDuration);
         if (_isDisposed || !_scrollController.hasClients) break;
+        if (!mounted || MediaQuery.of(context).disableAnimations) break;
 
         await _scrollController.animateTo(
           _scrollController.position.maxScrollExtent,
@@ -103,6 +109,7 @@ class _MarqueeWidgetState extends State<MarqueeWidget>
 
         await Future.delayed(widget.pauseDuration);
         if (_isDisposed || !_scrollController.hasClients) break;
+        if (!mounted || MediaQuery.of(context).disableAnimations) break;
 
         await _scrollController.animateTo(
           0,
