@@ -73,7 +73,10 @@ abstract interface class SpotifyReviewSprintDataSource {
     required Map<String, dynamic> item,
   });
 
-  Future<int> bulkApproveCluster(String key);
+  Future<int> bulkApproveCluster({
+    required String key,
+    required String importSessionId,
+  });
 }
 
 class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
@@ -129,7 +132,8 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
   }
 
   Future<SpotifyRescueProgress> runRescuePass({
-    bool Function()? shouldStop,
+    bool Function()? shouldCancel,
+    bool Function()? shouldPause,
     void Function(SpotifyRescueProgress progress)? onProgress,
   }) async {
     final box = Hive.box('user');
@@ -154,7 +158,11 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
     var stopped = false;
 
     for (final index in targetIndexes) {
-      if (shouldStop?.call() ?? false) {
+      if (shouldCancel?.call() ?? false) {
+        stopped = true;
+        break;
+      }
+      if (shouldPause?.call() ?? false) {
         stopped = true;
         break;
       }
@@ -180,9 +188,9 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
           ..['rescueAttemptedAt'] = DateTime.now().toUtc().toIso8601String();
       }
 
-      // A rescue lookup can return after its page was disposed. Never let
-      // that old local result checkpoint over a replacement import session.
-      if (shouldStop?.call() ?? false) {
+      // A rescue lookup can return after its page was disposed. Cancellation
+      // discards that result; a user pause still keeps the completed item.
+      if (shouldCancel?.call() ?? false) {
         stopped = true;
         break;
       }
@@ -201,7 +209,8 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
 
       processed++;
       sinceCheckpoint++;
-      if (sinceCheckpoint >= 5) {
+      final pauseRequested = shouldPause?.call() ?? false;
+      if (sinceCheckpoint >= 5 || pauseRequested) {
         if (!await _checkpoint(
           results,
           metadata,
@@ -224,9 +233,13 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
           finished: false,
         ),
       );
+      if (pauseRequested) {
+        stopped = true;
+        break;
+      }
     }
 
-    if (!stopped) {
+    if (!stopped || sinceCheckpoint > 0) {
       stopped = !await _checkpoint(
         results,
         metadata,
@@ -362,10 +375,18 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
   }
 
   @override
-  Future<int> bulkApproveCluster(String key) async {
+  Future<int> bulkApproveCluster({
+    required String key,
+    required String importSessionId,
+  }) async {
     final box = Hive.box('user');
     final results = _readMaps(box.get('spotifyMatchResults'));
     final metadata = _readMap(box.get('spotifyImportMetadata'));
+    if (importSessionId.isEmpty || _sessionId(metadata) != importSessionId) {
+      throw StateError(
+        'This review belongs to an older import. Reload the review queue.',
+      );
+    }
     var approved = 0;
 
     for (var index = 0; index < results.length; index++) {
@@ -382,7 +403,16 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
       approved++;
     }
 
-    if (approved > 0) await _checkpoint(results, metadata);
+    if (approved > 0 &&
+        !await _checkpoint(
+          results,
+          metadata,
+          expectedSessionId: importSessionId,
+        )) {
+      throw StateError(
+        'The import changed before the group could be saved. Reload the review queue.',
+      );
+    }
     return approved;
   }
 

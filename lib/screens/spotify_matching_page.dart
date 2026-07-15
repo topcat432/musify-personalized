@@ -111,7 +111,8 @@ class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
           final before = current.nextTrackIndex;
           current = await _service.matchNextBatch(
             batchSize: SpotifyTrackMatchingService.maximumPilotBatchSize,
-            shouldStop: () => !mounted || _stopRequested,
+            shouldCancel: () => !mounted,
+            shouldPause: () => _stopRequested,
             onProgress: (progress) {
               if (mounted) setState(() => _snapshot = progress);
             },
@@ -124,7 +125,8 @@ class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
       } else {
         current = await _service.matchNextBatch(
           batchSize: _selectedRunSize,
-          shouldStop: () => !mounted || _stopRequested,
+          shouldCancel: () => !mounted,
+          shouldPause: () => _stopRequested,
           onProgress: (progress) {
             if (mounted) setState(() => _snapshot = progress);
           },

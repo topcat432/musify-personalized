@@ -124,7 +124,7 @@ void main() {
 
     final snapshot = await const SpotifyTrackMatchingService().matchNextBatch(
       batchSize: 1,
-      shouldStop: () => ++stopChecks > 1,
+      shouldCancel: () => ++stopChecks > 1,
     );
 
     expect(stopChecks, 2);
@@ -134,5 +134,40 @@ void main() {
       box.get('spotifyImportMetadata') as Map,
     );
     expect(metadata['nextTrackIndex'], 0);
+  });
+
+  test('a user pause after lookup checkpoints the completed track', () async {
+    final box = Hive.box('user');
+    await box.put('spotifyImportTracks', [
+      {
+        'sourceRow': 7,
+        'title': 'Voice-over intro',
+        'artist': 'Quincy Jones',
+        'album': 'Off The Wall',
+      },
+    ]);
+    await box.put('spotifyExcludedImportRows', ['7']);
+    await box.put('spotifyImportMetadata', <String, dynamic>{
+      'matchingStatus': 'not_started',
+      'nextTrackIndex': 0,
+    });
+    await box.put('spotifyMatchResults', <dynamic>[]);
+    var pauseChecks = 0;
+
+    final snapshot = await const SpotifyTrackMatchingService().matchNextBatch(
+      batchSize: 1,
+      shouldPause: () => ++pauseChecks > 1,
+    );
+
+    expect(snapshot.nextTrackIndex, 1);
+    expect(snapshot.excludedCount, 1);
+    final saved = box.get('spotifyMatchResults') as List;
+    expect(saved, hasLength(1));
+    expect((saved.single as Map)['status'], 'excluded');
+    final metadata = Map<String, dynamic>.from(
+      box.get('spotifyImportMetadata') as Map,
+    );
+    expect(metadata['nextTrackIndex'], 1);
+    expect(metadata['matchingStatus'], 'complete');
   });
 }

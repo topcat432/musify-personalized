@@ -557,7 +557,14 @@ class _SpotifyReviewSprintPageState extends State<SpotifyReviewSprintPage> {
     if (!mounted) return;
     setState(() => _saving = true);
     try {
-      final applied = await _service.bulkApproveCluster(key);
+      final importSessionId =
+          item[SpotifyReviewWorkflowService.importSessionItemKey]
+              ?.toString() ??
+          '';
+      final applied = await _service.bulkApproveCluster(
+        key: key,
+        importSessionId: importSessionId,
+      );
       _sessionResolved += applied;
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

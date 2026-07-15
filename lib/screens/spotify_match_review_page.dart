@@ -98,7 +98,8 @@ class _SpotifyMatchReviewPageState extends State<SpotifyMatchReviewPage> {
 
     try {
       await _service.runRescuePass(
-        shouldStop: () => !mounted || _stopRescueRequested,
+        shouldCancel: () => !mounted,
+        shouldPause: () => _stopRescueRequested,
         onProgress: (progress) {
           if (mounted) setState(() => _rescueProgress = progress);
         },

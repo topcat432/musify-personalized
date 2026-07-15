@@ -134,7 +134,7 @@ void main() {
     var stopChecks = 0;
 
     final progress = await const SpotifyReviewWorkflowService().runRescuePass(
-      shouldStop: () => ++stopChecks > 1,
+      shouldCancel: () => ++stopChecks > 1,
     );
 
     expect(stopChecks, 2);
@@ -145,6 +145,62 @@ void main() {
     );
     expect(saved['status'], 'needs_review');
     expect(saved['reviewDecision'], isNull);
+  });
+
+  test('a user pause preserves the completed rescue item', () async {
+    final box = Hive.box('user');
+    final original = <String, dynamic>{
+      'sourceRow': 7,
+      'status': 'needs_review',
+      'sourceTitle': 'Example Song',
+      'sourceArtist': 'Example Artist',
+      'sourceAlbum': 'Example Album',
+      'sourceDurationMs': 180000,
+      'alternatives': [
+        {
+          'score': 0.84,
+          'candidate': {
+            'ytid': 'abc123',
+            'title': 'Example Song',
+            'artist': 'Example Artist',
+            'album': 'Example Album',
+            'duration': 180,
+            'sourceType': 'youtube_music_song',
+          },
+          'evidence': {
+            'titleScore': 1.0,
+            'primaryArtistScore': 1.0,
+            'albumScore': 1.0,
+            'durationScore': 1.0,
+            'sourceScore': 1.0,
+            'reasons': [
+              'Exact title match',
+              'Primary artist matches',
+              'Album matches',
+              'Duration closely matches',
+            ],
+          },
+        },
+      ],
+    };
+    await box.put('spotifyMatchResults', [original]);
+    await box.put('spotifyImportMetadata', <String, dynamic>{
+      'importSessionId': 'current-session',
+    });
+    var pauseChecks = 0;
+
+    final progress = await const SpotifyReviewWorkflowService().runRescuePass(
+      shouldPause: () => ++pauseChecks > 1,
+    );
+
+    expect(progress.processed, 1);
+    expect(progress.promotedToStrong, 1);
+    expect(progress.finished, isFalse);
+    final saved = Map<String, dynamic>.from(
+      (box.get('spotifyMatchResults') as List).single as Map,
+    );
+    expect(saved['status'], 'matched');
+    expect(saved['reviewDecision'], 'rescue_safe_evidence');
   });
 
   group('SpotifyReviewWorkflowService cluster safety', () {
@@ -252,6 +308,29 @@ void main() {
         ),
         throwsStateError,
       );
+    });
+
+    test('rejects stale bulk approval after the import changes', () async {
+      final box = Hive.box('user');
+      final current = safeItem()..['sourceRow'] = 7;
+      await box.put('spotifyMatchResults', [current]);
+      await box.put('spotifyImportMetadata', <String, dynamic>{
+        'importSessionId': 'new-session',
+      });
+
+      await expectLater(
+        const SpotifyReviewWorkflowService().bulkApproveCluster(
+          key: SpotifyReviewWorkflowService.clusterKey(current),
+          importSessionId: 'old-session',
+        ),
+        throwsStateError,
+      );
+
+      final saved = Map<String, dynamic>.from(
+        (box.get('spotifyMatchResults') as List).single as Map,
+      );
+      expect(saved['status'], 'needs_review');
+      expect(saved['reviewDecision'], isNull);
     });
 
     test('places equivalent evidence in the same cluster', () {

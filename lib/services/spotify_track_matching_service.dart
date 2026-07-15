@@ -163,7 +163,8 @@ class SpotifyTrackMatchingService {
 
   Future<SpotifyMatchingSnapshot> matchNextBatch({
     int batchSize = defaultBatchSize,
-    bool Function()? shouldStop,
+    bool Function()? shouldCancel,
+    bool Function()? shouldPause,
     void Function(SpotifyMatchingSnapshot snapshot)? onProgress,
   }) async {
     final box = Hive.box('user');
@@ -188,7 +189,11 @@ class SpotifyTrackMatchingService {
     var sinceCheckpoint = 0;
     var stopped = false;
     while (nextIndex < stopIndex) {
-      if (shouldStop?.call() ?? false) {
+      if (shouldCancel?.call() ?? false) {
+        stopped = true;
+        break;
+      }
+      if (shouldPause?.call() ?? false) {
         stopped = true;
         break;
       }
@@ -216,8 +221,9 @@ class SpotifyTrackMatchingService {
       }
 
       // A network lookup can finish after the matching page has been
-      // disposed. Do not checkpoint that result into a replacement import.
-      if (shouldStop?.call() ?? false) {
+      // disposed. Cancellation discards it; a user pause still keeps the
+      // completed track before returning control.
+      if (shouldCancel?.call() ?? false) {
         stopped = true;
         break;
       }
@@ -225,8 +231,9 @@ class SpotifyTrackMatchingService {
       results.add(result);
       nextIndex++;
       sinceCheckpoint++;
+      final pauseRequested = shouldPause?.call() ?? false;
 
-      if (sinceCheckpoint >= 5 || nextIndex >= stopIndex) {
+      if (sinceCheckpoint >= 5 || nextIndex >= stopIndex || pauseRequested) {
         metadata['matchingStatus'] = nextIndex >= tracks.length
             ? 'complete'
             : 'paused';
@@ -235,12 +242,22 @@ class SpotifyTrackMatchingService {
       }
 
       onProgress?.call(_snapshot(tracks, results, metadata));
+      if (pauseRequested) {
+        stopped = true;
+        break;
+      }
       if (nextIndex < stopIndex) {
         await Future<void>.delayed(const Duration(milliseconds: 150));
       }
     }
 
-    if (stopped) return loadSnapshot();
+    if (stopped) {
+      if (sinceCheckpoint > 0) {
+        metadata['matchingStatus'] = 'paused';
+        await _checkpoint(results, metadata, nextIndex, tracks.length);
+      }
+      return loadSnapshot();
+    }
 
     metadata['matchingStatus'] = nextIndex >= tracks.length
         ? 'complete'

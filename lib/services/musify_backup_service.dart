@@ -208,9 +208,20 @@ class MusifyBackupService {
         );
       }
 
-      // Android's save-as picker writes through the Storage Access Framework.
-      // Treat the picker return as untrusted until the actual saved file is
-      // reopened and proven byte-for-byte identical to the validated bundle.
+      final bundleLength = await bundleFile.length();
+      // Android's Storage Access Framework returns a document destination,
+      // not a Dart filesystem path that File can reliably reopen. The picker
+      // has already completed the byte write when it returns; keep path-based
+      // byte-for-byte verification for desktop destinations only.
+      if (!_shouldVerifyPickerSavePath(defaultTargetPlatform)) {
+        return BackupOperationResult(
+          success: true,
+          message:
+              'Verified backup saved by Android ($bundleLength bytes; '
+              '${summary.compactDescription}).',
+          summary: summary,
+        );
+      }
       final finalFile = File(outputPath);
       await _verifySavedBackupFileAgainstBundle(
         finalFile,
@@ -254,6 +265,13 @@ class MusifyBackupService {
   ) {
     return _verifySavedBackupFile(file, expectedBytes: expectedBytes);
   }
+
+  @visibleForTesting
+  static bool shouldVerifyPickerSavePathForTesting(TargetPlatform platform) =>
+      _shouldVerifyPickerSavePath(platform);
+
+  static bool _shouldVerifyPickerSavePath(TargetPlatform platform) =>
+      platform != TargetPlatform.android;
 
   static Future<ValidatedBackup> _verifySavedBackupFile(
     File file, {
@@ -336,7 +354,7 @@ class MusifyBackupService {
     final result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: const [musifyBackupExtension],
-      withData: true,
+      withReadStream: true,
     );
     if (result == null || result.files.isEmpty) return null;
 
@@ -346,8 +364,26 @@ class MusifyBackupService {
         'Select a .musifybackup file created by Musify Personalized.',
       );
     }
-    final bytes = await _platformFileBytes(selected);
-    return inspectBundleBytes(bytes, sourceDescription: selected.name);
+    final staging = await _newTemporaryDirectory('bundle-pick');
+    try {
+      final localCopy = File('${staging.path}/selected.$musifyBackupExtension');
+      final selectedStream = selected.readStream;
+      if (selectedStream != null) {
+        await selectedStream.pipe(localCopy.openWrite());
+      } else {
+        final path = selected.path;
+        if (path == null || !await File(path).exists()) {
+          throw BackupValidationException('${selected.name} could not be read.');
+        }
+        await File(path).openRead().pipe(localCopy.openWrite());
+      }
+      return _inspectBundleFile(
+        localCopy,
+        sourceDescription: selected.name,
+      );
+    } finally {
+      await _deleteDirectoryQuietly(staging);
+    }
   }
 
   static Future<ValidatedBackup?> pickAndInspectLegacyPair() async {
@@ -501,6 +537,121 @@ class MusifyBackupService {
   }
 
   @visibleForTesting
+  static Future<ValidatedBackup> inspectBundleFileForTesting(
+    File file, {
+    String sourceDescription = 'streamed test backup',
+  }) => _inspectBundleFile(file, sourceDescription: sourceDescription);
+
+  static Future<ValidatedBackup> _inspectBundleFile(
+    File input, {
+    required String sourceDescription,
+  }) async {
+    if (!await input.exists() || await input.length() == 0) {
+      throw const BackupValidationException('The selected backup is empty.');
+    }
+    const maximumBundleBytes = 512 * 1024 * 1024;
+    if (await input.length() > maximumBundleBytes) {
+      throw const BackupValidationException(
+        'The selected backup is too large to restore safely.',
+      );
+    }
+
+    final staging = await _newTemporaryDirectory('bundle-stream-inspect');
+    final reader = await _CanonicalBundleReader.open(input);
+    try {
+      await reader.expectAscii('{"manifest":');
+      final manifestBytes = await reader.readJsonObject();
+      Map<String, dynamic> manifest;
+      try {
+        manifest = Map<String, dynamic>.from(
+          jsonDecode(utf8.decode(manifestBytes, allowMalformed: false)) as Map,
+        );
+      } catch (_) {
+        throw const BackupValidationException(
+          'The backup manifest is not readable JSON.',
+        );
+      }
+      final manifestPayloads = _validateManifest(manifest);
+      await reader.expectAscii(',"payloads":{');
+
+      final payloadFiles = <String, File>{};
+      for (var index = 0; index < _requiredBoxNames.length; index++) {
+        final boxName = _requiredBoxNames[index];
+        if (index > 0) await reader.expectAscii(',');
+        await reader.expectAscii('"$boxName.hive":"');
+        final payloadFile = File('${staging.path}/$boxName.hive');
+        await reader.decodeBase64StringTo(payloadFile);
+        payloadFiles[boxName] = payloadFile;
+      }
+      await reader.expectAscii('}}');
+      await reader.expectEndOfFile();
+
+      final descriptors = await _describePayloadFiles(payloadFiles);
+      for (final boxName in _requiredBoxNames) {
+        final recordRaw = manifestPayloads[boxName];
+        if (recordRaw is! Map) {
+          throw BackupValidationException(
+            'The required $boxName database is missing.',
+          );
+        }
+        final record = Map<String, dynamic>.from(recordRaw);
+        final expectedLength = _readNonNegativeInt(
+          record['byteLength'],
+          '$boxName.byteLength',
+        );
+        final expectedChecksum = record['sha256'];
+        final descriptor = descriptors[boxName]!;
+        if (descriptor.byteLength != expectedLength) {
+          throw BackupValidationException(
+            'The $boxName database size does not match its manifest.',
+          );
+        }
+        if (expectedChecksum is! String ||
+            descriptor.sha256 != expectedChecksum) {
+          throw BackupValidationException(
+            'The $boxName database checksum failed.',
+          );
+        }
+      }
+
+      final snapshots = await _validatePayloadFiles(payloadFiles, staging);
+      final actualSummary = _summaryFromSnapshots(snapshots);
+      final manifestSummaryRaw = manifest['summary'];
+      if (manifestSummaryRaw is! Map) {
+        throw const BackupValidationException(
+          'The backup manifest has no semantic summary.',
+        );
+      }
+      _requireMatchingSummary(
+        BackupSummary.fromJson(
+          Map<String, dynamic>.from(manifestSummaryRaw),
+        ),
+        actualSummary,
+      );
+      _requireMatchingBoxInventories(manifestPayloads, snapshots);
+      final payloads = <String, Uint8List>{};
+      for (final boxName in _requiredBoxNames) {
+        payloads[boxName] = await payloadFiles[boxName]!.readAsBytes();
+      }
+      return ValidatedBackup(
+        payloads: payloads,
+        summary: actualSummary,
+        sourceDescription: sourceDescription,
+        manifest: manifest,
+      );
+    } on BackupValidationException {
+      rethrow;
+    } catch (_) {
+      throw const BackupValidationException(
+        'The selected file is not a readable Musify backup.',
+      );
+    } finally {
+      await reader.close();
+      await _deleteDirectoryQuietly(staging);
+    }
+  }
+
+  @visibleForTesting
   static Future<ValidatedBackup> inspectBundleBytes(
     List<int> input, {
     required String sourceDescription,
@@ -528,39 +679,7 @@ class MusifyBackupService {
       );
     }
     final manifest = Map<String, dynamic>.from(rawManifest);
-    if (manifest['format'] != musifyBackupFormat) {
-      throw const BackupValidationException(
-        'This file is not a Musify Personalized backup.',
-      );
-    }
-    if (manifest['schemaVersion'] != musifyBackupSchemaVersion) {
-      throw BackupValidationException(
-        'Unsupported backup schema ${manifest['schemaVersion']}.',
-      );
-    }
-    final rawApp = manifest['app'];
-    if (rawApp is! Map) {
-      throw const BackupValidationException(
-        'The backup manifest has no application identity.',
-      );
-    }
-    final app = Map<String, dynamic>.from(rawApp);
-    final sourcePackage = app['package'];
-    final sourceChannel = app['channel'];
-    final recognizedIdentity =
-        (sourcePackage == _releasePackage && sourceChannel == 'production') ||
-        (sourcePackage == _debugPackage && sourceChannel == 'debug');
-    if (!recognizedIdentity) {
-      throw BackupValidationException(
-        'Unrecognized backup origin: $sourcePackage / $sourceChannel.',
-      );
-    }
-    final manifestPayloads = manifest['payloads'];
-    if (manifestPayloads is! Map) {
-      throw const BackupValidationException(
-        'The backup manifest has no payload inventory.',
-      );
-    }
+    final manifestPayloads = _validateManifest(manifest);
 
     final payloads = <String, Uint8List>{};
     for (final boxName in _requiredBoxNames) {
@@ -851,6 +970,45 @@ class MusifyBackupService {
       throw BackupValidationException('${file.name} no longer exists.');
     }
     return Uint8List.fromList(await source.readAsBytes());
+  }
+
+  static Map<String, dynamic> _validateManifest(
+    Map<String, dynamic> manifest,
+  ) {
+    if (manifest['format'] != musifyBackupFormat) {
+      throw const BackupValidationException(
+        'This file is not a Musify Personalized backup.',
+      );
+    }
+    if (manifest['schemaVersion'] != musifyBackupSchemaVersion) {
+      throw BackupValidationException(
+        'Unsupported backup schema ${manifest['schemaVersion']}.',
+      );
+    }
+    final rawApp = manifest['app'];
+    if (rawApp is! Map) {
+      throw const BackupValidationException(
+        'The backup manifest has no application identity.',
+      );
+    }
+    final app = Map<String, dynamic>.from(rawApp);
+    final sourcePackage = app['package'];
+    final sourceChannel = app['channel'];
+    final recognizedIdentity =
+        (sourcePackage == _releasePackage && sourceChannel == 'production') ||
+        (sourcePackage == _debugPackage && sourceChannel == 'debug');
+    if (!recognizedIdentity) {
+      throw BackupValidationException(
+        'Unrecognized backup origin: $sourcePackage / $sourceChannel.',
+      );
+    }
+    final manifestPayloads = manifest['payloads'];
+    if (manifestPayloads is! Map) {
+      throw const BackupValidationException(
+        'The backup manifest has no payload inventory.',
+      );
+    }
+    return Map<String, dynamic>.from(manifestPayloads);
   }
 
   static Map<String, dynamic> _buildManifest(
@@ -1291,6 +1449,154 @@ void _logError(
 Future<String> _streamSha256(File file) async {
   final digest = await sha256.bind(file.openRead()).first;
   return digest.toString();
+}
+
+class _CanonicalBundleReader {
+  _CanonicalBundleReader._(this._file);
+
+  static Future<_CanonicalBundleReader> open(File source) async =>
+      _CanonicalBundleReader._(await source.open());
+
+  final RandomAccessFile _file;
+  Uint8List _buffer = Uint8List(0);
+  int _offset = 0;
+
+  Future<void> close() => _file.close();
+
+  Future<bool> _fillBuffer() async {
+    if (_offset < _buffer.length) return true;
+    _buffer = await _file.read(64 * 1024);
+    _offset = 0;
+    return _buffer.isNotEmpty;
+  }
+
+  Future<int?> _readByte() async {
+    if (!await _fillBuffer()) return null;
+    return _buffer[_offset++];
+  }
+
+  Future<void> expectAscii(String expected) async {
+    for (final expectedByte in ascii.encode(expected)) {
+      if (await _readByte() != expectedByte) {
+        throw const BackupValidationException(
+          'The backup does not use the supported streamed bundle layout.',
+        );
+      }
+    }
+  }
+
+  Future<Uint8List> readJsonObject() async {
+    const maximumManifestBytes = 2 * 1024 * 1024;
+    final bytes = BytesBuilder(copy: false);
+    var depth = 0;
+    var inString = false;
+    var escaped = false;
+
+    while (true) {
+      final value = await _readByte();
+      if (value == null) {
+        throw const BackupValidationException(
+          'The backup ended before its manifest was complete.',
+        );
+      }
+      bytes.addByte(value);
+      if (bytes.length > maximumManifestBytes) {
+        throw const BackupValidationException(
+          'The backup manifest is too large to be valid.',
+        );
+      }
+
+      if (inString) {
+        if (escaped) {
+          escaped = false;
+        } else if (value == 0x5c) {
+          escaped = true;
+        } else if (value == 0x22) {
+          inString = false;
+        }
+        continue;
+      }
+      if (value == 0x22) {
+        inString = true;
+      } else if (value == 0x7b) {
+        depth++;
+      } else if (value == 0x7d) {
+        depth--;
+        if (depth == 0) return bytes.takeBytes();
+      } else if (depth == 0) {
+        throw const BackupValidationException(
+          'The backup manifest is not a JSON object.',
+        );
+      }
+    }
+  }
+
+  Future<void> decodeBase64StringTo(File output) async {
+    final sink = output.openWrite();
+    var carry = <int>[];
+    try {
+      while (true) {
+        if (!await _fillBuffer()) {
+          throw const BackupValidationException(
+            'The backup ended inside a database payload.',
+          );
+        }
+        final quoteIndex = _buffer.indexOf(0x22, _offset);
+        final segmentEnd = quoteIndex == -1 ? _buffer.length : quoteIndex;
+        final segmentLength = segmentEnd - _offset;
+        final combined = Uint8List(carry.length + segmentLength)
+          ..setAll(0, carry)
+          ..setRange(
+            carry.length,
+            carry.length + segmentLength,
+            _buffer,
+            _offset,
+          );
+        _offset = quoteIndex == -1 ? segmentEnd : quoteIndex + 1;
+
+        final isFinal = quoteIndex != -1;
+        if (isFinal && combined.length % 4 != 0) {
+          throw const BackupValidationException(
+            'A database payload is not valid Base64.',
+          );
+        }
+        final decodeLength = isFinal
+            ? combined.length
+            : combined.length - (combined.length % 4);
+        if (decodeLength > 0) {
+          try {
+            sink.add(
+              base64Decode(
+                ascii.decode(combined.sublist(0, decodeLength)),
+              ),
+            );
+          } catch (_) {
+            throw const BackupValidationException(
+              'A database payload is not valid Base64.',
+            );
+          }
+        }
+        carry = combined.sublist(decodeLength);
+        if (isFinal) break;
+      }
+      await sink.flush();
+    } finally {
+      await sink.close();
+    }
+  }
+
+  Future<void> expectEndOfFile() async {
+    const whitespace = {0x09, 0x0a, 0x0d, 0x20};
+    while (true) {
+      final value = await _readByte();
+      if (value == null) return;
+      if (!whitespace.contains(value)) {
+        throw const BackupValidationException(
+          'The backup contains unexpected trailing data.',
+        );
+      }
+    }
+  }
 }
 
 class _PayloadDescriptor {

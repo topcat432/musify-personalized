@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:musify/services/musify_backup_service.dart';
@@ -26,6 +27,21 @@ void main() {
         sourceDescription: 'random.musifybackup',
       ),
       throwsA(isA<BackupValidationException>()),
+    );
+  });
+
+  test('does not reopen Android SAF save destinations as File paths', () {
+    expect(
+      MusifyBackupService.shouldVerifyPickerSavePathForTesting(
+        TargetPlatform.android,
+      ),
+      isFalse,
+    );
+    expect(
+      MusifyBackupService.shouldVerifyPickerSavePathForTesting(
+        TargetPlatform.linux,
+      ),
+      isTrue,
     );
   });
 
@@ -67,8 +83,8 @@ void main() {
           hiveRoot,
         );
 
-    final validated = await MusifyBackupService.inspectBundleBytes(
-      await bundleFile.readAsBytes(),
+    final validated = await MusifyBackupService.inspectBundleFileForTesting(
+      bundleFile,
       sourceDescription: 'streamed-2643.musifybackup',
     );
 
