@@ -69,7 +69,11 @@ void main() {
     await box.put('spotifyImportMetadata', <String, dynamic>{});
 
     final result = await const SpotifyReviewWorkflowService().excludeItem(
-      item: {'sourceRow': 7},
+      item: {
+        'sourceRow': 7,
+        'sourceTitle': 'Voice-over intro',
+        'status': 'manual_unmatched',
+      },
     );
     final saved = Map<String, dynamic>.from(
       (box.get('spotifyMatchResults') as List).single as Map,
@@ -211,6 +215,43 @@ void main() {
       evidence['primaryArtistScore'] = 0.72;
 
       expect(SpotifyReviewWorkflowService.isSafeClusterItem(item), isFalse);
+    });
+
+    test('does not trust a channel that merely contains topic', () {
+      final item = safeItem();
+      final alternative = item['alternatives'][0] as Map<String, dynamic>;
+      final candidate = alternative['candidate'] as Map<String, dynamic>;
+      candidate
+        ..remove('sourceType')
+        ..['videoAuthor'] = 'Guitar Topics';
+
+      expect(SpotifyReviewWorkflowService.isSafeClusterItem(item), isFalse);
+    });
+
+    test('rejects a stale review item after the import changes', () async {
+      final box = Hive.box('user');
+      final current = <String, dynamic>{
+        'sourceRow': 7,
+        'sourceTitle': 'New import song',
+        'sourceArtist': 'New artist',
+        'status': 'needs_review',
+      };
+      await box.put('spotifyMatchResults', [current]);
+      await box.put('spotifyImportMetadata', <String, dynamic>{
+        'importSessionId': 'new-session',
+      });
+
+      await expectLater(
+        const SpotifyReviewWorkflowService().resolveItem(
+          item: {
+            ...current,
+            'sourceTitle': 'Old import song',
+            SpotifyReviewWorkflowService.importSessionItemKey: 'old-session',
+          },
+          accept: false,
+        ),
+        throwsStateError,
+      );
     });
 
     test('places equivalent evidence in the same cluster', () {

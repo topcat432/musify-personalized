@@ -222,6 +222,7 @@ class SpotifyMatchScorer {
     );
     final candidateMentionsAlternate = _alternateVersionTerms.any(
       (term) => _candidateMarksVersion(
+        input,
         candidateTitle,
         candidateRawTitle,
         candidateAlbum,
@@ -240,6 +241,7 @@ class SpotifyMatchScorer {
     );
     final candidateMentionsMasteringVariant = _masteringVariantTerms.any(
       (term) => _candidateMarksVersion(
+        input,
         candidateTitle,
         candidateRawTitle,
         candidateAlbum,
@@ -392,11 +394,35 @@ class SpotifyMatchScorer {
     String author,
   ) {
     if (candidate['sourceType'] == 'youtube_music_song') return 1;
-    final normalized = _normalize(author);
-    if (normalized.contains('topic')) return 0.96;
-    if (normalized.contains('vevo')) return 0.92;
-    if (normalized.contains('official')) return 0.85;
+    if (_isTopicChannel(author)) return 0.96;
+    if (_isVevoChannel(author)) return 0.92;
+    if (_isOfficialChannel(author)) return 0.85;
     return 0.55;
+  }
+
+  static bool isReliableSource(Map<String, dynamic> candidate) {
+    if (candidate['sourceType'] == 'youtube_music_song') return true;
+    final author = candidate['videoAuthor']?.toString() ?? '';
+    return _isTopicChannel(author) ||
+        _isVevoChannel(author) ||
+        _isOfficialChannel(author);
+  }
+
+  static bool _isTopicChannel(String author) => RegExp(
+    r'\s-\s*topic\s*$',
+    caseSensitive: false,
+  ).hasMatch(author.trim());
+
+  static bool _isVevoChannel(String author) {
+    final normalized = _normalize(author);
+    return !_containsWholeTerm(normalized, 'unofficial') &&
+        RegExp(r'vevo$').hasMatch(normalized.replaceAll(' ', ''));
+  }
+
+  static bool _isOfficialChannel(String author) {
+    final normalized = _normalize(author);
+    return !_containsWholeTerm(normalized, 'unofficial') &&
+        _containsWholeTerm(normalized, 'official');
   }
 
   static double _textSimilarity(String left, String right) {
@@ -443,14 +469,35 @@ class SpotifyMatchScorer {
       _containsContextualTerm(input.album, term, allowBareSuffix: false);
 
   static bool _candidateMarksVersion(
+    SpotifyMatchInput input,
     String title,
     String rawTitle,
     String album,
     String term,
   ) =>
-      _containsContextualTerm(title, term, allowBareSuffix: true) ||
-      _containsContextualTerm(rawTitle, term, allowBareSuffix: true) ||
-      _containsContextualTerm(album, term, allowBareSuffix: true);
+      _containsContextualTerm(title, term, allowBareSuffix: false) ||
+      _containsContextualTerm(rawTitle, term, allowBareSuffix: false) ||
+      _containsContextualTerm(album, term, allowBareSuffix: false) ||
+      _hasExtraVersionSuffix(input.title, title, term) ||
+      _hasExtraVersionSuffix(input.title, rawTitle, term) ||
+      _hasExtraVersionSuffix(input.album, album, term);
+
+  static bool _hasExtraVersionSuffix(
+    String source,
+    String candidate,
+    String term,
+  ) {
+    final normalizedSource = _normalize(source);
+    final normalizedCandidate = _normalize(candidate);
+    final normalizedTerm = _normalize(term);
+    if (normalizedSource.isEmpty ||
+        normalizedCandidate == normalizedSource ||
+        !normalizedCandidate.startsWith('$normalizedSource ')) {
+      return false;
+    }
+    final extra = normalizedCandidate.substring(normalizedSource.length).trim();
+    return _containsWholeTerm(extra, normalizedTerm);
+  }
 
   static bool _containsContextualTerm(
     String value,

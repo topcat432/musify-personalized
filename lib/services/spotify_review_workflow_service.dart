@@ -79,6 +79,7 @@ abstract interface class SpotifyReviewSprintDataSource {
 class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
   const SpotifyReviewWorkflowService();
 
+  static const String importSessionItemKey = '_spotifyImportSessionId';
   static const double _automaticThreshold = 0.86;
   static const double _reviewThreshold = 0.58;
   static const Duration _searchTimeout = Duration(seconds: 18);
@@ -86,8 +87,16 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
 
   @override
   Future<List<Map<String, dynamic>>> loadUnresolvedItems() async {
-    final results = _readMaps(Hive.box('user').get('spotifyMatchResults'));
-    final items = results.where(isPendingResolution).toList(growable: true)
+    final box = Hive.box('user');
+    final results = _readMaps(box.get('spotifyMatchResults'));
+    final sessionId = _sessionId(_readMap(box.get('spotifyImportMetadata')));
+    final items = results
+        .where(isPendingResolution)
+        .map(
+          (item) => Map<String, dynamic>.from(item)
+            ..[importSessionItemKey] = sessionId,
+        )
+        .toList(growable: true)
       ..sort(_reviewPriorityCompare);
     return items;
   }
@@ -253,6 +262,11 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
     if (index == -1) {
       throw StateError('The imported track is no longer in the match list.');
     }
+    final importSessionId = validateCurrentItem(
+      item: item,
+      currentResult: results[index],
+      metadata: metadata,
+    );
 
     final updated = Map<String, dynamic>.from(results[index]);
     var duplicatesApplied = 0;
@@ -286,7 +300,11 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
       results[index] = updated;
     }
 
-    await _checkpoint(results, metadata);
+    await _checkpoint(
+      results,
+      metadata,
+      expectedSessionId: importSessionId,
+    );
     return SpotifyResolutionResult(
       duplicatesApplied: duplicatesApplied,
       remainingUnresolved: results.where(isPendingResolution).length,
@@ -310,6 +328,11 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
     if (index == -1) {
       throw StateError('The imported track is no longer in the match list.');
     }
+    final importSessionId = validateCurrentItem(
+      item: item,
+      currentResult: results[index],
+      metadata: metadata,
+    );
 
     final excludedRows =
         (box.get('spotifyExcludedImportRows') as List? ?? const [])
@@ -329,6 +352,7 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
     await _checkpoint(
       results,
       metadata,
+      expectedSessionId: importSessionId,
       excludedRows: excludedRows.toList(growable: false)..sort(),
     );
     return SpotifyResolutionResult(
@@ -416,8 +440,7 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
     if (candidate is! Map || evidenceRaw is! Map) return false;
     final candidateMap = Map<String, dynamic>.from(candidate);
     final evidence = Map<String, dynamic>.from(evidenceRaw);
-    final sourceIsReliable = candidateMap['sourceType'] == 'youtube_music_song' ||
-        (candidateMap['videoAuthor']?.toString().toLowerCase().contains('topic') ?? false);
+    final sourceIsReliable = SpotifyMatchScorer.isReliableSource(candidateMap);
     final titleScore = _asDouble(evidence['titleScore']) ?? 0;
     final artistScore = _asDouble(evidence['primaryArtistScore']) ?? 0;
     final albumScore = _asDouble(evidence['albumScore']) ?? 0.5;
@@ -640,6 +663,40 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
       metadata['importedAt']?.toString() ??
       metadata['fileName']?.toString() ??
       '';
+
+  static String validateCurrentItem({
+    required Map<String, dynamic> item,
+    required Map<String, dynamic> currentResult,
+    required Map<String, dynamic> metadata,
+  }) {
+    final expectedSessionId = item[importSessionItemKey]?.toString() ?? '';
+    final currentSessionId = _sessionId(metadata);
+    if (expectedSessionId != currentSessionId ||
+        !_sameSourceIdentity(item, currentResult)) {
+      throw StateError(
+        'This review belongs to an older import. Reload the review queue.',
+      );
+    }
+    return currentSessionId;
+  }
+
+  static bool _sameSourceIdentity(
+    Map<String, dynamic> left,
+    Map<String, dynamic> right,
+  ) {
+    const keys = <String>[
+      'sourceRow',
+      'sourceTitle',
+      'sourceArtist',
+      'sourceAlbum',
+      'sourceIsrc',
+      'sourceDurationMs',
+    ];
+    return keys.every(
+      (key) =>
+          left[key]?.toString().trim() == right[key]?.toString().trim(),
+    );
+  }
 
   static int _reviewPriorityCompare(
     Map<String, dynamic> left,

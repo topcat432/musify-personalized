@@ -264,6 +264,40 @@ void main() {
       expect(result.reasons, isNot(contains('Alternate version not requested')));
     });
 
+    test('does not trust channels that merely contain trusted words', () {
+      const input = SpotifyMatchInput(
+        title: 'Example Song',
+        artist: 'Example Artist',
+      );
+      for (final author in ['Unofficial Music', 'Guitar Topics']) {
+        final result = SpotifyMatchScorer.score(input, {
+          'title': 'Example Song',
+          'artist': 'Example Artist',
+          'videoAuthor': author,
+        });
+
+        expect(result.automaticEligible, isFalse, reason: author);
+        expect(result.sourceScore, 0.55, reason: author);
+      }
+    });
+
+    test('keeps an exact title ending in a version word eligible', () {
+      const input = SpotifyMatchInput(
+        title: 'Under Cover',
+        artist: 'Example Artist',
+        durationMs: 180000,
+      );
+      final result = SpotifyMatchScorer.score(input, {
+        'title': 'Under Cover',
+        'artist': 'Example Artist',
+        'duration': 180,
+        'sourceType': 'youtube_music_song',
+      });
+
+      expect(result.automaticEligible, isTrue);
+      expect(result.reasons, isNot(contains('Alternate version not requested')));
+    });
+
     test('does not treat a normal song title as compilation content', () {
       const input = SpotifyMatchInput(
         title: 'Best of You',

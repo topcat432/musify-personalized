@@ -64,7 +64,9 @@ android {
         }
         create("fdroid") {
             dimension = "flavor"
-            applicationIdSuffix = ".fdroid"
+            // Preserve the published F-Droid package so existing installs
+            // continue to receive upgrades from the legacy distribution.
+            applicationId = "com.gokadzev.musify.fdroid"
         }
     }
 

@@ -287,6 +287,11 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
       if (index == -1) {
         throw StateError('The imported track is no longer in the match list.');
       }
+      SpotifyReviewWorkflowService.validateCurrentItem(
+        item: widget.item,
+        currentResult: results[index],
+        metadata: metadata,
+      );
 
       final updated = Map<String, dynamic>.from(results[index])
         ..['status'] = 'manually_matched'

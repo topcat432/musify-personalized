@@ -161,7 +161,9 @@ jobs:
           apk=build/app/outputs/flutter-apk/app-fdroid-debug.apk
           test -f "$apk"
           aapt="$(find "$ANDROID_SDK_ROOT/build-tools" -mindepth 2 -maxdepth 2 -type f -name aapt | sort -V | tail -1)"
+          badging="$($aapt dump badging "$apk")"
           permissions="$($aapt dump permissions "$apk")"
+          grep -Fq "package: name='com.gokadzev.musify.fdroid.debug'" <<<"$badging"
           ! grep -Fq 'android.permission.REQUEST_INSTALL_PACKAGES' <<<"$permissions"
 
       - name: Build unsigned release APK
