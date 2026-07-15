@@ -108,28 +108,27 @@ void initPriorityReviewTestPlugins() {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
   final tempRoot = Directory.systemTemp.createTempSync('vr-plugins-');
 
-  messenger.setMockMethodCallHandler(
-    const MethodChannel('plugins.flutter.io/path_provider'),
-    (call) async {
-      switch (call.method) {
-        case 'getTemporaryDirectory':
-        case 'getApplicationSupportDirectory':
-        case 'getApplicationDocumentsDirectory':
-          return '${tempRoot.path}${Platform.pathSeparator}${call.method}';
-      }
-      return null;
-    },
-  );
-
-  messenger.setMockMethodCallHandler(
-    const MethodChannel('com.ryanheise.just_audio.methods'),
-    (call) async => null,
-  );
-
-  messenger.setMockMethodCallHandler(
-    const MethodChannel('com.ryanheise.audio_service.client.methods'),
-    (call) async => null,
-  );
+  messenger
+    ..setMockMethodCallHandler(
+      const MethodChannel('plugins.flutter.io/path_provider'),
+      (call) async {
+        switch (call.method) {
+          case 'getTemporaryDirectory':
+          case 'getApplicationSupportDirectory':
+          case 'getApplicationDocumentsDirectory':
+            return '${tempRoot.path}${Platform.pathSeparator}${call.method}';
+        }
+        return null;
+      },
+    )
+    ..setMockMethodCallHandler(
+      const MethodChannel('com.ryanheise.just_audio.methods'),
+      (call) async => null,
+    )
+    ..setMockMethodCallHandler(
+      const MethodChannel('com.ryanheise.audio_service.client.methods'),
+      (call) async => null,
+    );
 }
 
 File _visualSansFont() {
@@ -155,8 +154,7 @@ File _materialIconsFont() {
   final flutterRoot = Platform.environment['FLUTTER_ROOT'];
   final candidates = <String>[
     if (flutterRoot != null)
-      '$flutterRoot/bin/cache/artifacts/material_fonts/'
-          'MaterialIcons-Regular.otf',
+      '$flutterRoot/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf',
     r'C:\devtools\flutter\bin\cache\artifacts\material_fonts\MaterialIcons-Regular.otf',
   ];
 
@@ -252,48 +250,48 @@ void seedPrioritySearchHistory() {
 }
 
 void seedPrioritySpotifyMatchingPopulated() {
-  final box = Hive.box('user');
-  box.put('spotifyImportTracks', <Map<String, dynamic>>[
-    <String, dynamic>{
-      'sourceRow': 1,
-      'title': 'Midnight Drive',
-      'artist': 'The Night Signals',
-      'album': 'City Lights',
-    },
-    <String, dynamic>{
-      'sourceRow': 2,
-      'title': 'Golden Hour',
-      'artist': 'Mara June',
-      'album': 'Open Roads',
-    },
-  ]);
-  box.put('spotifyMatchResults', <Map<String, dynamic>>[
-    <String, dynamic>{
-      'sourceRow': 1,
-      'sourceTitle': 'Midnight Drive',
-      'sourceArtist': 'The Night Signals',
-      'status': 'matched',
-      'score': 0.92,
-    },
-    <String, dynamic>{
-      'sourceRow': 2,
-      'sourceTitle': 'Golden Hour',
-      'sourceArtist': 'Mara June',
-      'status': 'needs_review',
-      'score': 0.71,
-    },
-  ]);
-  box.put('spotifyImportMetadata', <String, dynamic>{
-    'importSessionId': 'priority-review',
-    'sourceName': 'Liked Songs from Spotify',
-    'matchingStatus': 'paused',
-    'nextTrackIndex': 1,
-    'matchedCount': 1,
-    'reviewCount': 1,
-    'unmatchedCount': 0,
-    'errorCount': 0,
-    'excludedCount': 0,
-  });
+  Hive.box('user')
+    ..put('spotifyImportTracks', <Map<String, dynamic>>[
+      <String, dynamic>{
+        'sourceRow': 1,
+        'title': 'Midnight Drive',
+        'artist': 'The Night Signals',
+        'album': 'City Lights',
+      },
+      <String, dynamic>{
+        'sourceRow': 2,
+        'title': 'Golden Hour',
+        'artist': 'Mara June',
+        'album': 'Open Roads',
+      },
+    ])
+    ..put('spotifyMatchResults', <Map<String, dynamic>>[
+      <String, dynamic>{
+        'sourceRow': 1,
+        'sourceTitle': 'Midnight Drive',
+        'sourceArtist': 'The Night Signals',
+        'status': 'matched',
+        'score': 0.92,
+      },
+      <String, dynamic>{
+        'sourceRow': 2,
+        'sourceTitle': 'Golden Hour',
+        'sourceArtist': 'Mara June',
+        'status': 'needs_review',
+        'score': 0.71,
+      },
+    ])
+    ..put('spotifyImportMetadata', <String, dynamic>{
+      'importSessionId': 'priority-review',
+      'sourceName': 'Liked Songs from Spotify',
+      'matchingStatus': 'paused',
+      'nextTrackIndex': 1,
+      'matchedCount': 1,
+      'reviewCount': 1,
+      'unmatchedCount': 0,
+      'errorCount': 0,
+      'excludedCount': 0,
+    });
 }
 
 Future<void> clearPrioritySpotifyMatchingData() async {
@@ -309,12 +307,12 @@ Future<void> bindPriorityReviewAudioHandler({
   final handler = MusifyAudioHandler();
   audioHandler = handler;
   if (withPlayingMedia) {
-    final mediaItem = MediaItem(
+    const mediaItem = MediaItem(
       id: 'visual-review-track',
       title: 'Midnight Drive',
       artist: 'The Night Signals',
       album: 'City Lights',
-      duration: const Duration(minutes: 3, seconds: 44),
+      duration: Duration(minutes: 3, seconds: 44),
     );
     handler.mediaItem.add(mediaItem);
     handler.queue.add([mediaItem]);
