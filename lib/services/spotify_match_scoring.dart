@@ -272,7 +272,12 @@ class SpotifyMatchScorer {
         isrcBonus -
         penalty;
     final finalScore = disqualified ? 0.0 : weighted.clamp(0.0, 1.0);
+    final reliableSource = isReliableSource(candidate);
+    if (!reliableSource) {
+      reasons.add('Fallback source needs review');
+    }
     final automaticEligible = !disqualified &&
+        reliableSource &&
         !hasUnrequestedAlternate &&
         !hasUnrequestedMasteringVariant &&
         titleScore >= 0.82 &&

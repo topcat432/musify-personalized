@@ -144,9 +144,14 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
         // Ordinary YouTube fallback below can still succeed.
       }
 
-      final youtubeResults = await fetchSongsList(query).timeout(_timeout);
-      for (final raw in youtubeResults.whereType<Map>()) {
-        addCandidate(Map<String, dynamic>.from(raw));
+      try {
+        final youtubeResults = await fetchSongsList(query).timeout(_timeout);
+        for (final raw in youtubeResults.whereType<Map>()) {
+          addCandidate(Map<String, dynamic>.from(raw));
+        }
+      } catch (_) {
+        // Structured YouTube Music candidates remain useful even when the
+        // ordinary YouTube fallback is unavailable.
       }
 
       final ranked = <Map<String, dynamic>>[];

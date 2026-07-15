@@ -17,6 +17,7 @@ enum SpotifyImportDestinationKind { likedSongs, newPlaylist, existingPlaylist }
 
 class SpotifyImportDestinationSnapshot {
   const SpotifyImportDestinationSnapshot({
+    required this.importSessionId,
     required this.sourceName,
     required this.resolvedSongs,
     required this.resolvedResultCount,
@@ -24,6 +25,7 @@ class SpotifyImportDestinationSnapshot {
     required this.customPlaylists,
   });
 
+  final String importSessionId;
   final String sourceName;
   final List<Map<String, dynamic>> resolvedSongs;
   final int resolvedResultCount;
@@ -83,6 +85,7 @@ class SpotifyImportDestinationService {
     final unresolvedCount = countUnresolvedTracks(tracks, results);
 
     return SpotifyImportDestinationSnapshot(
+      importSessionId: _sessionId(metadata),
       sourceName: _sourceName(metadata['fileName']?.toString()),
       resolvedSongs: List.unmodifiable(songs),
       resolvedResultCount: resolved.length,
@@ -147,6 +150,12 @@ class SpotifyImportDestinationService {
     return unresolvedResultCount + unprocessedCount;
   }
 
+  static String _sessionId(Map<String, dynamic> metadata) =>
+      metadata['importSessionId']?.toString() ??
+      metadata['importedAt']?.toString() ??
+      metadata['fileName']?.toString() ??
+      '';
+
   Future<SpotifyImportRouteResult> route({
     required SpotifyImportDestinationSnapshot snapshot,
     required int requestedCount,
@@ -154,6 +163,7 @@ class SpotifyImportDestinationService {
     String? newPlaylistName,
     String? existingPlaylistId,
   }) async {
+    _validateCurrentSnapshot(snapshot);
     final selected = selectSongs(snapshot, requestedCount);
     if (selected.isEmpty) {
       throw StateError('Choose at least one resolved song.');
@@ -180,6 +190,18 @@ class SpotifyImportDestinationService {
       // into a reported failure or invite a duplicate retry.
     }
     return result;
+  }
+
+  void _validateCurrentSnapshot(SpotifyImportDestinationSnapshot snapshot) {
+    final currentSessionId = _sessionId(
+      _readMap(Hive.box('user').get('spotifyImportMetadata')),
+    );
+    if (snapshot.importSessionId.isEmpty ||
+        snapshot.importSessionId != currentSessionId) {
+      throw StateError(
+        'This destination view belongs to an older import. Reload it before transferring songs.',
+      );
+    }
   }
 
   Future<SpotifyImportRouteResult> _routeToLiked(

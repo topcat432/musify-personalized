@@ -352,5 +352,31 @@ void main() {
         SpotifyReviewWorkflowService.clusterKey(second),
       );
     });
+
+    test('uses the accepted alternative rather than the top candidate for audits', () {
+      final item = safeItem();
+      final selectedAlternative = <String, dynamic>{
+        'candidate': {
+          'ytid': 'fallback-456',
+          'title': 'Example Song',
+          'artist': 'Example Artist',
+          'sourceType': 'youtube_fallback',
+        },
+        'evidence': {
+          'titleScore': 0.84,
+          'primaryArtistScore': 0.85,
+          'albumScore': 0.0,
+          'durationScore': 0.0,
+        },
+      };
+
+      expect(
+        SpotifyReviewWorkflowService.clusterKeyForAlternative(
+          item,
+          selectedAlternative,
+        ),
+        isNot(SpotifyReviewWorkflowService.clusterKey(item)),
+      );
+    });
   });
 }

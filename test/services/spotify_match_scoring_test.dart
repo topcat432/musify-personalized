@@ -281,6 +281,27 @@ void main() {
       }
     });
 
+    test('does not automatically accept an otherwise exact untrusted fallback', () {
+      const input = SpotifyMatchInput(
+        title: 'Billie Jean',
+        artist: 'Michael Jackson',
+        album: 'Thriller',
+        durationMs: 294000,
+      );
+      final result = SpotifyMatchScorer.score(input, {
+        'title': 'Billie Jean',
+        'artist': 'Michael Jackson',
+        'album': 'Thriller',
+        'videoAuthor': 'Random Uploads',
+        'duration': 294,
+      });
+
+      expect(result.disqualified, isFalse);
+      expect(result.score, greaterThanOrEqualTo(0.86));
+      expect(result.automaticEligible, isFalse);
+      expect(result.reasons, contains('Fallback source needs review'));
+    });
+
     test('keeps an exact title ending in a version word eligible', () {
       const input = SpotifyMatchInput(
         title: 'Under Cover',

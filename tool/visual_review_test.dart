@@ -367,6 +367,7 @@ final List<Map<String, dynamic>> _visualItems = [
 ];
 
 final _visualDestinationSnapshot = SpotifyImportDestinationSnapshot(
+  importSessionId: 'visual-preview',
   sourceName: 'Liked Songs from Spotify',
   resolvedSongs: List<Map<String, dynamic>>.generate(
     2619,

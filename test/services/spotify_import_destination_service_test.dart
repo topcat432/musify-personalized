@@ -1,9 +1,28 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hive/hive.dart';
 import 'package:musify/services/spotify_import_destination_service.dart';
 
 void main() {
+  late Directory hiveRoot;
+
+  setUp(() async {
+    hiveRoot = await Directory.systemTemp.createTemp(
+      'import-destination-test-',
+    );
+    Hive.init(hiveRoot.path);
+    await Hive.openBox('user');
+  });
+
+  tearDown(() async {
+    await Hive.close();
+    if (await hiveRoot.exists()) await hiveRoot.delete(recursive: true);
+  });
+
   const service = SpotifyImportDestinationService();
   final snapshot = SpotifyImportDestinationSnapshot(
+    importSessionId: 'current-session',
     sourceName: 'My Spotify songs',
     resolvedSongs: [
       {'ytid': 'song-1', 'title': 'One'},
@@ -42,6 +61,7 @@ void main() {
 
     test('previews duplicates in an import playlist that will be reused', () {
       const reusedSnapshot = SpotifyImportDestinationSnapshot(
+        importSessionId: 'current-session',
         sourceName: 'My Spotify songs',
         resolvedSongs: [
           {'ytid': 'song-1', 'title': 'One'},
@@ -86,6 +106,21 @@ void main() {
       );
 
       expect(unresolved, 2);
+    });
+
+    test('rejects routing from a destination snapshot for an older import', () async {
+      await Hive.box('user').put('spotifyImportMetadata', {
+        'importSessionId': 'new-session',
+      });
+
+      await expectLater(
+        service.route(
+          snapshot: snapshot,
+          requestedCount: 1,
+          destinationKind: SpotifyImportDestinationKind.likedSongs,
+        ),
+        throwsStateError,
+      );
     });
   });
 }

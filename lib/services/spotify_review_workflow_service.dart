@@ -417,7 +417,15 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
   }
 
   static String clusterKey(Map<String, dynamic> item) {
-    final alternative = _topAlternative(item);
+    return clusterKeyForAlternative(item, _topAlternative(item));
+  }
+
+  /// Uses the chosen candidate's evidence when a reviewer accepts an
+  /// alternative that is not the card's highest-ranked option.
+  static String clusterKeyForAlternative(
+    Map<String, dynamic> item,
+    Map<String, dynamic>? alternative,
+  ) {
     final candidate = alternative?['candidate'] is Map
         ? Map<String, dynamic>.from(alternative!['candidate'] as Map)
         : <String, dynamic>{};

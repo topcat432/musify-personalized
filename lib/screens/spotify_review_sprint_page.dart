@@ -369,7 +369,9 @@ class _SpotifyReviewSprintPageState extends State<SpotifyReviewSprintPage> {
             alternatives.length - 1,
           )]
         : null;
-    final cluster = SpotifyReviewWorkflowService.clusterKey(item);
+    final cluster = accept
+        ? SpotifyReviewWorkflowService.clusterKeyForAlternative(item, selected)
+        : SpotifyReviewWorkflowService.clusterKey(item);
     final sourceIsrc = _normalizeIsrc(item['sourceIsrc']?.toString() ?? '');
     _playbackGeneration++;
     await _stopPreview();
