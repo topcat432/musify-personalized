@@ -5,176 +5,99 @@
  *     it under the terms of the GNU General Public License as published by
  *     the Free Software Foundation, either version 3 of the License, or
  *     (at your option) any later version.
- *
- *     Musify is distributed in the hope that it will be useful,
- *     but WITHOUT ANY WARRANTY; without even the implied warranty of
- *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *     GNU General Public License for more details.
- *
- *     You should have received a copy of the GNU General Public License
- *     along with this program.  If not, see <https://www.gnu.org/licenses/>.
- *
- *
- *     For more information about Musify, including how to contribute,
- *     please visit: https://github.com/gokadzev/Musify
  */
 
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:musify/constants/version.dart';
 import 'package:musify/extensions/l10n.dart';
 import 'package:musify/main.dart';
 import 'package:musify/services/data_manager.dart';
+import 'package:musify/services/personalized_update_service.dart';
 import 'package:musify/services/router_service.dart';
 import 'package:musify/services/settings_manager.dart';
-import 'package:musify/utilities/url_launcher.dart';
-import 'package:musify/widgets/auto_format_text.dart';
+import 'package:musify/widgets/personalized_update_dialog.dart';
 
-const String checkUrl =
+const String _upstreamAnnouncementUrl =
     'https://raw.githubusercontent.com/gokadzev/Musify/update/check.json';
-const String releasesUrl =
-    'https://api.github.com/repos/gokadzev/Musify/releases/latest';
-const String downloadUrlKey = 'url';
-const String downloadUrlArm64Key = 'arm64url';
-const String downloadFilename = 'Musify.apk';
 
-Future<void> checkAppUpdates() async {
+Future<void> checkAppUpdates({bool showWhenCurrent = false}) async {
+  final service = PersonalizedUpdateService();
   try {
-    final response = await http.get(Uri.parse(checkUrl));
-
-    if (response.statusCode != 200) {
-      logger.log(
-        'Fetch update API (checkUrl) call returned status code ${response.statusCode}',
-      );
-      return;
-    }
-
-    final map = json.decode(response.body) as Map<String, dynamic>;
-    announcementURL.value = map['announcementurl'];
-    final latestVersion = map['version'].toString();
-
-    if (!isLatestVersionHigher(appVersion, latestVersion)) {
-      return;
-    }
-
-    final releasesRequest = await http.get(Uri.parse(releasesUrl));
-
-    if (releasesRequest.statusCode != 200) {
-      logger.log(
-        'Fetch update API (releasesUrl) call returned status code ${response.statusCode}',
-      );
-      return;
-    }
-
-    final releasesResponse =
-        json.decode(releasesRequest.body) as Map<String, dynamic>;
-
-    await showDialog(
-      context: NavigationManager().context,
-      builder: (BuildContext context) {
-        final colorScheme = Theme.of(context).colorScheme;
-
-        return AlertDialog(
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: colorScheme.primaryContainer,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  FluentIcons.arrow_download_24_regular,
-                  color: colorScheme.onPrimaryContainer,
-                  size: 32,
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                context.l10n!.appUpdateIsAvailable,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w600,
-                  color: colorScheme.onSurface,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: colorScheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  'V$latestVersion',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: colorScheme.onPrimaryContainer,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Container(
-                constraints: BoxConstraints(
-                  maxHeight: MediaQuery.sizeOf(context).height / 2.5,
-                ),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: colorScheme.surfaceContainerLow,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: SingleChildScrollView(
-                  child: AutoFormatText(text: releasesResponse['body']),
-                ),
-              ),
-            ],
-          ),
-          actionsAlignment: MainAxisAlignment.center,
-          actions: <Widget>[
-            OutlinedButton(
-              onPressed: () => Navigator.pop(context),
-              style: OutlinedButton.styleFrom(
-                side: BorderSide(color: colorScheme.outline),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              child: Text(context.l10n!.cancel),
-            ),
-            FilledButton.icon(
-              onPressed: () {
-                getDownloadUrl(map).then(
-                  (url) => {launchURL(Uri.parse(url)), Navigator.pop(context)},
-                );
-              },
-              icon: const Icon(FluentIcons.arrow_download_20_regular),
-              label: Text(context.l10n!.download),
-            ),
-          ],
+    // Update checks and home-page announcements share the same opt-in. Keep
+    // both channels refreshed without trusting the upstream APK download URL.
+    await fetchAnnouncementOnly();
+    final check = await service.check();
+    if (check.availability == PersonalizedUpdateAvailability.current) {
+      if (showWhenCurrent) {
+        await _showUpdateStatusDialog(
+          title: 'You are up to date',
+          message:
+              'Installed production build ${check.installed.versionCode} is the newest verified personalized release.',
+          icon: FluentIcons.checkmark_circle_24_regular,
         );
-      },
+      }
+      return;
+    }
+
+    await showDialog<void>(
+      context: NavigationManager().context,
+      builder: (_) => PersonalizedUpdateDialog(check: check, service: service),
     );
-  } catch (e, stackTrace) {
-    logger.log('Error in checkAppUpdates', error: e, stackTrace: stackTrace);
+  } catch (error, stackTrace) {
+    logger.log(
+      'Error in personalized update check',
+      error: error,
+      stackTrace: stackTrace,
+    );
+    if (showWhenCurrent) {
+      await _showUpdateStatusDialog(
+        title: 'Could not check for updates',
+        message: error.toString(),
+        icon: FluentIcons.warning_24_regular,
+        isError: true,
+      );
+    }
+  } finally {
+    service.close();
   }
+}
+
+Future<void> _showUpdateStatusDialog({
+  required String title,
+  required String message,
+  required IconData icon,
+  bool isError = false,
+}) {
+  return showDialog<void>(
+    context: NavigationManager().context,
+    builder: (context) {
+      final colors = Theme.of(context).colorScheme;
+      return AlertDialog(
+        icon: Icon(
+          icon,
+          color: isError ? colors.error : colors.primary,
+          size: 40,
+        ),
+        title: Text(title, textAlign: TextAlign.center),
+        content: Text(message, textAlign: TextAlign.center),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      );
+    },
+  );
 }
 
 void showUpdateCheckDialog(BuildContext context) {
   final colorScheme = Theme.of(context).colorScheme;
-
-  showDialog(
+  showDialog<void>(
     context: context,
     builder: (context) {
       return AlertDialog(
@@ -191,9 +114,8 @@ void showUpdateCheckDialog(BuildContext context) {
           ),
           textAlign: TextAlign.center,
         ),
-        content: Text(
-          context.l10n!.enableUpdateChecksDescription,
-          style: TextStyle(color: colorScheme.onSurfaceVariant),
+        content: const Text(
+          'Automatically check for verified Musify Personalized production updates when the app starts.',
           textAlign: TextAlign.center,
         ),
         actionsAlignment: MainAxisAlignment.center,
@@ -204,12 +126,6 @@ void showUpdateCheckDialog(BuildContext context) {
               addOrUpdateData<bool>('settings', 'shouldWeCheckUpdates', false);
               Navigator.of(context).pop();
             },
-            style: OutlinedButton.styleFrom(
-              side: BorderSide(color: colorScheme.outline),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
             child: Text(context.l10n!.no),
           ),
           FilledButton(
@@ -230,69 +146,23 @@ void showUpdateCheckDialog(BuildContext context) {
   );
 }
 
-bool isLatestVersionHigher(String appVersion, String latestVersion) {
-  final parsedAppVersion = appVersion.split('.');
-  final parsedAppLatestVersion = latestVersion.split('.');
-  final length = parsedAppVersion.length > parsedAppLatestVersion.length
-      ? parsedAppVersion.length
-      : parsedAppLatestVersion.length;
-  for (var i = 0; i < length; i++) {
-    final value1 = i < parsedAppVersion.length
-        ? int.parse(parsedAppVersion[i])
-        : 0;
-    final value2 = i < parsedAppLatestVersion.length
-        ? int.parse(parsedAppLatestVersion[i])
-        : 0;
-    if (value2 > value1) {
-      return true;
-    } else if (value2 < value1) {
-      return false;
-    }
-  }
-
-  return false;
-}
-
-Future<String> getCPUArchitecture() async {
-  final info = await Process.run('uname', ['-m']);
-  final cpu = info.stdout.toString().replaceAll('\n', '');
-
-  return cpu;
-}
-
-Future<String> getDownloadUrl(Map<String, dynamic> map) async {
-  final cpuArchitecture = await getCPUArchitecture();
-  final url = cpuArchitecture == 'aarch64'
-      ? map[downloadUrlArm64Key].toString()
-      : map[downloadUrlKey].toString();
-
-  return url;
-}
-
-/// Fetch only the announcement URL from the `check.json` file and set the
-/// global `announcementURL` ValueNotifier. This does not trigger releases
-/// fetching or any update dialogs/downloads and is safe to call for F‑Droid
-/// builds where update prompts are not allowed.
+/// Fetch only the upstream announcement URL without using its APK channel.
 Future<void> fetchAnnouncementOnly() async {
   try {
-    final response = await http.get(Uri.parse(checkUrl));
-
+    final response = await http.get(Uri.parse(_upstreamAnnouncementUrl));
     if (response.statusCode != 200) {
       logger.log(
-        'Fetch announcement (checkUrl) call returned status code ${response.statusCode}',
+        'Fetch announcement returned status code ${response.statusCode}',
       );
       return;
     }
-
     final map = json.decode(response.body) as Map<String, dynamic>;
-    final ann = map['announcementurl'];
-    if (ann != null) {
-      announcementURL.value = ann.toString();
-    }
-  } catch (e, stackTrace) {
+    final announcement = map['announcementurl'];
+    announcementURL.value = announcement?.toString();
+  } catch (error, stackTrace) {
     logger.log(
       'Error in fetchAnnouncementOnly',
-      error: e,
+      error: error,
       stackTrace: stackTrace,
     );
   }

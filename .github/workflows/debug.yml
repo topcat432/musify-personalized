@@ -22,9 +22,9 @@ env:
 
 jobs:
   build:
-    name: Analyze, test, and build debug APK
+    name: Analyze, test, and build APKs
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
 
     steps:
       - name: Check out repository
@@ -51,6 +51,25 @@ jobs:
 
       - name: Install dependencies
         run: flutter pub get
+
+      - name: Enforce the sole production release path
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          for workflow in .github/workflows/*.yml .github/workflows/*.yaml; do
+            case "$(basename "$workflow")" in
+              debug.yml|signed-release.yml) continue ;;
+            esac
+            workflow_text="$(tr '\n' ' ' < "$workflow")"
+            if grep -Eq -- '--flavor([=[:space:]\\]+)github([[:space:]\\]|$)' <<<"$workflow_text" &&
+              { grep -Fq -- 'KEYSTORE2' <<<"$workflow_text" ||
+                { grep -Fq -- 'flutter build apk' <<<"$workflow_text" &&
+                  grep -Fq -- '--release' <<<"$workflow_text"; }; }; then
+              echo "Legacy production-package build path found in $workflow"
+              exit 1
+            fi
+          done
 
       - name: Analyze Dart code
         id: analyze
@@ -98,16 +117,78 @@ jobs:
         if: steps.tests.outputs.status != '0'
         run: exit 1
 
-      - name: Build universal debug APK
-        run: flutter build apk --debug --flavor github
+      - name: Render visual review screenshots
+        run: >-
+          flutter test tool/visual_review_test.dart
+          --update-goldens
 
-      - name: Verify APK output
-        run: test -f build/app/outputs/flutter-apk/app-github-debug.apk
-
-      - name: Upload debug APK
+      - name: Upload visual review screenshots
         uses: actions/upload-artifact@v4
         with:
-          name: musify-personalized-debug-${{ github.run_number }}
-          path: build/app/outputs/flutter-apk/app-github-debug.apk
+          name: visual-review-${{ github.run_number }}
+          path: tool/visual_review_goldens/*.png
           if-no-files-found: error
           retention-days: 14
+
+      - name: Build universal debug APK
+        run: >-
+          flutter build apk --debug --flavor github
+          --dart-define=GIT_SHA=${{ github.sha }}
+
+      - name: Verify debug APK output
+        run: test -f build/app/outputs/flutter-apk/app-github-debug.apk
+
+      - name: Verify debug channel identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk=build/app/outputs/flutter-apk/app-github-debug.apk
+          aapt="$(find "$ANDROID_SDK_ROOT/build-tools" -mindepth 2 -maxdepth 2 -type f -name aapt | sort -V | tail -1)"
+          badging="$($aapt dump badging "$apk")"
+          permissions="$($aapt dump permissions "$apk")"
+          grep -Fq "package: name='com.topcat432.musifypersonalized.debug'" <<<"$badging"
+          grep -Fq "application-label:'Musify Personalized DEBUG'" <<<"$badging"
+          grep -Fq 'android.permission.REQUEST_INSTALL_PACKAGES' <<<"$permissions"
+          ! cmp -s \
+            android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png \
+            android/app/src/debug/res/mipmap-xxxhdpi/ic_launcher.png
+
+      - name: Build and verify F-Droid permission boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter build apk --debug --flavor fdroid -t lib/main_fdroid.dart
+          apk=build/app/outputs/flutter-apk/app-fdroid-debug.apk
+          test -f "$apk"
+          aapt="$(find "$ANDROID_SDK_ROOT/build-tools" -mindepth 2 -maxdepth 2 -type f -name aapt | sort -V | tail -1)"
+          badging="$($aapt dump badging "$apk")"
+          permissions="$($aapt dump permissions "$apk")"
+          grep -Fq "package: name='com.gokadzev.musify.fdroid.debug'" <<<"$badging"
+          ! grep -Fq 'android.permission.REQUEST_INSTALL_PACKAGES' <<<"$permissions"
+
+      - name: Build unsigned release APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          build_number=$((200000 + GITHUB_RUN_NUMBER))
+          flutter build apk \
+            --release \
+            --flavor github \
+            --build-number "$build_number" \
+            --build-name "0.1.${GITHUB_RUN_NUMBER}" \
+            --dart-define=GIT_SHA="$GITHUB_SHA"
+
+      - name: Verify unsigned release APK output
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk=build/app/outputs/flutter-apk/app-github-release.apk
+          test -f "$apk"
+          aapt="$(find "$ANDROID_SDK_ROOT/build-tools" -mindepth 2 -maxdepth 2 -type f -name aapt | sort -V | tail -1)"
+          badging="$($aapt dump badging "$apk")"
+          grep -Fq "package: name='com.topcat432.musifypersonalized'" <<<"$badging"
+          grep -Fq "application-label:'Musify Personalized'" <<<"$badging"
+
+      # CI builds are verification inputs only. They are deliberately not
+      # uploaded because debug signing is ephemeral and unsigned releases are
+      # not safe user updates. User-facing APKs come only from signed-release.

@@ -111,10 +111,18 @@ class SpotifyCsvImporter {
     final isrcIndex = _findHeader(headers, const ['isrc']);
     final durationIndex = _findHeader(headers, const [
       'track duration (ms)',
+      'duration (ms)',
       'duration ms',
       'duration_ms',
       'duration',
     ]);
+    final durationIsExplicitMilliseconds = durationIndex != null &&
+        const {
+          'track duration (ms)',
+          'duration (ms)',
+          'duration ms',
+          'duration_ms',
+        }.contains(headers[durationIndex]);
     final addedAtIndex = _findHeader(headers, const [
       'added at',
       'date added',
@@ -157,7 +165,10 @@ class SpotifyCsvImporter {
           artist: artist,
           album: _valueAt(row, albumIndex).trim(),
           isrc: _valueAt(row, isrcIndex).trim(),
-          durationMs: _parseDurationMs(_valueAt(row, durationIndex)),
+          durationMs: _parseDurationMs(
+            _valueAt(row, durationIndex),
+            valuesAreMilliseconds: durationIsExplicitMilliseconds,
+          ),
           addedAt: _parseDate(_valueAt(row, addedAtIndex)),
         ),
       );
@@ -259,15 +270,18 @@ class SpotifyCsvImporter {
     return row[index];
   }
 
-  static int? _parseDurationMs(String value) {
+  static int? _parseDurationMs(
+    String value, {
+    required bool valuesAreMilliseconds,
+  }) {
     final normalized = value.trim();
     if (normalized.isEmpty) return null;
 
     final parsed = int.tryParse(normalized);
     if (parsed == null || parsed <= 0) return null;
 
-    // Generic CSVs sometimes store whole seconds rather than milliseconds.
-    return parsed < 10000 ? parsed * 1000 : parsed;
+    // Only ambiguous generic duration columns need the seconds fallback.
+    return !valuesAreMilliseconds && parsed < 10000 ? parsed * 1000 : parsed;
   }
 
   static DateTime? _parseDate(String value) {

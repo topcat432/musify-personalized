@@ -33,6 +33,40 @@ class MusicAlbum {
   String toString() => 'MusicAlbum($id, $title)';
 }
 
+/// A song-only YouTube Music search result.
+class MusicSong {
+  const MusicSong({
+    required this.id,
+    required this.title,
+    required this.artists,
+    this.album,
+    this.duration,
+    this.thumbnailUrl,
+    this.explicit = false,
+  });
+
+  /// Playable YouTube video id.
+  final String id;
+
+  /// Canonical song title returned by YouTube Music.
+  final String title;
+
+  /// Structured artist names associated with the song.
+  final List<String> artists;
+
+  /// Album or single title, when YouTube Music exposes it.
+  final String? album;
+
+  /// Track duration, when available.
+  final Duration? duration;
+
+  /// Artwork URL, when available.
+  final String? thumbnailUrl;
+
+  /// Whether YouTube Music marks the result explicit.
+  final bool explicit;
+}
+
 /// Queries the YouTube Music (`WEB_REMIX`) browse endpoints.
 class MusicClient {
   /// Initializes an instance of [MusicClient].
@@ -51,7 +85,12 @@ class MusicClient {
   /// Search filter that restricts results to artists only.
   static const _artistsSearchParams = 'EgWKAQIgAWoMEA4QChADEAQQCRAF';
 
+  /// Search filter that restricts results to songs only.
+  static const _songsSearchParams =
+      'EgWKAQIIAWoKEAkQChAFEAMQBA%3D%3D';
+
   static const _artistPageType = 'MUSIC_PAGE_TYPE_ARTIST';
+  static const _albumPageType = 'MUSIC_PAGE_TYPE_ALBUM';
 
   /// Searches YouTube Music for canonical artist entries matching [query].
   Future<List<MusicArtist>> searchArtists(String query) async {
@@ -93,6 +132,49 @@ class MusicClient {
         ),
       );
     }
+    return results;
+  }
+
+  /// Searches the song-only YouTube Music catalog matching [query].
+  Future<List<MusicSong>> searchSongs(String query, {int limit = 10}) async {
+    final normalizedQuery = query.trim();
+    if (normalizedQuery.isEmpty || limit <= 0) return [];
+
+    final root = await _httpClient.sendPost('search', {
+      'context': _remixContext,
+      'query': normalizedQuery,
+      'params': _songsSearchParams,
+    });
+
+    final results = <MusicSong>[];
+    final seen = <String>{};
+    for (final item in _findRenderers(
+      root,
+      'musicResponsiveListItemRenderer',
+    )) {
+      final videoId = _trackVideoId(item);
+      if (videoId == null || !seen.add(videoId)) continue;
+
+      final title = _firstFlexColumnText(item)?.trim() ?? '';
+      if (title.isEmpty) continue;
+
+      final artists = _songArtists(item);
+      if (artists.isEmpty) continue;
+
+      results.add(
+        MusicSong(
+          id: videoId,
+          title: title,
+          artists: List.unmodifiable(artists),
+          album: _songAlbum(item),
+          duration: _parseDuration(_fixedColumnText(item)),
+          thumbnailUrl: _listItemThumbnailUrl(item),
+          explicit: item.toString().contains('MUSIC_EXPLICIT_BADGE'),
+        ),
+      );
+      if (results.length >= limit) break;
+    }
+
     return results;
   }
 
@@ -269,17 +351,92 @@ class MusicClient {
   }
 
   String? _firstFlexColumnText(_JsonMap item) {
+    final runs = _flexColumnRuns(item, 0);
+    return runs.isEmpty ? null : runs.parseRuns();
+  }
+
+  List<_JsonMap> _flexColumnRuns(_JsonMap item, int index) {
     final columns = item.getList('flexColumns');
-    if (columns == null || columns.isEmpty) return null;
-    final firstColumn = columns.first;
-    if (firstColumn is! Map) return null;
-    return firstColumn
+    if (columns == null || index < 0 || index >= columns.length) return [];
+    final column = columns[index];
+    if (column is! Map) return [];
+    final runs = column
         .cast<String, dynamic>()
         .getMap('musicResponsiveListItemFlexColumnRenderer')
         ?.getMap('text')
-        ?.getList('runs')
-        ?.whereType<Map>()
-        .parseRuns();
+        ?.getList('runs');
+    if (runs == null) return [];
+    return runs
+        .whereType<Map>()
+        .map((run) => run.cast<String, dynamic>())
+        .toList(growable: false);
+  }
+
+  List<String> _songArtists(_JsonMap item) {
+    final artists = <String>[];
+    final seen = <String>{};
+    final runs = _flexColumnRuns(item, 1);
+
+    for (final run in runs) {
+      final browseId = _runBrowseId(run);
+      final pageType = _runPageType(run);
+      final text = run.getValue<String>('text')?.trim() ?? '';
+      final isArtist =
+          (browseId?.startsWith('UC') ?? false) || pageType == _artistPageType;
+      if (isArtist && text.isNotEmpty && seen.add(text.toLowerCase())) {
+        artists.add(text);
+      }
+    }
+
+    if (artists.isNotEmpty) return artists;
+
+    final pieces = runs
+        .map((run) => run.getValue<String>('text') ?? '')
+        .join()
+        .split('•')
+        .map((piece) => piece.trim())
+        .where((piece) => piece.isNotEmpty)
+        .toList();
+    for (final piece in pieces) {
+      final normalized = piece.toLowerCase();
+      if (normalized == 'song' ||
+          RegExp(r'^\d{1,2}:\d{2}$').hasMatch(piece) ||
+          RegExp(r'^\d{4}$').hasMatch(piece)) {
+        continue;
+      }
+      artists.add(piece);
+      break;
+    }
+    return artists;
+  }
+
+  String? _songAlbum(_JsonMap item) {
+    for (final run in _flexColumnRuns(item, 1)) {
+      final browseId = _runBrowseId(run);
+      final pageType = _runPageType(run);
+      final isAlbum =
+          (browseId?.startsWith('MPRE') ?? false) || pageType == _albumPageType;
+      if (!isAlbum) continue;
+      final text = run.getValue<String>('text')?.trim();
+      if (text != null && text.isNotEmpty) return text;
+    }
+    return null;
+  }
+
+  String? _runBrowseId(_JsonMap run) {
+    return run
+        .getMap('navigationEndpoint')
+        ?.getMap('browseEndpoint')
+        ?.getValue<String>('browseId');
+  }
+
+  String? _runPageType(_JsonMap run) {
+    return run
+        .getMap('navigationEndpoint')
+        ?.getMap('browseEndpoint')
+        ?.getMap('browseEndpointContextSupportedConfigs')
+        ?.getMap('browseEndpointContextMusicConfig')
+        ?.getValue<String>('pageType');
   }
 
   String? _fixedColumnText(_JsonMap item) {

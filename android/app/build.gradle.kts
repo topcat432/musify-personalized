@@ -21,6 +21,10 @@ if (keystorePropertiesFile.exists()) {
         keystoreProperties.load(inputStream)
     }
 }
+val hasReleaseSigning = keystorePropertiesFile.exists() &&
+    keystoreProperties["keyAlias"] != null &&
+    keystoreProperties["keyPassword"] != null &&
+    keystoreProperties["storePassword"] != null
 
 android {
     namespace = "com.gokadzev.musify"
@@ -42,7 +46,9 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.gokadzev.musify"
+        // Permanent identity for Daniel's personalized build. Do not change this
+        // after the first signed release or Android will treat it as a new app.
+        applicationId = "com.topcat432.musifypersonalized"
         minSdk = 24
         targetSdk = 36
         versionCode = flutter.versionCode
@@ -58,19 +64,21 @@ android {
         }
         create("fdroid") {
             dimension = "flavor"
-            applicationIdSuffix = ".fdroid"
+            // Preserve the published F-Droid package so existing installs
+            // continue to receive upgrades from the legacy distribution.
+            applicationId = "com.gokadzev.musify.fdroid"
         }
     }
 
     signingConfigs {
-        create("release") {
-            // From decoded key
-            storeFile = file("key.jks")
-
-            // From key.properties
-            keyAlias = keystoreProperties["keyAlias"] as String?
-            keyPassword = keystoreProperties["keyPassword"] as String?
-            storePassword = keystoreProperties["storePassword"] as String?
+        if (hasReleaseSigning) {
+            create("release") {
+                // CI writes the long-lived private key to this path at build time.
+                storeFile = file("key.jks")
+                keyAlias = keystoreProperties["keyAlias"] as String
+                keyPassword = keystoreProperties["keyPassword"] as String
+                storePassword = keystoreProperties["storePassword"] as String
+            }
         }
     }
 
@@ -87,7 +95,9 @@ android {
 
     buildTypes {
         getByName("release") {
-            signingConfig = signingConfigs.getByName("release")
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             isShrinkResources = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
