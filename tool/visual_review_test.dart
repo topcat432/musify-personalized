@@ -450,7 +450,10 @@ class _VisualDataSource implements SpotifyReviewSprintDataSource {
   }
 
   @override
-  Future<int> bulkApproveCluster(String key) async => 0;
+  Future<int> bulkApproveCluster({
+    required String key,
+    required String importSessionId,
+  }) async => 0;
 }
 
 class _VisualAudioPlayer implements ReviewSprintAudioPlayer {
