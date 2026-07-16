@@ -1,0 +1,202 @@
+name: Build signed bleeding-edge preview APK
+
+on:
+  push:
+    branches:
+      - preview/latest-debug
+
+permissions:
+  contents: read
+
+concurrency:
+  group: musify-preview
+  cancel-in-progress: true
+
+env:
+  FLUTTER_VERSION: '3.44.5'
+
+jobs:
+  preview:
+    name: Build and sign isolated preview APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out preview branch
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: '17'
+          cache: gradle
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze preview source
+        id: analyze
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          flutter analyze . 2>&1 | tee preview-analyze.log
+
+      - name: Run preview tests
+        id: tests
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          flutter test 2>&1 | tee preview-tests.log
+
+      - name: Build unsigned isolated preview APK
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -e android/key.properties
+          test ! -e android/app/key.jks
+          build_number=$((300000000 + GITHUB_RUN_NUMBER))
+          version_name="preview.0.1.${GITHUB_RUN_NUMBER}"
+          flutter build apk \
+            --release \
+            --flavor preview \
+            --build-number "$build_number" \
+            --build-name "$version_name" \
+            --dart-define=GIT_SHA="$GITHUB_SHA"
+          echo "build_number=$build_number" >> "$GITHUB_OUTPUT"
+          echo "version_name=$version_name" >> "$GITHUB_OUTPUT"
+
+      - name: Verify unsigned preview identity
+        shell: bash
+        env:
+          BUILD_NUMBER: ${{ steps.version.outputs.build_number }}
+        run: |
+          set -euo pipefail
+          apk=build/app/outputs/flutter-apk/app-preview-release.apk
+          test -f "$apk"
+          unzip -t "$apk" >/dev/null
+          apksigner="$(find "$ANDROID_SDK_ROOT/build-tools" -mindepth 2 -maxdepth 2 -type f -name apksigner | sort -V | tail -1)"
+          aapt="$(find "$ANDROID_SDK_ROOT/build-tools" -mindepth 2 -maxdepth 2 -type f -name aapt | sort -V | tail -1)"
+          test -x "$apksigner"
+          test -x "$aapt"
+          if "$apksigner" verify "$apk" >/dev/null 2>&1; then
+            echo "Preview candidate must be unsigned before the isolated signing step."
+            exit 1
+          fi
+          badging="$($aapt dump badging "$apk")"
+          package_line="$(head -1 <<<"$badging")"
+          grep -Fq "package: name='com.topcat432.musifypersonalized.preview'" <<<"$package_line"
+          grep -Fq "versionCode='$BUILD_NUMBER'" <<<"$package_line"
+          grep -Fq "application-label:'Musify Personalized PREVIEW'" <<<"$badging"
+          ! grep -Fq 'application-debuggable' <<<"$badging"
+
+      - name: Sign and verify preview APK
+        shell: bash
+        env:
+          BUILD_NUMBER: ${{ steps.version.outputs.build_number }}
+          VERSION_NAME: ${{ steps.version.outputs.version_name }}
+          ANALYZE_OUTCOME: ${{ steps.analyze.outcome }}
+          TEST_OUTCOME: ${{ steps.tests.outcome }}
+          MUSIFY_SIGNING_KEY_BASE64: ${{ secrets.MUSIFY_SIGNING_KEY_BASE64 }}
+          MUSIFY_SIGNING_PASSWORD: ${{ secrets.MUSIFY_SIGNING_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$MUSIFY_SIGNING_KEY_BASE64"
+          test -n "$MUSIFY_SIGNING_PASSWORD"
+
+          keystore="$RUNNER_TEMP/musify-personalized-preview.jks"
+          certificate="$RUNNER_TEMP/musify-personalized-preview.der"
+          trap 'rm -f "$keystore" "$certificate"' EXIT
+          printf '%s' "$MUSIFY_SIGNING_KEY_BASE64" | base64 --decode > "$keystore"
+          chmod 600 "$keystore"
+          keytool -list \
+            -keystore "$keystore" \
+            -storepass "$MUSIFY_SIGNING_PASSWORD" \
+            -alias musify-personalized >/dev/null
+          keytool -exportcert \
+            -keystore "$keystore" \
+            -storepass "$MUSIFY_SIGNING_PASSWORD" \
+            -alias musify-personalized \
+            -file "$certificate" >/dev/null
+          expected_signer_sha="$(sha256sum "$certificate" | cut -d' ' -f1)"
+
+          unsigned_apk=build/app/outputs/flutter-apk/app-preview-release.apk
+          output_apk=musify-personalized-preview.apk
+          apksigner="$(find "$ANDROID_SDK_ROOT/build-tools" -mindepth 2 -maxdepth 2 -type f -name apksigner | sort -V | tail -1)"
+          aapt="$(find "$ANDROID_SDK_ROOT/build-tools" -mindepth 2 -maxdepth 2 -type f -name aapt | sort -V | tail -1)"
+          test -x "$apksigner"
+          test -x "$aapt"
+
+          "$apksigner" sign \
+            --ks "$keystore" \
+            --ks-key-alias musify-personalized \
+            --ks-pass env:MUSIFY_SIGNING_PASSWORD \
+            --key-pass env:MUSIFY_SIGNING_PASSWORD \
+            --v1-signing-enabled true \
+            --v2-signing-enabled true \
+            --v3-signing-enabled true \
+            --out "$output_apk" \
+            "$unsigned_apk"
+
+          verification="$($apksigner verify --verbose --print-certs "$output_apk")"
+          printf '%s\n' "$verification"
+          grep -Fq 'Verified using v2 scheme (APK Signature Scheme v2): true' <<<"$verification"
+          grep -Fq 'Verified using v3 scheme (APK Signature Scheme v3): true' <<<"$verification"
+          mapfile -t signer_shas < <(
+            sed -nE \
+              -e 's/^Signer #[0-9]+ certificate SHA-256 digest: ([0-9a-fA-F]+)$/\1/p' \
+              -e 's/^V[0-9.]+ Signer: certificate SHA-256 digest: ([0-9a-fA-F]+)$/\1/p' \
+              <<<"$verification" | tr '[:upper:]' '[:lower:]' | sort -u
+          )
+          test "${#signer_shas[@]}" -eq 1
+          signer_sha="${signer_shas[0]}"
+          test "${signer_sha,,}" = "${expected_signer_sha,,}"
+
+          badging="$($aapt dump badging "$output_apk")"
+          package_line="$(head -1 <<<"$badging")"
+          grep -Fq "package: name='com.topcat432.musifypersonalized.preview'" <<<"$package_line"
+          grep -Fq "versionCode='$BUILD_NUMBER'" <<<"$package_line"
+          grep -Fq "application-label:'Musify Personalized PREVIEW'" <<<"$badging"
+          ! grep -Fq 'application-debuggable' <<<"$badging"
+          unzip -t "$output_apk" >/dev/null
+
+          sha256sum "$output_apk" > musify-personalized-preview.apk.sha256
+          {
+            echo "Musify Personalized bleeding-edge preview"
+            echo "Source commit: $GITHUB_SHA"
+            echo "Workflow run: $GITHUB_RUN_ID"
+            echo "Version name: $VERSION_NAME"
+            echo "Version code: $BUILD_NUMBER"
+            echo "Package: com.topcat432.musifypersonalized.preview"
+            echo "Application label: Musify Personalized PREVIEW"
+            echo "Debuggable: false"
+            echo "Signature schemes: v2=true, v3=true"
+            echo "Signer SHA-256: $signer_sha"
+            echo "Analyzer outcome: $ANALYZE_OUTCOME"
+            echo "Test outcome: $TEST_OUTCOME"
+            echo "$package_line"
+          } > preview-proof.txt
+          cat preview-proof.txt
+
+      - name: Upload signed preview APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: musify-personalized-preview-${{ github.run_number }}
+          path: |
+            musify-personalized-preview.apk
+            musify-personalized-preview.apk.sha256
+            preview-proof.txt
+            preview-analyze.log
+            preview-tests.log
+          if-no-files-found: error
+          retention-days: 14
