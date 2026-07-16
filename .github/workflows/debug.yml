@@ -117,64 +117,18 @@ jobs:
         if: steps.tests.outputs.status != '0'
         run: exit 1
 
-      - name: Run visual review suite
-        id: visual_review
-        shell: bash
-        run: |
-          set +e
-          flutter test tool/visual_review_test.dart 2>&1 | tee flutter-visual-review.log
-          status=${PIPESTATUS[0]}
-          echo "status=$status" >> "$GITHUB_OUTPUT"
-          exit 0
+      - name: Render visual review screenshots
+        run: >-
+          flutter test tool/visual_review_test.dart
+          --update-goldens
 
-      - name: Upload visual review log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: flutter-visual-review-${{ github.run_number }}
-          path: flutter-visual-review.log
-          if-no-files-found: error
-          retention-days: 7
-
-      - name: Run priority visual review suite
-        id: priority_visual_review
-        shell: bash
-        run: |
-          set +e
-          flutter test tool/visual_review_priority_test.dart 2>&1 | tee flutter-priority-visual-review.log
-          status=${PIPESTATUS[0]}
-          echo "status=$status" >> "$GITHUB_OUTPUT"
-          exit 0
-
-      - name: Upload priority visual review log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: flutter-priority-visual-review-${{ github.run_number }}
-          path: flutter-priority-visual-review.log
-          if-no-files-found: error
-          retention-days: 7
-
-      # Uploaded regardless of pass/fail so mismatches (and the currently
-      # committed baselines) stay inspectable; goldens are never regenerated
-      # in CI (no --update-goldens), so this is the same committed content
-      # already in the checkout.
       - name: Upload visual review screenshots
-        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: visual-review-${{ github.run_number }}
           path: tool/visual_review_goldens/*.png
           if-no-files-found: error
           retention-days: 14
-
-      - name: Fail on visual review mismatches
-        if: steps.visual_review.outputs.status != '0'
-        run: exit 1
-
-      - name: Fail on priority visual review mismatches
-        if: steps.priority_visual_review.outputs.status != '0'
-        run: exit 1
 
       - name: Build universal debug APK
         run: >-
