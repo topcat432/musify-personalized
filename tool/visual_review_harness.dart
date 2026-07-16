@@ -65,8 +65,20 @@ ThemeData reviewTheme(Brightness brightness) {
   );
 }
 
-ThemeData productionReviewTheme(Brightness brightness) =>
-    getAppTheme(visualReviewScheme(brightness));
+ThemeData productionReviewTheme(Brightness brightness) {
+  final theme = getAppTheme(visualReviewScheme(brightness));
+  // Golden legibility only: apply the loaded readable family to the theme's
+  // text so production-theme renders show real glyphs instead of Ahem boxes.
+  // `.apply(fontFamily:)` changes only the family — every production font
+  // size, weight, letter-spacing, height, and color is preserved — and it
+  // cascades to AppTypography-role and raw TextStyle text via DefaultTextStyle
+  // merge. The app-bar's `paytoneOne` title lives in `appBarTheme` (not
+  // `textTheme`) and is intentionally left untouched.
+  return theme.copyWith(
+    textTheme: theme.textTheme.apply(fontFamily: 'visualSans'),
+    primaryTextTheme: theme.primaryTextTheme.apply(fontFamily: 'visualSans'),
+  );
+}
 
 void visualReviewSetViewport(
   WidgetTester tester,
@@ -95,11 +107,35 @@ Future<void> loadVisualReviewFonts() async {
   final iconBytes = await _materialIconsFont().readAsBytes();
   final iconLoader = FontLoader('MaterialIcons')
     ..addFont(Future<ByteData>.value(ByteData.sublistView(iconBytes)));
+  // `fluentui_system_icons` ships its glyphs in two families used across the
+  // app (`_*_regular` and `_*_filled`); load both from the bundled package
+  // assets so FluentIcons render as real glyphs instead of square
+  // placeholders. Its `IconData` carry `fontPackage: 'fluentui_system_icons'`,
+  // so the engine's effective family is prefixed `packages/<pkg>/<family>` —
+  // the FontLoader family name must match that prefixed form, not the bare
+  // family declared in the package pubspec.
+  final fluentRegularLoader =
+      FontLoader(
+        'packages/fluentui_system_icons/FluentSystemIcons-Regular',
+      )..addFont(
+        rootBundle.load(
+          'packages/fluentui_system_icons/fonts/FluentSystemIcons-Regular.ttf',
+        ),
+      );
+  final fluentFilledLoader =
+      FontLoader('packages/fluentui_system_icons/FluentSystemIcons-Filled')
+        ..addFont(
+          rootBundle.load(
+            'packages/fluentui_system_icons/fonts/FluentSystemIcons-Filled.ttf',
+          ),
+        );
 
   await Future.wait([
     paytoneLoader.load(),
     sansLoader.load(),
     iconLoader.load(),
+    fluentRegularLoader.load(),
+    fluentFilledLoader.load(),
   ]);
 }
 

@@ -256,7 +256,7 @@ void main() {
           await tester.pumpWidget(
             MaterialApp(
               debugShowCheckedModeBanner: false,
-              theme: getAppTheme(_foundationScheme(brightness)),
+              theme: _productionReviewTheme(brightness),
               home: const SpotifyImportHubPage(),
             ),
           );
@@ -278,7 +278,7 @@ void main() {
         await tester.pumpWidget(
           MaterialApp(
             debugShowCheckedModeBanner: false,
-            theme: getAppTheme(_foundationScheme(brightness)),
+            theme: _productionReviewTheme(brightness),
             home: Scaffold(
               body: Builder(
                 builder: (context) => Center(
@@ -317,7 +317,7 @@ void main() {
         await tester.pumpWidget(
           MaterialApp(
             debugShowCheckedModeBanner: false,
-            theme: getAppTheme(_foundationScheme(brightness)),
+            theme: _productionReviewTheme(brightness),
             home: const _FoundationCardListScreen(),
           ),
         );
@@ -338,7 +338,7 @@ void main() {
           await tester.pumpWidget(
             MaterialApp(
               debugShowCheckedModeBanner: false,
-              theme: getAppTheme(_foundationScheme(brightness)),
+              theme: _productionReviewTheme(brightness),
               home: const _FoundationContentScreen(),
             ),
           );
@@ -360,6 +360,19 @@ ColorScheme _foundationScheme(Brightness brightness) => ColorScheme.fromSeed(
   seedColor: const Color(0xFF9B4F2A),
   brightness: brightness,
 );
+
+/// Real production `getAppTheme`, with the loaded readable family applied to
+/// its text for golden legibility only. `.apply(fontFamily:)` changes only the
+/// glyph family — production sizes/weights/spacing/colors are preserved — and
+/// the app-bar's `paytoneOne` title (in `appBarTheme`, not `textTheme`) is left
+/// untouched. Mirrors `productionReviewTheme` in `visual_review_harness.dart`.
+ThemeData _productionReviewTheme(Brightness brightness) {
+  final theme = getAppTheme(_foundationScheme(brightness));
+  return theme.copyWith(
+    textTheme: theme.textTheme.apply(fontFamily: 'visualSans'),
+    primaryTextTheme: theme.primaryTextTheme.apply(fontFamily: 'visualSans'),
+  );
+}
 
 /// A synthetic "general content screen": ordinary Material widgets
 /// (`AppBar`, `ListTile`, `Divider`) relying purely on the theme's default
@@ -506,11 +519,33 @@ Future<void> _loadVisualReviewFonts() async {
   final iconBytes = await _materialIconsFont().readAsBytes();
   final iconLoader = FontLoader('MaterialIcons')
     ..addFont(Future<ByteData>.value(ByteData.sublistView(iconBytes)));
+  // Load both Fluent icon families from the bundled package assets so
+  // FluentIcons render as real glyphs (matches the priority harness). The
+  // package's `IconData` carry `fontPackage: 'fluentui_system_icons'`, so the
+  // FontLoader family must use the engine's prefixed `packages/<pkg>/<family>`
+  // form, not the bare family name.
+  final fluentRegularLoader =
+      FontLoader(
+        'packages/fluentui_system_icons/FluentSystemIcons-Regular',
+      )..addFont(
+        rootBundle.load(
+          'packages/fluentui_system_icons/fonts/FluentSystemIcons-Regular.ttf',
+        ),
+      );
+  final fluentFilledLoader =
+      FontLoader('packages/fluentui_system_icons/FluentSystemIcons-Filled')
+        ..addFont(
+          rootBundle.load(
+            'packages/fluentui_system_icons/fonts/FluentSystemIcons-Filled.ttf',
+          ),
+        );
 
   await Future.wait([
     paytoneLoader.load(),
     sansLoader.load(),
     iconLoader.load(),
+    fluentRegularLoader.load(),
+    fluentFilledLoader.load(),
   ]);
 }
 
