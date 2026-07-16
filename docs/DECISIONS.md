@@ -141,6 +141,83 @@ changes.
 - **Evidence:** `docs/MASTER_AGENT_HANDOVER.md` sections 2, 6, and 12;
   `lib/widgets/personalized_ui.dart`; `docs/VISUAL_SYSTEM.md`.
 
+## D-011 — Phase 1 design-token foundation formalizes, does not redesign
+
+- **Status:** accepted
+- **Recorded:** 2026-07-15, this phase's implementation
+- **Decision:** `lib/theme/app_spacing.dart`, `lib/theme/app_shape.dart`,
+  `lib/theme/motion.dart`, `lib/theme/app_semantic_colors.dart`, and
+  `lib/theme/app_typography.dart` formalize the spacing scale, shape/radius
+  roles, motion durations/curves, semantic color aliases, and typography
+  roles already documented in `docs/VISUAL_SYSTEM.md` and implemented ad hoc
+  in `lib/widgets/personalized_ui.dart`. `getAppTheme` (`lib/theme/app_themes.dart`)
+  registers `AppSemanticColors` and `AppTypography` as `ThemeExtension`s built
+  from the theme's own resolved `colorScheme`/`textTheme`, so light, dark,
+  pure-black, and dynamic-color themes all resolve correctly. Every token
+  substitution in `personalized_ui.dart` preserves the exact rendered value
+  already in use, verified by byte-identical golden output before and after
+  (`tool/visual_review_goldens/`). Two exceptions were deliberately widened as
+  minor accessibility fixes, not redesigns: `PersonalizedSurface`'s
+  `AnimatedContainer` and `PersonalizedMetric`'s `AnimatedSwitcher` now also
+  honor reduced motion via `AppMotion.resolve`, matching the convention
+  `PersonalizedReveal` and `personalizedPageRoute` already followed.
+- **Consequence:** New/touched personalized widgets should reach for these
+  tokens instead of literals. Screens outside the personalized/import surfaces
+  (Home, Library, Search, Settings, etc.) are out of scope for this phase;
+  backfilling their visual coverage and consuming these tokens is Phase 2+ per
+  `docs/VISUAL_OVERHAUL_PLAN.md` §10.
+- **Evidence:** `lib/theme/app_spacing.dart`, `lib/theme/app_shape.dart`,
+  `lib/theme/motion.dart`, `lib/theme/app_semantic_colors.dart`,
+  `lib/theme/app_typography.dart`, `lib/theme/app_themes.dart`,
+  `lib/widgets/personalized_ui.dart`,
+  `test/theme/app_theme_foundation_test.dart`,
+  `tool/visual_review_test.dart` (`Phase 1 foundation tokens` group).
+
+## D-012 — Icon system: Fluent for core, Material for personalized (for now)
+
+- **Status:** accepted
+- **Recorded:** 2026-07-15, this phase's implementation
+- **Decision:** Formalize the current de facto split as the intentional,
+  documented exception rather than migrate any icon usage in this phase: the
+  core (pre-existing) app continues to use `fluentui_system_icons`; the
+  personalized/Spotify-import fork (`lib/screens/spotify_*`,
+  `lib/widgets/personalized_ui.dart`, and related widgets) continues to use
+  Flutter's built-in Material icons (`Icons.*`).
+- **Consequence:** New core-app code should keep using Fluent icons; new
+  personalized-surface code should keep using Material icons. Do not introduce
+  a third icon package. `docs/VISUAL_OVERHAUL_PLAN.md`'s own recommendation to
+  eventually migrate the personalized fork to Fluent (unifying the app under
+  one icon system) remains a live option for a later, dedicated phase — it
+  touches every Spotify-import/review screen and needs Daniel's explicit
+  sign-off before that scope of edit, and is out of bounds for this
+  foundation-token phase.
+- **Evidence:** `docs/VISUAL_OVERHAUL_BASELINE.md` icon inventory;
+  `docs/VISUAL_OVERHAUL_PLAN.md` §2.7 and §10.
+
+## D-013 — Visual-phase test boundary
+
+- **Status:** accepted
+- **Recorded:** 2026-07-15, Phase 3 implementation
+- **Decision:** Presentation-only phases validate rendering, visual states,
+  semantics, accessibility, responsive layouts, and goldens. They do not add
+  new end-to-end interaction tests for unchanged persistence, network,
+  playback, sharing, routing, updater, import, or recovery behavior. Such
+  coverage belongs in a separately scoped functional/test-infrastructure
+  change. A newly introduced test that hangs in an unchanged subsystem is
+  removed or isolated rather than turning the visual phase into subsystem
+  debugging.
+- **Consequence:** Phase 3 dropped a Time Machine "view more" bottom-sheet
+  interaction test and two Playlist Folder add/delete interaction tests after
+  confirming (by diff inspection) that the underlying persistence/routing
+  logic those tests exercised was unmodified by the visual pass, and that the
+  hangs were isolated to test-harness/teardown timing, not the production
+  code. Direct-call and presentation-only coverage for the same screens was
+  kept. Any future phase that intentionally changes that behavior should add
+  its own scoped interaction tests as part of that change, not retrofit them
+  onto an unrelated visual pass.
+- **Evidence:** `docs/VISUAL_OVERHAUL_PLAN.md` §9 and §16; Phase 3 PR #20
+  discussion.
+
 ## New decision template
 
 ```text

@@ -22,35 +22,47 @@
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:musify/extensions/l10n.dart';
+import 'package:musify/theme/app_spacing.dart';
+import 'package:musify/theme/app_typography.dart';
+import 'package:musify/widgets/personalized_ui.dart';
 
 class OfflineSearchPlaceholder extends StatelessWidget {
   const OfflineSearchPlaceholder({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final typography = AppTypography.of(context);
+
     return Scaffold(
       appBar: AppBar(title: Text(context.l10n!.search)),
       body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              FluentIcons.cloud_off_24_regular,
-              size: 64,
-              color: Theme.of(
-                context,
-              ).colorScheme.onSurface.withValues(alpha: 0.5),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              context.l10n!.error,
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                color: Theme.of(
-                  context,
-                ).colorScheme.onSurface.withValues(alpha: 0.7),
+        child: PersonalizedReveal(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                FluentIcons.cloud_off_24_regular,
+                size: 64,
+                // `AppSemanticColors.disabledContent` is documented for
+                // actually-disabled controls, not decorative empty-state
+                // iconography — use the plain muted-icon Material role
+                // instead (matches the pre-token 0.5-alpha-over-onSurface
+                // look this replaced).
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
-            ),
-          ],
+              const SizedBox(height: AppSpacing.lg),
+              Text(
+                // This reuses the generic `error` string rather than an
+                // offline-specific message — a known, tracked copy defect
+                // (see the Phase 3 PR notes), deliberately left unchanged
+                // in this visual-only pass.
+                context.l10n!.error,
+                textAlign: TextAlign.center,
+                style: typography.supportingBody,
+              ),
+            ],
+          ),
         ),
       ),
     );
