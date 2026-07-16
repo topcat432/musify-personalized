@@ -61,14 +61,34 @@ class _MarqueeWidgetState extends State<MarqueeWidget>
   @override
   void didUpdateWidget(MarqueeWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.child != widget.child ||
-        oldWidget.direction != widget.direction) {
+    if (oldWidget.direction != widget.direction ||
+        _contentChanged(oldWidget.child, widget.child)) {
       if (_scrollController.hasClients && _scrollController.offset > 0) {
         _scrollController.jumpTo(0);
       }
       _isAnimating = false;
     }
     _scheduleOverflowCheck();
+  }
+
+  /// Whether [newChild] represents different logical content than
+  /// [oldChild], e.g. a track change on the Now Playing screen.
+  ///
+  /// Deliberately does not compare arbitrary widget object identity: parents
+  /// (e.g. the mini player) routinely rebuild an equivalent [Text] as a new
+  /// widget instance on every playback-state tick, and identity comparison
+  /// would reset an in-progress scroll on every such rebuild. Every current
+  /// [MarqueeWidget] consumer passes a [Text] child, so comparing the actual
+  /// string content distinguishes a real content change from an equivalent
+  /// rebuild.
+  bool _contentChanged(Widget oldChild, Widget newChild) {
+    if (oldChild is Text && newChild is Text) {
+      return oldChild.data != newChild.data;
+    }
+    // No current consumer passes a non-Text child. Without a reliable,
+    // generic way to detect "content changed" for an arbitrary widget,
+    // assume unchanged rather than resetting on every rebuild.
+    return false;
   }
 
   @override
@@ -88,10 +108,22 @@ class _MarqueeWidgetState extends State<MarqueeWidget>
   }
 
   void _maybeStartAnimation() {
-    if (_isDisposed || _isAnimating) return;
-    if (!mounted || MediaQuery.of(context).disableAnimations) return;
+    if (_isDisposed || !mounted) return;
     if (!_scrollController.hasClients) return;
-    if (_scrollController.position.maxScrollExtent <= 0) return;
+
+    if (_scrollController.position.maxScrollExtent <= 0) {
+      // Content no longer overflows (e.g. a long-to-short rebuild).
+      // Normalize position; the animation loop itself detects this on its
+      // next iteration and stops on its own, so `_isAnimating` is left
+      // alone here to avoid racing an in-flight loop.
+      if (_scrollController.offset > 0) {
+        _scrollController.jumpTo(0);
+      }
+      return;
+    }
+
+    if (_isAnimating) return;
+    if (MediaQuery.of(context).disableAnimations) return;
     _startAnimation();
   }
 

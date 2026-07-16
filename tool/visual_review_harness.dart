@@ -195,6 +195,26 @@ void resetPriorityReviewGlobals() {
   onlinePlaylists.value = [];
   userLikedSongsList.value = [];
   userRecentlyPlayed.value = [];
+  globalSongs = [];
+}
+
+/// Deterministic Home "Recommended for you" fixture.
+///
+/// [getRecommendedSongs] only reaches live YouTube (via
+/// `getSongsFromPlaylist`) when [globalSongs] is empty, so seeding it here
+/// keeps the Home golden offline. Exactly one song is seeded deliberately:
+/// `_getRecommendationsFromMixedSources`/`_deduplicateAndShuffle` shuffle
+/// the combined song list with an unseeded `Random`, so seeding two or more
+/// songs would make their rendered order (and therefore the golden) flaky
+/// from run to run. A single-element list cannot be reordered by a shuffle.
+void seedPriorityHomeRecommendations() {
+  globalSongs = [
+    {
+      'ytid': 'visual-home-rec-1',
+      'title': 'Midnight Drive',
+      'artist': 'The Night Signals',
+    },
+  ];
 }
 
 void seedPriorityLibraryPopulated() {
@@ -515,7 +535,15 @@ Future<void> pumpPriorityGolden(
   await tester.pump();
   if (settle) {
     await tester.pump(const Duration(milliseconds: 400));
-    await tester.pumpAndSettle(settleTimeout);
+    // `pumpAndSettle`'s first positional parameter is the per-pump-step
+    // duration, not a timeout; passing `settleTimeout` there left the
+    // timeout at Flutter's 10-minute default, so a ticker/image/marquee
+    // left running never failed near the intended timeout.
+    await tester.pumpAndSettle(
+      const Duration(milliseconds: 100),
+      EnginePhase.sendSemanticsUpdate,
+      settleTimeout,
+    );
   } else {
     await tester.pump();
     await tester.pump();

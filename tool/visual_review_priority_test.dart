@@ -12,6 +12,7 @@ import 'package:musify/screens/search_page.dart';
 import 'package:musify/screens/settings_page.dart';
 import 'package:musify/screens/spotify_matching_page.dart';
 import 'package:musify/screens/time_machine_page.dart';
+import 'package:musify/services/common_services.dart' show globalSongs;
 import 'package:musify/services/playlists_manager.dart';
 import 'package:musify/services/settings_manager.dart';
 import 'package:musify/widgets/listening_recap_card.dart';
@@ -117,6 +118,8 @@ void main() {
     });
 
     testWidgets('home populated playlists (light)', (tester) async {
+      seedPriorityHomeRecommendations();
+      final seededGlobalSongs = List<Map>.from(globalSongs);
       await pumpPriorityGolden(
         tester,
         widget: priorityReviewApp(
@@ -129,6 +132,20 @@ void main() {
       );
 
       expect(find.text('Musify.'), findsOneWidget);
+      expect(find.text('Midnight Drive'), findsWidgets);
+      // getRecommendedSongs() only reaches the live-YouTube fallback when
+      // globalSongs is empty; if that path were hit, globalSongs would be
+      // reassigned (fetched data, or left empty on failure). Asserting it is
+      // unchanged proves the deterministic seed was used, not a network
+      // fetch.
+      expect(
+        globalSongs,
+        equals(seededGlobalSongs),
+        reason:
+            'globalSongs changed during the Home golden, which means '
+            'getRecommendedSongs() reached its live-YouTube fallback '
+            'instead of using the deterministic seed.',
+      );
       await expectLater(
         find.byType(Scaffold),
         matchesGoldenFile(
