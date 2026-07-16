@@ -46,6 +46,7 @@ class _MarqueeWidgetState extends State<MarqueeWidget>
   late ScrollController _scrollController;
   bool _isAnimating = false;
   bool _isDisposed = false;
+  bool _overflowCheckScheduled = false;
 
   @override
   bool get wantKeepAlive => true;
@@ -54,11 +55,20 @@ class _MarqueeWidgetState extends State<MarqueeWidget>
   void initState() {
     super.initState();
     _scrollController = ScrollController();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _isDisposed) return;
-      if (MediaQuery.of(context).disableAnimations) return;
-      _startAnimation();
-    });
+    _scheduleOverflowCheck();
+  }
+
+  @override
+  void didUpdateWidget(MarqueeWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.child != widget.child ||
+        oldWidget.direction != widget.direction) {
+      if (_scrollController.hasClients && _scrollController.offset > 0) {
+        _scrollController.jumpTo(0);
+      }
+      _isAnimating = false;
+    }
+    _scheduleOverflowCheck();
   }
 
   @override
@@ -68,9 +78,27 @@ class _MarqueeWidgetState extends State<MarqueeWidget>
     super.dispose();
   }
 
+  void _scheduleOverflowCheck() {
+    if (_overflowCheckScheduled) return;
+    _overflowCheckScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _overflowCheckScheduled = false;
+      _maybeStartAnimation();
+    });
+  }
+
+  void _maybeStartAnimation() {
+    if (_isDisposed || _isAnimating) return;
+    if (!mounted || MediaQuery.of(context).disableAnimations) return;
+    if (!_scrollController.hasClients) return;
+    if (_scrollController.position.maxScrollExtent <= 0) return;
+    _startAnimation();
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context);
+    _scheduleOverflowCheck();
     return RepaintBoundary(
       child: SingleChildScrollView(
         scrollDirection: widget.direction,

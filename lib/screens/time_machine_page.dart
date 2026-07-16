@@ -44,8 +44,37 @@ import 'package:musify/widgets/song_bar.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+/// Fixed, immutable render-only data for a deterministic Time Machine
+/// preview (visual-review goldens and widget tests).
+///
+/// Supplying this to [TimeMachinePage.previewData] bypasses
+/// [listeningStatsService] and Hive entirely, and renders the share/View
+/// More affordances with no-op callbacks. It performs no playback, sharing,
+/// navigation, persistence, or networking.
+@immutable
+class TimeMachinePreviewData {
+  const TimeMachinePreviewData({
+    required this.periodTitle,
+    required this.periodLabel,
+    required this.minutes,
+    required this.previewSongs,
+    this.hasMoreSongs = false,
+  });
+
+  final String periodTitle;
+  final String periodLabel;
+  final int minutes;
+  final List<Map<String, dynamic>> previewSongs;
+  final bool hasMoreSongs;
+}
+
 class TimeMachinePage extends StatefulWidget {
-  const TimeMachinePage({super.key});
+  const TimeMachinePage({super.key, this.previewData});
+
+  /// Deterministic render-only preview data. Leave null for production,
+  /// which uses the real [listeningStatsService] and Hive-backed state with
+  /// real playback and sharing behavior. See [TimeMachinePreviewData].
+  final TimeMachinePreviewData? previewData;
 
   @override
   State<TimeMachinePage> createState() => _TimeMachinePageState();
@@ -75,6 +104,11 @@ class _TimeMachinePageState extends State<TimeMachinePage> {
 
   @override
   Widget build(BuildContext context) {
+    final preview = widget.previewData;
+    if (preview != null) {
+      return _buildPreview(context, preview);
+    }
+
     return ValueListenableBuilder<bool>(
       valueListenable: offlineMode,
       builder: (context, isOffline, _) {
@@ -111,6 +145,91 @@ class _TimeMachinePageState extends State<TimeMachinePage> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildPreview(BuildContext context, TimeMachinePreviewData preview) {
+    return Scaffold(
+      appBar: AppBar(title: Text(context.l10n!.timeMachine)),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(10, 0, 10, 24),
+        children: [
+          PersonalizedReveal(
+            child: _PeriodSection(
+              title: preview.periodTitle,
+              onShare: () {},
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  ListeningRecapCard(
+                    periodLabel: preview.periodLabel,
+                    minutes: preview.minutes,
+                    songs: preview.previewSongs,
+                    onSongTap: (_) {},
+                    songRowBuilder: _buildPreviewSongRow,
+                  ),
+                  if (preview.hasMoreSongs) _ViewMoreButton(onPressed: () {}),
+                ],
+              ),
+            ),
+          ),
+          const MiniPlayerBottomSpace(),
+        ],
+      ),
+    );
+  }
+
+  /// Deterministic, network-free song row used only by [_buildPreview].
+  /// Avoids [SongBar]'s `CachedNetworkImage`/`Image.file` artwork paths so
+  /// preview goldens never depend on network or disk I/O.
+  Widget _buildPreviewSongRow(
+    BuildContext context,
+    Map<String, dynamic> song,
+    int index,
+  ) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsetsDirectional.symmetric(vertical: 10),
+      child: Row(
+        children: [
+          Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(
+              color: colorScheme.primaryContainer,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              '${index + 1}',
+              style: TextStyle(
+                color: colorScheme.onPrimaryContainer,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  song['title']?.toString() ?? '',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  song['artist']?.toString() ?? '',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

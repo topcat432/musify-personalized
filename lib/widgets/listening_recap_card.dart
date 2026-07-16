@@ -35,6 +35,7 @@ class ListeningRecapCard extends StatelessWidget {
     required this.minutes,
     required this.songs,
     required this.onSongTap,
+    this.songRowBuilder,
     super.key,
   });
 
@@ -42,6 +43,18 @@ class ListeningRecapCard extends StatelessWidget {
   final int minutes;
   final List<Map<String, dynamic>> songs;
   final ValueChanged<int> onSongTap;
+
+  /// Overrides the default [SongBar] row rendering for each song.
+  ///
+  /// Used only by deterministic render-only previews (e.g. visual-review
+  /// goldens) that must not depend on network image loading. Production
+  /// callers leave this null and get the normal [SongBar] rows.
+  final Widget Function(
+    BuildContext context,
+    Map<String, dynamic> song,
+    int index,
+  )?
+  songRowBuilder;
 
   @override
   Widget build(BuildContext context) {
@@ -102,14 +115,18 @@ class ListeningRecapCard extends StatelessWidget {
           ),
           if (songs.isNotEmpty) ...[
             for (var i = 0; i < songs.length; i++)
-              SongBar(
-                songs[i],
-                false,
-                showPlayTime: true,
-                rank: i + 1,
-                onPlay: () => onSongTap(i),
-                barPadding: const EdgeInsetsDirectional.symmetric(vertical: 10),
-              ),
+              songRowBuilder != null
+                  ? songRowBuilder!(context, songs[i], i)
+                  : SongBar(
+                      songs[i],
+                      false,
+                      showPlayTime: true,
+                      rank: i + 1,
+                      onPlay: () => onSongTap(i),
+                      barPadding: const EdgeInsetsDirectional.symmetric(
+                        vertical: 10,
+                      ),
+                    ),
           ],
         ],
       ),

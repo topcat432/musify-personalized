@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
@@ -17,6 +18,26 @@ import 'package:musify/widgets/listening_recap_card.dart';
 import 'package:musify/widgets/offline_search_placeholder.dart';
 
 import 'visual_review_harness.dart';
+
+/// Fixed preview fixture for the populated Time Machine page golden.
+///
+/// Deterministic and render-only: bypasses the listening stats service and
+/// Hive entirely via [TimeMachinePage.previewData], so it does not depend on
+/// the wall clock, persisted stats, or network image loading.
+const priorityTimeMachinePreviewData = TimeMachinePreviewData(
+  periodTitle: 'June 2026',
+  periodLabel: 'June 2026',
+  minutes: 128,
+  previewSongs: [
+    {
+      'ytid': 'visual-tm-1',
+      'title': 'Midnight Drive',
+      'artist': 'The Night Signals',
+    },
+    {'ytid': 'visual-tm-2', 'title': 'Golden Hour', 'artist': 'Mara June'},
+  ],
+  hasMoreSongs: true,
+);
 
 void main() {
   late Directory hiveRoot;
@@ -465,12 +486,43 @@ void main() {
       await completePriorityReviewTest(tester);
     });
 
+    testWidgets('time machine populated page (light)', (tester) async {
+      await pumpPriorityGolden(
+        tester,
+        widget: priorityReviewApp(
+          brightness: Brightness.light,
+          reducedMotion: true,
+          child: const TimeMachinePage(
+            previewData: priorityTimeMachinePreviewData,
+          ),
+        ),
+        viewport: visualReviewStandardPhone,
+        reducedMotion: true,
+        settle: false,
+      );
+      await pumpPriorityReviewFrames(tester);
+
+      expect(find.text('Time Machine'), findsOneWidget);
+      expect(find.text('June 2026'), findsWidgets);
+      expect(find.byIcon(FluentIcons.share_24_regular), findsOneWidget);
+      expect(find.text('128'), findsOneWidget);
+      expect(find.text('Midnight Drive'), findsOneWidget);
+      expect(find.text('Golden Hour'), findsOneWidget);
+      expect(find.text('Tap to view'), findsOneWidget);
+      await expectLater(
+        find.byType(Scaffold),
+        matchesGoldenFile(
+          'visual_review_goldens/priority_time_machine_populated_light.png',
+        ),
+      );
+      await completePriorityReviewTest(tester);
+    });
+
     testWidgets('listening recap card (compact dark)', (tester) async {
       // Golden-covers the restyled recap card directly with fixed literal
-      // props, rather than through the full Time Machine page: the page's
-      // period label/month gating is wall-clock driven with no injectable
-      // clock, so a page-level populated golden would silently break every
-      // time the real current month changes.
+      // props. The populated Time Machine page golden uses
+      // [TimeMachinePreviewData] via [TimeMachinePage.previewData] for full
+      // page composition coverage.
       await pumpPriorityGolden(
         tester,
         widget: priorityReviewApp(

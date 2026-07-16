@@ -528,14 +528,17 @@ Future<void> scrollToText(
   double delta = 500,
 }) async {
   final target = find.text(text);
-  if (target.evaluate().isEmpty) {
-    await tester.scrollUntilVisible(
-      target,
-      delta,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.pumpAndSettle();
-  }
+  expect(
+    target,
+    findsOneWidget,
+    reason: 'Expected text "$text" to exist in the widget tree.',
+  );
+  await tester.scrollUntilVisible(
+    target,
+    delta,
+    scrollable: find.byType(Scrollable).first,
+  );
+  await tester.pumpAndSettle();
 }
 
 /// Core-app destructive confirmation dialog used across Settings and Library.
