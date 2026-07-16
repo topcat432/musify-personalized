@@ -62,6 +62,12 @@ android {
             dimension = "flavor"
             applicationIdSuffix = ""
         }
+        create("preview") {
+            dimension = "flavor"
+            // Isolated bleeding-edge channel. It must never share storage with
+            // production or the preserved debug fallback.
+            applicationIdSuffix = ".preview"
+        }
         create("fdroid") {
             dimension = "flavor"
             // Preserve the published F-Droid package so existing installs
