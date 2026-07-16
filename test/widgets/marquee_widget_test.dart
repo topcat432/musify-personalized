@@ -196,4 +196,65 @@ void main() {
     final controller = controllerOf(tester);
     expect(controller.offset, 0);
   });
+
+  testWidgets(
+    'a stale animation loop cannot animate or compete after the title '
+    'genuinely changes mid-pause',
+    (tester) async {
+      const pauseDuration = Duration(milliseconds: 200);
+      const animationDuration = Duration(milliseconds: 300);
+
+      await pumpMarquee(
+        tester,
+        longLabelA,
+        animationDuration: animationDuration,
+        pauseDuration: pauseDuration,
+      );
+
+      final controller = controllerOf(tester);
+      expect(controller.position.maxScrollExtent, greaterThan(0));
+      expect(controller.offset, 0);
+
+      // Still well inside the first loop's initial pauseDuration (started at
+      // t=0, due at t=200): rebuild with a different, still-overflowing
+      // title. This is a genuine content change (e.g. a Now Playing track
+      // change), so it bumps the generation and lets a new loop start, but
+      // the old loop is asleep inside `Future.delayed` and has not observed
+      // that yet.
+      await tester.pump(const Duration(milliseconds: 80));
+      await tester.pumpWidget(
+        buildMarqueeTree(
+          longLabelB,
+          animationDuration: animationDuration,
+          pauseDuration: pauseDuration,
+        ),
+      );
+      await tester.pump();
+
+      // The new loop starts its own pauseDuration from here (t~=80),
+      // due at t~=280.
+      expect(controller.offset, 0);
+
+      // Advance past t=200 (relative to the stale loop's own start), the
+      // moment its original delay would fire. The new loop's own
+      // pauseDuration does not complete until t~=280, so if only the new
+      // loop is running the offset must still be 0. Without the generation
+      // check, the stale loop would wake here and call animateTo, which
+      // would already have moved the offset off 0.
+      await tester.pump(const Duration(milliseconds: 125));
+      expect(controller.offset, 0);
+
+      // The new loop's own pauseDuration has now elapsed and it animates
+      // normally, proving the fix does not also break the replacement loop.
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 20));
+        if (controller.offset > 0) break;
+      }
+      expect(controller.offset, greaterThan(0));
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+    },
+  );
 }

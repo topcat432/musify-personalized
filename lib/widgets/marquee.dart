@@ -48,6 +48,20 @@ class _MarqueeWidgetState extends State<MarqueeWidget>
   bool _isDisposed = false;
   bool _overflowCheckScheduled = false;
 
+  /// Bumped whenever genuine content or direction change invalidates an
+  /// in-flight [_startAnimation] loop (see [didUpdateWidget]).
+  ///
+  /// [_startAnimation] captures the current generation when it starts and
+  /// checks it after every await and immediately before every `animateTo`.
+  /// A loop whose captured generation no longer matches exits without
+  /// touching [_isAnimating], since that flag belongs to whichever loop is
+  /// running for the current generation. Without this, a loop paused inside
+  /// `Future.delayed` when content changes would otherwise wake up later and
+  /// still call `animateTo`, competing with the new loop that
+  /// `_maybeStartAnimation` starts for the new content on the same
+  /// [_scrollController].
+  int _generation = 0;
+
   @override
   bool get wantKeepAlive => true;
 
@@ -63,6 +77,7 @@ class _MarqueeWidgetState extends State<MarqueeWidget>
     super.didUpdateWidget(oldWidget);
     if (oldWidget.direction != widget.direction ||
         _contentChanged(oldWidget.child, widget.child)) {
+      _generation++;
       if (_scrollController.hasClients && _scrollController.offset > 0) {
         _scrollController.jumpTo(0);
       }
@@ -147,6 +162,7 @@ class _MarqueeWidgetState extends State<MarqueeWidget>
     if (_isDisposed || _isAnimating) return;
     if (!mounted || MediaQuery.of(context).disableAnimations) return;
 
+    final generation = _generation;
     _isAnimating = true;
 
     while (_scrollController.hasClients && !_isDisposed) {
@@ -158,30 +174,41 @@ class _MarqueeWidgetState extends State<MarqueeWidget>
         }
 
         await Future.delayed(widget.pauseDuration);
+        if (generation != _generation) return;
         if (_isDisposed || !_scrollController.hasClients) break;
         if (!mounted || MediaQuery.of(context).disableAnimations) break;
 
+        if (generation != _generation) return;
         await _scrollController.animateTo(
           _scrollController.position.maxScrollExtent,
           duration: widget.animationDuration,
           curve: Curves.linear,
         );
+        if (generation != _generation) return;
 
         await Future.delayed(widget.pauseDuration);
+        if (generation != _generation) return;
         if (_isDisposed || !_scrollController.hasClients) break;
         if (!mounted || MediaQuery.of(context).disableAnimations) break;
 
+        if (generation != _generation) return;
         await _scrollController.animateTo(
           0,
           duration: widget.backDuration,
           curve: Curves.easeOut,
         );
+        if (generation != _generation) return;
       } catch (e) {
         // Handle animation interruptions gracefully
         break;
       }
     }
 
-    _isAnimating = false;
+    // A stale generation must never clear `_isAnimating` for a newer loop
+    // that `_maybeStartAnimation` may have already started for the current
+    // generation.
+    if (generation == _generation) {
+      _isAnimating = false;
+    }
   }
 }
