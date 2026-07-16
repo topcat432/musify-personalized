@@ -257,4 +257,85 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
     },
   );
+
+  testWidgets(
+    'enabling reduced motion mid-animation cancels it promptly, stays at '
+    'offset 0, and a normal loop resumes once it is disabled again',
+    (tester) async {
+      const pauseDuration = Duration(milliseconds: 20);
+      const animationDuration = Duration(milliseconds: 400);
+
+      await pumpMarquee(
+        tester,
+        longLabelA,
+        animationDuration: animationDuration,
+        pauseDuration: pauseDuration,
+      );
+
+      final controller = controllerOf(tester);
+      expect(controller.position.maxScrollExtent, greaterThan(0));
+
+      // Let the marquee begin its forward animateTo.
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 20));
+        if (controller.offset > 0) break;
+      }
+      final offsetBeforeReducedMotion = controller.offset;
+      expect(offsetBeforeReducedMotion, greaterThan(0));
+      // Comfortably mid-flight: well past the start, well before the
+      // 400ms animateTo would finish on its own.
+      expect(
+        offsetBeforeReducedMotion,
+        lessThan(controller.position.maxScrollExtent),
+      );
+
+      // Enable reduced motion while the forward animateTo is still active.
+      await tester.pumpWidget(
+        buildMarqueeTree(
+          longLabelA,
+          reducedMotion: true,
+          animationDuration: animationDuration,
+          pauseDuration: pauseDuration,
+        ),
+      );
+      // A single pump is enough for didChangeDependencies to run and cancel
+      // the animation synchronously — proving it doesn't wait for the
+      // in-flight animateTo's own 400ms duration to elapse.
+      await tester.pump();
+
+      expect(controller.offset, 0);
+
+      // No further motion for as long as reduced motion remains enabled,
+      // well past the point the original animateTo would otherwise have
+      // completed.
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(controller.offset, 0);
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(controller.offset, 0);
+
+      // Disabling reduced motion again lets a normal marquee loop restart.
+      await tester.pumpWidget(
+        buildMarqueeTree(
+          longLabelA,
+          animationDuration: animationDuration,
+          pauseDuration: pauseDuration,
+        ),
+      );
+      await tester.pump();
+
+      var resumed = false;
+      for (var i = 0; i < 15; i++) {
+        await tester.pump(const Duration(milliseconds: 20));
+        if (controller.offset > 0) {
+          resumed = true;
+          break;
+        }
+      }
+      expect(resumed, isTrue);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+    },
+  );
 }

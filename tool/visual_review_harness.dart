@@ -21,6 +21,7 @@ import 'package:musify/services/listening_stats_service.dart';
 import 'package:musify/services/playlists_manager.dart';
 import 'package:musify/services/settings_manager.dart';
 import 'package:musify/theme/app_themes.dart';
+import 'package:musify/theme/app_typography.dart';
 import 'package:musify/widgets/confirmation_dialog.dart';
 import 'package:musify/widgets/mini_player.dart';
 
@@ -70,13 +71,28 @@ ThemeData productionReviewTheme(Brightness brightness) {
   // Golden legibility only: apply the loaded readable family to the theme's
   // text so production-theme renders show real glyphs instead of Ahem boxes.
   // `.apply(fontFamily:)` changes only the family — every production font
-  // size, weight, letter-spacing, height, and color is preserved — and it
-  // cascades to AppTypography-role and raw TextStyle text via DefaultTextStyle
-  // merge. The app-bar's `paytoneOne` title lives in `appBarTheme` (not
-  // `textTheme`) and is intentionally left untouched.
+  // size, weight, letter-spacing, height, and color is preserved. The
+  // app-bar's `paytoneOne` title lives in `appBarTheme` (not `textTheme`) and
+  // is intentionally left untouched.
+  final visualTextTheme = theme.textTheme.apply(fontFamily: 'visualSans');
+  // `getAppTheme` already built and registered `AppTypography` from the
+  // theme's original `textTheme` before this runs. `ThemeData.copyWith` does
+  // not rebuild an already-registered extension, so leaving `extensions`
+  // untouched here would make `AppTypography.of(context)` keep returning
+  // styles from the unloaded original font — rebuild it from the
+  // visualSans-applied text theme so every named role also renders real
+  // glyphs. Every other extension (e.g. `AppSemanticColors`) is preserved
+  // unchanged.
+  final rebuiltExtensions = [
+    ...theme.extensions.values.where(
+      (extension) => extension is! AppTypography,
+    ),
+    AppTypography.fromTheme(visualTextTheme, theme.colorScheme),
+  ];
   return theme.copyWith(
-    textTheme: theme.textTheme.apply(fontFamily: 'visualSans'),
+    textTheme: visualTextTheme,
     primaryTextTheme: theme.primaryTextTheme.apply(fontFamily: 'visualSans'),
+    extensions: rebuiltExtensions,
   );
 }
 

@@ -12,6 +12,7 @@ import 'package:musify/services/review_sprint_audio_player.dart';
 import 'package:musify/services/spotify_import_destination_service.dart';
 import 'package:musify/services/spotify_review_workflow_service.dart';
 import 'package:musify/theme/app_themes.dart';
+import 'package:musify/theme/app_typography.dart';
 import 'package:musify/widgets/personalized_ui.dart';
 import 'package:musify/widgets/personalized_update_dialog.dart';
 
@@ -368,9 +369,24 @@ ColorScheme _foundationScheme(Brightness brightness) => ColorScheme.fromSeed(
 /// untouched. Mirrors `productionReviewTheme` in `visual_review_harness.dart`.
 ThemeData _productionReviewTheme(Brightness brightness) {
   final theme = getAppTheme(_foundationScheme(brightness));
+  final visualTextTheme = theme.textTheme.apply(fontFamily: 'visualSans');
+  // `getAppTheme` already built and registered `AppTypography` from the
+  // theme's original `textTheme` before this runs. `ThemeData.copyWith` does
+  // not rebuild an already-registered extension, so leaving `extensions`
+  // untouched here would make `AppTypography.of(context)` keep returning
+  // styles from the unloaded original font. Rebuild it from the
+  // visualSans-applied text theme, preserving every other extension (e.g.
+  // `AppSemanticColors`) unchanged.
+  final rebuiltExtensions = [
+    ...theme.extensions.values.where(
+      (extension) => extension is! AppTypography,
+    ),
+    AppTypography.fromTheme(visualTextTheme, theme.colorScheme),
+  ];
   return theme.copyWith(
-    textTheme: theme.textTheme.apply(fontFamily: 'visualSans'),
+    textTheme: visualTextTheme,
     primaryTextTheme: theme.primaryTextTheme.apply(fontFamily: 'visualSans'),
+    extensions: rebuiltExtensions,
   );
 }
 

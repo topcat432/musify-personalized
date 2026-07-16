@@ -48,6 +48,11 @@ class _MarqueeWidgetState extends State<MarqueeWidget>
   bool _isDisposed = false;
   bool _overflowCheckScheduled = false;
 
+  /// The last `MediaQuery.of(context).disableAnimations` value seen in
+  /// [didChangeDependencies], used to detect a false-to-true or true-to-false
+  /// transition rather than reacting to every dependency change.
+  bool? _lastDisableAnimations;
+
   /// Bumped whenever genuine content or direction change invalidates an
   /// in-flight [_startAnimation] loop (see [didUpdateWidget]).
   ///
@@ -70,6 +75,39 @@ class _MarqueeWidgetState extends State<MarqueeWidget>
     super.initState();
     _scrollController = ScrollController();
     _scheduleOverflowCheck();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final disableAnimations = MediaQuery.of(context).disableAnimations;
+    // `_lastDisableAnimations` is null only on the very first call (right
+    // after `initState`); treat that as "no transition" rather than a
+    // false-to-true edge; the initial `_scheduleOverflowCheck` from
+    // `initState` already covers the mount case.
+    final wasDisabled = _lastDisableAnimations ?? disableAnimations;
+    if (!wasDisabled && disableAnimations) {
+      // Reduced motion just turned on. An in-flight `_startAnimation` loop
+      // only re-checks `disableAnimations` after its current await, so a
+      // long `animateTo` (the mini player uses 8 seconds) could otherwise
+      // keep visibly scrolling for a while after the user asked for reduced
+      // motion. Bump the generation so that loop's post-await checks exit
+      // without touching `_isAnimating`, cancel the active scroll animation
+      // by jumping (which disposes the driving activity and completes the
+      // loop's pending `animateTo` future immediately), and reset
+      // `_isAnimating` directly here since no newer-generation loop is
+      // running to own that flag.
+      _generation++;
+      _isAnimating = false;
+      if (_scrollController.hasClients && _scrollController.offset != 0) {
+        _scrollController.jumpTo(0);
+      }
+    } else if (wasDisabled && !disableAnimations) {
+      // Reduced motion just turned back off: re-check overflow and let one
+      // normal marquee loop resume for the current generation.
+      _scheduleOverflowCheck();
+    }
+    _lastDisableAnimations = disableAnimations;
   }
 
   @override
