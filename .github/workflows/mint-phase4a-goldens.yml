@@ -1,0 +1,49 @@
+name: '[MINT - temporary] Phase 4A Linux golden mint'
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - agent/phase-4a-shell-home
+
+permissions:
+  contents: read
+
+jobs:
+  mint:
+    name: Regenerate Phase 4A shell/Home goldens on Linux
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.5'
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Regenerate Phase 4A goldens
+        run: |
+          flutter test tool/visual_review_priority_test.dart \
+            --plain-name "Phase 4A" \
+            --update-goldens
+
+      - name: Upload minted goldens
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase4a-linux-goldens
+          path: |
+            tool/visual_review_goldens/priority_home_empty_light.png
+            tool/visual_review_goldens/priority_shell_home_compact_light.png
+            tool/visual_review_goldens/priority_shell_home_wide_light.png
+            tool/visual_review_goldens/priority_home_announcement_light.png
+            tool/visual_review_goldens/priority_shell_home_offline_compact_dark.png
+          if-no-files-found: error
+          retention-days: 1
