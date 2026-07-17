@@ -640,6 +640,34 @@ void main() {
       await completePriorityReviewTest(tester);
     });
 
+    testWidgets('real shell on Home tab, offline (compact, dark)', (
+      tester,
+    ) async {
+      seedPriorityHomeRecommendations();
+      offlineMode.value = true;
+      final router = buildPriorityShellNavRouter();
+      await pumpPriorityGolden(
+        tester,
+        widget: priorityReviewShellAppSized(
+          router: router,
+          brightness: Brightness.dark,
+          viewSize: visualReviewCompactPhone,
+        ),
+        viewport: visualReviewCompactPhone,
+        reducedMotion: true,
+      );
+
+      expect(find.text('Search'), findsNothing);
+      expect(find.text('Home'), findsOneWidget);
+      await expectLater(
+        find.byType(Scaffold).first,
+        matchesGoldenFile(
+          'visual_review_goldens/priority_shell_home_offline_compact_dark.png',
+        ),
+      );
+      await completePriorityReviewTest(tester);
+    });
+
     testWidgets('home nothing-personalized-yet state (light)', (tester) async {
       seedPriorityHomeEmpty();
       await pumpPriorityGolden(
