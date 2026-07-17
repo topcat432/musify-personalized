@@ -517,11 +517,73 @@ Widget priorityReviewApp({
   );
 }
 
+/// Same wiring as [priorityReviewApp], but derives `MediaQueryData` from the
+/// test view (`MediaQueryData.fromView`) instead of a bare `MediaQueryData`.
+/// See [priorityReviewShellAppSized]'s doc comment for why this matters:
+/// `Home`'s own layout (`playlistHeight = MediaQuery.sizeOf(context).height *
+/// ...`) genuinely depends on a correct `MediaQuery.size`, which
+/// `priorityReviewApp` cannot provide.
+Widget priorityReviewAppSized({
+  required Widget child,
+  required Brightness brightness,
+  required Size viewSize,
+  bool useProductionTheme = true,
+  double textScale = 1,
+  bool reducedMotion = false,
+}) {
+  final theme = useProductionTheme
+      ? productionReviewTheme(brightness)
+      : reviewTheme(brightness);
+  return Builder(
+    builder: (context) {
+      final baseData = MediaQueryData.fromView(View.of(context));
+      return MediaQuery(
+        data: baseData.copyWith(
+          size: viewSize,
+          textScaler: TextScaler.linear(textScale),
+          disableAnimations: reducedMotion,
+        ),
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          theme: theme,
+          darkTheme: theme,
+          themeMode: ThemeMode.light,
+          locale: const Locale('en'),
+          localizationsDelegates: const [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: child,
+        ),
+      );
+    },
+  );
+}
+
 GoRouter buildPriorityReviewShellRouter({required String initialLocation}) {
   return GoRouter(
     initialLocation: initialLocation,
     routes: [
-      GoRoute(path: '/home', builder: (_, _) => const HomePage()),
+      GoRoute(
+        path: '/home',
+        builder: (_, _) => const HomePage(),
+        routes: [
+          GoRoute(
+            path: 'playlist/:playlistId',
+            builder: (_, state) => PriorityShellBranchPlaceholder(
+              label: 'Playlist ${state.pathParameters['playlistId']}',
+            ),
+          ),
+          GoRoute(
+            path: 'timeMachine',
+            builder: (_, _) =>
+                const PriorityShellBranchPlaceholder(label: 'Time Machine'),
+          ),
+        ],
+      ),
       GoRoute(path: '/search', builder: (_, _) => const SearchPage()),
       GoRoute(path: '/library', builder: (_, _) => const LibraryPage()),
       GoRoute(path: '/settings', builder: (_, _) => const SettingsPage()),

@@ -578,4 +578,92 @@ void main() {
       await completePriorityReviewTest(tester);
     });
   });
+
+  group('Phase 4A shell/Home pre-restyle baseline', () {
+    setUp(() async {
+      // The real BottomNavigationPage reads the global `audioHandler`
+      // directly (mini-player visibility stream), unlike the fixture-only
+      // `priorityReviewShellFrame` used by the Phase 2A shell goldens above.
+      await bindPriorityReviewAudioHandler();
+    });
+
+    testWidgets('real shell on Home tab (compact, light)', (tester) async {
+      seedPriorityHomeRecommendations();
+      final router = buildPriorityShellNavRouter();
+      await pumpPriorityGolden(
+        tester,
+        widget: priorityReviewShellAppSized(
+          router: router,
+          brightness: Brightness.light,
+          viewSize: visualReviewCompactPhone,
+        ),
+        viewport: visualReviewCompactPhone,
+        reducedMotion: true,
+      );
+
+      expect(find.text('Musify.'), findsOneWidget);
+      expect(find.byType(NavigationBar), findsOneWidget);
+      await expectLater(
+        find.byType(Scaffold).first,
+        matchesGoldenFile(
+          'visual_review_goldens/priority_shell_home_compact_light.png',
+        ),
+      );
+      await completePriorityReviewTest(tester);
+    });
+
+    testWidgets('real shell on Home tab (wide, NavigationRail, light)', (
+      tester,
+    ) async {
+      seedPriorityHomeRecommendations();
+      const wideViewport = Size(900, 800);
+      final router = buildPriorityShellNavRouter();
+      await pumpPriorityGolden(
+        tester,
+        widget: priorityReviewShellAppSized(
+          router: router,
+          brightness: Brightness.light,
+          viewSize: wideViewport,
+        ),
+        viewport: wideViewport,
+        reducedMotion: true,
+      );
+
+      expect(find.byType(NavigationRail), findsOneWidget);
+      expect(find.byType(NavigationBar), findsNothing);
+      await expectLater(
+        find.byType(Scaffold).first,
+        matchesGoldenFile(
+          'visual_review_goldens/priority_shell_home_wide_light.png',
+        ),
+      );
+      await completePriorityReviewTest(tester);
+    });
+
+    testWidgets('home nothing-personalized-yet state (light)', (tester) async {
+      seedPriorityHomeEmpty();
+      await pumpPriorityGolden(
+        tester,
+        widget: priorityReviewAppSized(
+          brightness: Brightness.light,
+          reducedMotion: true,
+          viewSize: visualReviewStandardPhone,
+          child: const HomePage(),
+        ),
+        viewport: visualReviewStandardPhone,
+        reducedMotion: true,
+      );
+
+      expect(find.text('Musify.'), findsOneWidget);
+      expect(find.text('Recommended for you'), findsNothing);
+      expect(find.text('Listening stats'), findsNothing);
+      await expectLater(
+        find.byType(Scaffold),
+        matchesGoldenFile(
+          'visual_review_goldens/priority_home_empty_light.png',
+        ),
+      );
+      await completePriorityReviewTest(tester);
+    });
+  });
 }
