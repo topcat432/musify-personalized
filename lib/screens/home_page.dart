@@ -29,6 +29,7 @@ import 'package:musify/services/common_services.dart';
 import 'package:musify/services/listening_stats_service.dart';
 import 'package:musify/services/playlists_manager.dart';
 import 'package:musify/services/settings_manager.dart';
+import 'package:musify/theme/app_spacing.dart';
 import 'package:musify/utilities/app_utils.dart';
 import 'package:musify/utilities/async_loader.dart';
 import 'package:musify/utilities/listening_stats_utils.dart';
@@ -163,11 +164,15 @@ class _HomePageState extends State<HomePage> {
               ? FluentIcons.heart_24_filled
               : FluentIcons.list_24_filled,
         ),
-        ConstrainedBox(
-          constraints: BoxConstraints(maxHeight: playlistHeight),
-          child: isLargeScreen
-              ? _buildHorizontalList(playlists, itemsNumber, playlistHeight)
-              : _buildCarouselView(playlists, itemsNumber, playlistHeight),
+        Semantics(
+          label: sectionTitle,
+          container: true,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: playlistHeight),
+            child: isLargeScreen
+                ? _buildHorizontalList(playlists, itemsNumber, playlistHeight)
+                : _buildCarouselView(playlists, itemsNumber, playlistHeight),
+          ),
         ),
       ],
     );
@@ -184,10 +189,14 @@ class _HomePageState extends State<HomePage> {
       itemBuilder: (context, index) {
         final playlist = playlists[index];
         return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          child: GestureDetector(
-            onTap: () => context.push('/home/playlist/${playlist['ytid']}'),
-            child: PlaylistCube(playlist, size: height),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+          child: Semantics(
+            button: true,
+            label: playlist['title']?.toString(),
+            child: GestureDetector(
+              onTap: () => context.push('/home/playlist/${playlist['ytid']}'),
+              child: PlaylistCube(playlist, size: height),
+            ),
           ),
         );
       },
@@ -253,7 +262,12 @@ class _HomePageState extends State<HomePage> {
               onSongTap: (index) => _playRecapSongs(previewSongs, index),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(8, 10, 8, 0),
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.sm,
+                AppSpacing.sm + 2,
+                AppSpacing.sm,
+                0,
+              ),
               child: SizedBox(
                 width: double.infinity,
                 child: FilledButton.tonalIcon(
@@ -292,6 +306,7 @@ class _HomePageState extends State<HomePage> {
           title: recommendedTitle,
           icon: FluentIcons.sparkle_24_filled,
           actionButton: IconButton(
+            tooltip: context.l10n!.play,
             onPressed: () async {
               await audioHandler.playPlaylistSong(
                 playlist: {'title': recommendedTitle, 'list': data},
