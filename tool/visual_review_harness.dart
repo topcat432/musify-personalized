@@ -272,14 +272,26 @@ void seedPriorityHomeRecommendations() {
 
 /// Deterministic Home "nothing personalized yet" fixture.
 ///
-/// Clears every *user*-data-driven section (liked-only rail, recap,
-/// recommended-for-you), each of which independently collapses to
-/// `SizedBox.shrink()` in `home_page.dart` when its own data is empty. The
-/// general suggested-playlists rail is intentionally left alone: it is
-/// backed by `getPlaylists()`, which draws from the built-in
+/// Clears every *user*-playlist-driven section (liked-only rail, recap),
+/// each of which independently collapses to `SizedBox.shrink()` in
+/// `home_page.dart` when its own data is empty. The general
+/// suggested-playlists rail is intentionally left alone: it is backed by
+/// `getPlaylists()`, which draws from the built-in
 /// `playlists`/`playlistsDB`/`albumsDB` catalog (a static, non-user list),
 /// so it is never actually empty in practice — a "fully blank Home" state
 /// does not exist in the current app and is not invented here.
+///
+/// `globalSongs` is seeded with the same single deterministic song
+/// `seedPriorityHomeRecommendations` uses, **not** left empty:
+/// `_getRecommendationsFromMixedSources` (lib/services/common_services.dart)
+/// fetches a real YouTube playlist over the network whenever `globalSongs`
+/// is empty and no other local data exists, which this fixture would
+/// otherwise trigger on every run. That means "Recommended for you" cannot
+/// be genuinely and deterministically empty at the same time as fully
+/// offline — the real app has no stable offline state where it collapses;
+/// it only renders empty if the network fallback itself fails. This
+/// fixture therefore models "no personalized playlists/recap, but generic
+/// recommendations still show" rather than a wholly blank Home.
 void seedPriorityHomeEmpty() {
   offlineMode.value = false;
   announcementURL.value = null;
@@ -287,7 +299,7 @@ void seedPriorityHomeEmpty() {
   userLikedPlaylists.value = [];
   userCustomPlaylists.value = [];
   userPlaylists.value = [];
-  globalSongs = [];
+  seedPriorityHomeRecommendations();
 }
 
 void seedPriorityLibraryPopulated() {

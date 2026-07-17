@@ -214,7 +214,12 @@ class _HomePageState extends State<HomePage> {
       onTap: (index) =>
           context.push('/home/playlist/${playlists[index]['ytid']}'),
       children: List.generate(itemCount, (index) {
-        return PlaylistCube(playlists[index], size: height * 2);
+        final playlist = playlists[index];
+        return Semantics(
+          button: true,
+          label: playlist['title']?.toString(),
+          child: PlaylistCube(playlist, size: height * 2),
+        );
       }),
     );
   }

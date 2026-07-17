@@ -722,7 +722,11 @@ void main() {
       );
 
       expect(find.text('Musify.'), findsOneWidget);
-      expect(find.text('Recommended for you'), findsNothing);
+      // "Recommended for you" is seeded (not empty): genuinely staying
+      // offline requires globalSongs to be non-empty, since
+      // _getRecommendationsFromMixedSources falls back to a real network
+      // fetch otherwise — see seedPriorityHomeEmpty's doc comment.
+      expect(find.text('Recommended for you'), findsOneWidget);
       expect(find.text('Listening stats'), findsNothing);
       await expectLater(
         find.byType(Scaffold),
