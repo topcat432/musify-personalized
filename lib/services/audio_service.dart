@@ -35,6 +35,7 @@ import 'package:musify/services/settings_manager.dart';
 import 'package:musify/utilities/map_utils.dart';
 import 'package:musify/utilities/mediaitem.dart';
 import 'package:musify/utilities/queue_entry_utils.dart';
+import 'package:musify/utilities/queue_retry_utils.dart';
 import 'package:rxdart/rxdart.dart';
 
 class MusifyAudioHandler extends BaseAudioHandler {
@@ -215,7 +216,8 @@ class MusifyAudioHandler extends BaseAudioHandler {
             if (state.processingState == ProcessingState.idle &&
                 !state.playing &&
                 _lastError != null) {
-              Future.microtask(_handlePlaybackError);
+              final failedIndex = _currentQueueIndex;
+              Future.microtask(() => _handlePlaybackError(failedIndex));
             }
             _debouncedStateUpdate();
           },
@@ -679,7 +681,14 @@ class MusifyAudioHandler extends BaseAudioHandler {
           _queueList.isNotEmpty) ||
       playNextSongAutomatically.value;
 
-  void _handlePlaybackError() {
+  /// Handles a failed playback attempt at [failedIndex].
+  ///
+  /// The retry must target the song after [failedIndex] directly, not
+  /// recompute "next" from `_currentQueueIndex` — that index has already
+  /// been reverted (above, for display continuity) back to the
+  /// previously-playing song, so recomputing from it would retry
+  /// [failedIndex] again forever instead of advancing past it.
+  void _handlePlaybackError(int failedIndex) {
     _consecutiveErrors++;
     logger.log(
       'Playback error occurred. Consecutive errors: $_consecutiveErrors',
@@ -692,10 +701,23 @@ class MusifyAudioHandler extends BaseAudioHandler {
       return;
     }
 
-    if (_canRetryPlayback()) {
-      Future.delayed(_errorRetryDelay, skipToNext);
-    } else {
+    if (!_canRetryPlayback()) {
       _lastError = null;
+      return;
+    }
+
+    final retryIndex = nextRetryQueueIndex(
+      failedIndex: failedIndex,
+      queueLength: _queueList.length,
+      repeatMode: repeatNotifier.value,
+    );
+
+    if (retryIndex != null) {
+      Future.delayed(_errorRetryDelay, () => _playFromQueue(retryIndex));
+    } else {
+      // End of queue with no repeat-all: fall back to the auto-play path,
+      // which can fetch new recommended songs to keep listening going.
+      Future.delayed(_errorRetryDelay, skipToNext);
     }
   }
 
@@ -1266,12 +1288,12 @@ class MusifyAudioHandler extends BaseAudioHandler {
             mediaItem.add(previousMediaItem);
           }
           _updatePlaybackState();
-          _handlePlaybackError();
+          _handlePlaybackError(index);
         }
       }
     } catch (e, stackTrace) {
       logger.log('Error playing from queue', error: e, stackTrace: stackTrace);
-      _handlePlaybackError();
+      _handlePlaybackError(index);
     } finally {
       // Only reset if this is still the transition that started it
       if (currentTransitionId == _currentLoadingTransitionId) {
