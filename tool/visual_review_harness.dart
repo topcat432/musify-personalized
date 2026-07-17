@@ -11,6 +11,7 @@ import 'package:go_router/go_router.dart';
 import 'package:hive/hive.dart';
 import 'package:musify/localization/app_localizations.dart';
 import 'package:musify/main.dart' show audioHandler, isFdroidBuild;
+import 'package:musify/screens/bottom_navigation_page.dart';
 import 'package:musify/screens/home_page.dart';
 import 'package:musify/screens/library_page.dart';
 import 'package:musify/screens/search_page.dart';
@@ -269,6 +270,38 @@ void seedPriorityHomeRecommendations() {
   ];
 }
 
+/// Deterministic Home "nothing personalized yet" fixture.
+///
+/// Clears every *user*-playlist-driven section (liked-only rail, recap),
+/// each of which independently collapses to `SizedBox.shrink()` in
+/// `home_page.dart` when its own data is empty. The general
+/// suggested-playlists rail is intentionally left alone: it is backed by
+/// `getPlaylists()`, which draws from the built-in
+/// `playlists`/`playlistsDB`/`albumsDB` catalog (a static, non-user list),
+/// so it is never actually empty in practice — a "fully blank Home" state
+/// does not exist in the current app and is not invented here.
+///
+/// `globalSongs` is seeded with the same single deterministic song
+/// `seedPriorityHomeRecommendations` uses, **not** left empty:
+/// `_getRecommendationsFromMixedSources` (lib/services/common_services.dart)
+/// fetches a real YouTube playlist over the network whenever `globalSongs`
+/// is empty and no other local data exists, which this fixture would
+/// otherwise trigger on every run. That means "Recommended for you" cannot
+/// be genuinely and deterministically empty at the same time as fully
+/// offline — the real app has no stable offline state where it collapses;
+/// it only renders empty if the network fallback itself fails. This
+/// fixture therefore models "no personalized playlists/recap, but generic
+/// recommendations still show" rather than a wholly blank Home.
+void seedPriorityHomeEmpty() {
+  offlineMode.value = false;
+  announcementURL.value = null;
+  wrappedEnabled.value = false;
+  userLikedPlaylists.value = [];
+  userCustomPlaylists.value = [];
+  userPlaylists.value = [];
+  seedPriorityHomeRecommendations();
+}
+
 void seedPriorityLibraryPopulated() {
   offlineMode.value = false;
   userCustomPlaylists.value = [
@@ -496,15 +529,205 @@ Widget priorityReviewApp({
   );
 }
 
+/// Same wiring as [priorityReviewApp], but derives `MediaQueryData` from the
+/// test view (`MediaQueryData.fromView`) instead of a bare `MediaQueryData`.
+/// See [priorityReviewShellAppSized]'s doc comment for why this matters:
+/// `Home`'s own layout (`playlistHeight = MediaQuery.sizeOf(context).height *
+/// ...`) genuinely depends on a correct `MediaQuery.size`, which
+/// `priorityReviewApp` cannot provide.
+Widget priorityReviewAppSized({
+  required Widget child,
+  required Brightness brightness,
+  required Size viewSize,
+  bool useProductionTheme = true,
+  double textScale = 1,
+  bool reducedMotion = false,
+}) {
+  final theme = useProductionTheme
+      ? productionReviewTheme(brightness)
+      : reviewTheme(brightness);
+  return Builder(
+    builder: (context) {
+      final baseData = MediaQueryData.fromView(View.of(context));
+      return MediaQuery(
+        data: baseData.copyWith(
+          size: viewSize,
+          textScaler: TextScaler.linear(textScale),
+          disableAnimations: reducedMotion,
+        ),
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          theme: theme,
+          darkTheme: theme,
+          themeMode: ThemeMode.light,
+          locale: const Locale('en'),
+          localizationsDelegates: const [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: child,
+        ),
+      );
+    },
+  );
+}
+
 GoRouter buildPriorityReviewShellRouter({required String initialLocation}) {
   return GoRouter(
     initialLocation: initialLocation,
     routes: [
-      GoRoute(path: '/home', builder: (_, _) => const HomePage()),
+      GoRoute(
+        path: '/home',
+        builder: (_, _) => const HomePage(),
+        routes: [
+          GoRoute(
+            path: 'playlist/:playlistId',
+            builder: (_, state) => PriorityShellBranchPlaceholder(
+              label: 'Playlist ${state.pathParameters['playlistId']}',
+            ),
+          ),
+          GoRoute(
+            path: 'timeMachine',
+            builder: (_, _) =>
+                const PriorityShellBranchPlaceholder(label: 'Time Machine'),
+          ),
+        ],
+      ),
       GoRoute(path: '/search', builder: (_, _) => const SearchPage()),
       GoRoute(path: '/library', builder: (_, _) => const LibraryPage()),
       GoRoute(path: '/settings', builder: (_, _) => const SettingsPage()),
     ],
+  );
+}
+
+/// Trivial placeholder body for shell branches that are out of scope for
+/// Phase 4A (Search/Library/Settings) — only the tab index/label is asserted
+/// for those branches, so their real screens are not needed here.
+class PriorityShellBranchPlaceholder extends StatelessWidget {
+  const PriorityShellBranchPlaceholder({required this.label, super.key});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(label)),
+      body: Text(label),
+    );
+  }
+}
+
+/// A real `StatefulShellRoute.indexedStack` router hosting the actual
+/// production `BottomNavigationPage` widget (not a fixture mirror), so shell
+/// tests exercise the real back-navigation, double-tap-reset, offline
+/// tab-hiding, and compact/wide layout logic. The Home branch renders the
+/// real `HomePage`; other branches are trivial placeholders since Search,
+/// Library, and Settings are out of scope for this phase.
+GoRouter buildPriorityShellNavRouter({String initialLocation = '/home'}) {
+  return GoRouter(
+    initialLocation: initialLocation,
+    routes: [
+      StatefulShellRoute.indexedStack(
+        pageBuilder: (context, state, navigationShell) => NoTransitionPage(
+          child: BottomNavigationPage(child: navigationShell),
+        ),
+        branches: [
+          StatefulShellBranch(
+            routes: [
+              GoRoute(path: '/home', builder: (_, _) => const HomePage()),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/search',
+                builder: (_, _) =>
+                    const PriorityShellBranchPlaceholder(label: 'Search'),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/library',
+                builder: (_, _) =>
+                    const PriorityShellBranchPlaceholder(label: 'Library'),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/settings',
+                builder: (_, _) =>
+                    const PriorityShellBranchPlaceholder(label: 'Settings'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    ],
+  );
+}
+
+/// Same wiring as [priorityReviewShellApp], but derives `MediaQueryData`
+/// from the test view (`MediaQueryData.fromView`) instead of a bare
+/// `MediaQueryData(...)`.
+///
+/// **Known pre-existing gap (not fixed here):** `priorityReviewApp` and
+/// `priorityReviewShellApp` both construct a bare `MediaQueryData(...)`,
+/// whose `size` defaults to `Size.zero` — it does not inherit the real
+/// viewport size set via `tester.view.physicalSize`/`visualReviewSetViewport`.
+/// Every existing priority/Phase-3 golden happens to test only narrow
+/// viewports (`visualReviewStandardPhone`/`visualReviewCompactPhone`), so
+/// this has never surfaced there, but it does mean any code reading
+/// `MediaQuery.of(context).size` (not just layout constraints) sees
+/// `Size.zero` in those tests today — including, notably, Home's own
+/// `playlistHeight = MediaQuery.sizeOf(context).height * 0.25 / 1.1`. Fixing
+/// that in the two shared functions above would risk changing pixel output
+/// for every existing committed golden (Search/Library/Settings/Spotify
+/// included), which is out of bounds for a Home/shell-only phase — flagged
+/// for a separately scoped harness fix rather than patched opportunistically
+/// here. This function exists solely to unblock the one new capability this
+/// phase needs (correct wide-vs-compact shell coverage) without touching the
+/// shared, wider-blast-radius helpers.
+Widget priorityReviewShellAppSized({
+  required GoRouter router,
+  required Brightness brightness,
+  required Size viewSize,
+  double textScale = 1,
+  bool reducedMotion = false,
+}) {
+  final theme = productionReviewTheme(brightness);
+  return Builder(
+    builder: (context) {
+      final baseData = MediaQueryData.fromView(View.of(context));
+      return MediaQuery(
+        data: baseData.copyWith(
+          size: viewSize,
+          textScaler: TextScaler.linear(textScale),
+          disableAnimations: reducedMotion,
+        ),
+        child: MaterialApp.router(
+          debugShowCheckedModeBanner: false,
+          theme: theme,
+          darkTheme: theme,
+          themeMode: ThemeMode.light,
+          locale: const Locale('en'),
+          localizationsDelegates: const [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: AppLocalizations.supportedLocales,
+          routerConfig: router,
+        ),
+      );
+    },
   );
 }
 
