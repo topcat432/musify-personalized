@@ -19,6 +19,7 @@
  *     please visit: https://github.com/gokadzev/Musify
  */
 
+import 'package:audio_service/audio_service.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:musify/constants/app_constants.dart';
@@ -218,12 +219,21 @@ class _UserSongsPageState extends State<UserSongsPage> {
                           ? userOfflineSongs.value
                           : userRecentlyPlayed.value;
                       if (songs.isEmpty) return;
-                      final shuffled = List<Map>.from(songs.whereType<Map>())
-                        ..shuffle();
+                      final orderedSongs = List<Map>.from(
+                        songs.whereType<Map>(),
+                      );
+                      if (orderedSongs.isEmpty) return;
+                      // Queue in natural order, then enable shuffle through
+                      // the real toggle so `shuffleNotifier`/the persisted
+                      // setting/the restorable original order all stay
+                      // consistent with what this button did.
                       await audioHandler.addPlaylistToQueue(
-                        shuffled,
+                        orderedSongs,
                         replace: true,
                         startIndex: 0,
+                      );
+                      await audioHandler.setShuffleMode(
+                        AudioServiceShuffleMode.all,
                       );
                     },
                   ),

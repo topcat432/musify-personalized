@@ -19,6 +19,7 @@
  *     please visit: https://github.com/gokadzev/Musify
  */
 
+import 'package:audio_service/audio_service.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:musify/main.dart';
@@ -36,14 +37,17 @@ class ShufflePlayButton extends StatelessWidget {
       tooltip: 'Shuffle play',
       onPressed: () async {
         if (songs.isEmpty) return;
-        final shuffledSongs = List<Map>.from(songs.whereType<Map>());
-        if (shuffledSongs.isEmpty) return;
-        shuffledSongs.shuffle();
+        final orderedSongs = List<Map>.from(songs.whereType<Map>());
+        if (orderedSongs.isEmpty) return;
+        // Queue in natural order, then enable shuffle through the real
+        // toggle so `shuffleNotifier`/the persisted setting/the restorable
+        // original order all stay consistent with what the button did.
         await audioHandler.addPlaylistToQueue(
-          shuffledSongs,
+          orderedSongs,
           replace: true,
           startIndex: 0,
         );
+        await audioHandler.setShuffleMode(AudioServiceShuffleMode.all);
       },
     );
   }
