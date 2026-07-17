@@ -2,6 +2,9 @@ name: '[MINT - temporary] Phase 4A Linux golden mint'
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - agent/phase-4a-shell-home
 
 permissions:
   contents: read
