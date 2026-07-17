@@ -4,6 +4,8 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
+import 'package:musify/constants/app_constants.dart'
+    show recommendedCubesNumber;
 import 'package:musify/screens/about_page.dart';
 import 'package:musify/screens/home_page.dart';
 import 'package:musify/screens/library_page.dart';
@@ -580,11 +582,38 @@ void main() {
   });
 
   group('Phase 4A shell/Home pre-restyle baseline', () {
+    // Every test in this group renders Home, whose general
+    // suggested-playlists rail is backed by `getPlaylists()`
+    // (lib/services/playlists_manager.dart), which does
+    // `List<Map>.from(playlists)..shuffle()` — an *unseeded* shuffle over
+    // the built-in, always-non-empty `playlists` catalog — and takes the
+    // first `recommendedCubesNumber`. That makes two things non-deterministic
+    // per run, not one: which catalog entries appear, and (since real
+    // entries carry real external `image` URLs) whether each cube's network
+    // artwork fetch fails before or after the golden snapshot is taken.
+    // Neither is fixable by waiting longer or clearing caches (confirmed:
+    // still flaky after both, including on real Linux CI runs of the exact
+    // same commit producing different pixel output). The only fully
+    // deterministic fix is to replace the catalog with a fixed, image-free
+    // fixture for the duration of this group, so every cube renders the
+    // same generic placeholder regardless of shuffle order or network state.
+    late List<Map> originalCatalogPlaylists;
+
     setUp(() async {
       // The real BottomNavigationPage reads the global `audioHandler`
       // directly (mini-player visibility stream), unlike the fixture-only
       // `priorityReviewShellFrame` used by the Phase 2A shell goldens above.
       await bindPriorityReviewAudioHandler();
+
+      originalCatalogPlaylists = List<Map>.from(playlists);
+      playlists = List.generate(
+        recommendedCubesNumber,
+        (i) => {'ytid': 'phase4a-catalog-fixture-$i', 'title': 'Fixture $i'},
+      );
+    });
+
+    tearDown(() {
+      playlists = originalCatalogPlaylists;
     });
 
     testWidgets('real shell on Home tab (compact, light)', (tester) async {
@@ -599,6 +628,13 @@ void main() {
         ),
         viewport: visualReviewCompactPhone,
         reducedMotion: true,
+        // The general suggested-playlists rail's catalog artwork attempts a
+        // real (mocked-to-fail) network fetch with its own retry/backoff;
+        // a short settle timeout races that against the fetch failing,
+        // producing an intermittent extra "broken image" placeholder icon.
+        // A generous timeout lets the failure fully resolve before the
+        // golden snapshot instead of racing it.
+        settleTimeout: const Duration(seconds: 10),
       );
 
       expect(find.text('Musify.'), findsOneWidget);
@@ -627,6 +663,7 @@ void main() {
         ),
         viewport: wideViewport,
         reducedMotion: true,
+        settleTimeout: const Duration(seconds: 10),
       );
 
       expect(find.byType(NavigationRail), findsOneWidget);
@@ -655,6 +692,7 @@ void main() {
         ),
         viewport: visualReviewCompactPhone,
         reducedMotion: true,
+        settleTimeout: const Duration(seconds: 10),
       );
 
       expect(find.text('Search'), findsNothing);
@@ -680,6 +718,7 @@ void main() {
         ),
         viewport: visualReviewStandardPhone,
         reducedMotion: true,
+        settleTimeout: const Duration(seconds: 10),
       );
 
       expect(find.text('Musify.'), findsOneWidget);
@@ -707,6 +746,7 @@ void main() {
         ),
         viewport: visualReviewStandardPhone,
         reducedMotion: true,
+        settleTimeout: const Duration(seconds: 10),
       );
 
       expect(find.byIcon(FluentIcons.megaphone_24_filled), findsOneWidget);
