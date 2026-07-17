@@ -665,5 +665,34 @@ void main() {
       );
       await completePriorityReviewTest(tester);
     });
+
+    testWidgets('home with announcement banner (light)', (tester) async {
+      seedPriorityHomeRecommendations();
+      announcementURL.value = 'https://example.com/announcement';
+      await pumpPriorityGolden(
+        tester,
+        widget: priorityReviewAppSized(
+          brightness: Brightness.light,
+          reducedMotion: true,
+          viewSize: visualReviewStandardPhone,
+          child: const HomePage(),
+        ),
+        viewport: visualReviewStandardPhone,
+        reducedMotion: true,
+      );
+
+      expect(find.byIcon(FluentIcons.megaphone_24_filled), findsOneWidget);
+      expect(
+        find.byIcon(FluentIcons.dismiss_circle_24_regular),
+        findsOneWidget,
+      );
+      await expectLater(
+        find.byType(Scaffold),
+        matchesGoldenFile(
+          'visual_review_goldens/priority_home_announcement_light.png',
+        ),
+      );
+      await completePriorityReviewTest(tester);
+    });
   });
 }
