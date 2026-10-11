@@ -58,8 +58,19 @@ class _SpotifyImportDestinationPageState
   }
 
   void _applySnapshot(SpotifyImportDestinationSnapshot snapshot) {
+    final previousSnapshot = _snapshot;
     _snapshot = snapshot;
-    _countController.text = snapshot.resolvedSongs.length.toString();
+    if (previousSnapshot == null || _useAll) {
+      _countController.text = snapshot.resolvedSongs.length.toString();
+    } else {
+      // Refresh duplicate counts after a transfer without silently expanding
+      // the first-N amount the user approved for this destination.
+      final requestedCount = int.tryParse(_countController.text.trim());
+      if (requestedCount != null &&
+          requestedCount > snapshot.resolvedSongs.length) {
+        _countController.text = snapshot.resolvedSongs.length.toString();
+      }
+    }
     if (_playlistNameController.text.trim().isEmpty) {
       _playlistNameController.text = snapshot.sourceName;
     }
@@ -265,8 +276,8 @@ class _SpotifyImportDestinationPageState
                     icon: Icons.favorite_rounded,
                     title: 'Liked Songs',
                     description: 'Add them to your heart collection',
-                    selected: _destination ==
-                        SpotifyImportDestinationKind.likedSongs,
+                    selected:
+                        _destination == SpotifyImportDestinationKind.likedSongs,
                     enabled: !_saving,
                     onTap: () => setState(
                       () => _destination =
@@ -277,8 +288,10 @@ class _SpotifyImportDestinationPageState
                   _SelectionCard(
                     icon: Icons.playlist_add_rounded,
                     title: 'Create a new playlist',
-                    description: 'Keep this import together as its own playlist',
-                    selected: _destination ==
+                    description:
+                        'Keep this import together as its own playlist',
+                    selected:
+                        _destination ==
                         SpotifyImportDestinationKind.newPlaylist,
                     enabled: !_saving,
                     onTap: () => setState(
@@ -305,7 +318,8 @@ class _SpotifyImportDestinationPageState
                     description: readySnapshot.customPlaylists.isEmpty
                         ? 'No Musify playlists are available yet'
                         : 'Choose from ${readySnapshot.customPlaylists.length} Musify playlists',
-                    selected: _destination ==
+                    selected:
+                        _destination ==
                         SpotifyImportDestinationKind.existingPlaylist,
                     enabled:
                         !_saving && readySnapshot.customPlaylists.isNotEmpty,
@@ -392,10 +406,7 @@ class SpotifyImportConfirmationDialog extends StatelessWidget {
       ),
       actions: [
         TextButton(onPressed: onCancel, child: const Text('Not yet')),
-        FilledButton(
-          onPressed: onConfirm,
-          child: const Text('Transfer songs'),
-        ),
+        FilledButton(onPressed: onConfirm, child: const Text('Transfer songs')),
       ],
     );
   }
@@ -611,9 +622,7 @@ class _TransferActionBar extends StatelessWidget {
             ),
             const SizedBox(width: 14),
             FilledButton.icon(
-              style: FilledButton.styleFrom(
-                minimumSize: const Size(0, 48),
-              ),
+              style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
               onPressed: saving ? null : onPressed,
               icon: saving
                   ? const SizedBox.square(
