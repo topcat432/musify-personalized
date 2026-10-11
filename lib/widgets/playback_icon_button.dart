@@ -35,7 +35,8 @@ Widget buildPlaybackIconButton(
     stream: audioHandler.playbackState.distinct((previous, current) {
       // Only rebuild if relevant state changes
       return previous.playing == current.playing &&
-          previous.processingState == current.processingState;
+          previous.processingState == current.processingState &&
+          previous.errorMessage == current.errorMessage;
     }),
     builder: (context, snapshot) {
       final playbackState = snapshot.data;
@@ -46,7 +47,15 @@ Widget buildPlaybackIconButton(
       VoidCallback? onPressed;
       String? semanticLabel;
 
-      if (processingState == AudioProcessingState.loading ||
+      if (playbackState?.errorMessage != null) {
+        iconWidget = Icon(
+          FluentIcons.warning_24_regular,
+          color: iconColor,
+          size: iconSize,
+        );
+        onPressed = null;
+        semanticLabel = 'Source unavailable';
+      } else if (processingState == AudioProcessingState.loading ||
           processingState == AudioProcessingState.buffering) {
         iconWidget = SizedBox(
           width: iconSize,
@@ -56,8 +65,8 @@ Widget buildPlaybackIconButton(
             valueColor: AlwaysStoppedAnimation<Color>(iconColor),
           ),
         );
-        onPressed = null;
-        semanticLabel = context.l10n!.loading;
+        onPressed = audioHandler.stop;
+        semanticLabel = 'Cancel playback';
       } else if (processingState == AudioProcessingState.completed) {
         iconWidget = Icon(
           FluentIcons.arrow_counterclockwise_24_regular,

@@ -42,7 +42,8 @@ import 'package:musify/utilities/queue_retry_utils.dart';
 import 'package:rxdart/rxdart.dart';
 
 class MusifyAudioHandler extends BaseAudioHandler {
-  MusifyAudioHandler({AudioPlayer? player}) {
+  MusifyAudioHandler({AudioPlayer? player, OnlineSourceFactory? sourceFactory})
+    : _onlineSourceFactory = sourceFactory ?? onlineAudioSource {
     _androidEqualizer = AndroidEqualizer();
     audioPlayer =
         player ??
@@ -74,6 +75,7 @@ class MusifyAudioHandler extends BaseAudioHandler {
 
   late final AndroidEqualizer _androidEqualizer;
   late final AudioPlayer audioPlayer;
+  final OnlineSourceFactory _onlineSourceFactory;
   bool _equalizerInitialized = false;
   Future<bool>? _equalizerInitFuture;
   DateTime _equalizerRetryNotBefore = DateTime.fromMillisecondsSinceEpoch(0);
@@ -104,6 +106,8 @@ class MusifyAudioHandler extends BaseAudioHandler {
   bool _sponsorSeekPending = false;
 
   String? _lastError;
+  String? _visiblePlaybackError;
+  AudioSource? _failedAudioSource;
   int _consecutiveErrors = 0;
   static const int _maxConsecutiveErrors = 3;
 
@@ -127,8 +131,11 @@ class MusifyAudioHandler extends BaseAudioHandler {
         audioPlayer.positionStream,
         audioPlayer.bufferedPositionStream,
         audioPlayer.durationStream,
-        (position, bufferedPosition, duration) =>
-            PositionData(position, bufferedPosition, duration ?? Duration.zero),
+        (position, bufferedPosition, duration) => PositionData(
+          position,
+          bufferedPosition,
+          duration ?? mediaItem.valueOrNull?.duration ?? Duration.zero,
+        ),
       ).distinct((prev, curr) {
         return (prev.position - curr.position).abs() < _positionDataThreshold &&
             prev.duration == curr.duration &&
@@ -620,6 +627,7 @@ class MusifyAudioHandler extends BaseAudioHandler {
           currentState.processingState != newProcessingState ||
           currentState.queueIndex != _currentQueueIndex ||
           currentState.speed != audioPlayer.speed ||
+          currentState.errorMessage != _visiblePlaybackError ||
           shouldEmitProgressTick ||
           hasBufferedPositionChange ||
           (_hasSignificantPositionChange(
@@ -645,6 +653,7 @@ class MusifyAudioHandler extends BaseAudioHandler {
             updatePosition: currentPosition,
             bufferedPosition: bufferedPosition,
             speed: audioPlayer.speed,
+            errorMessage: _visiblePlaybackError,
             queueIndex:
                 _currentQueueIndex >= 0 &&
                     _currentQueueIndex < _queueList.length
@@ -745,9 +754,19 @@ class MusifyAudioHandler extends BaseAudioHandler {
     final entryId = _queueEntryIds.ensureId(_queueList[failedIndex]);
     final transition = _songTransitionCounter;
     _handledRuntimeErrorTransition = transition;
+    final failedSource = audioPlayer.audioSource;
     try {
       logger.log('Native playback source failed', error: error.code);
       await pause();
+      if (transition != _songTransitionCounter ||
+          !identical(failedSource, audioPlayer.audioSource))
+        return;
+      _failedAudioSource = failedSource;
+      if (failedSource is GoogleVideoByteSource) {
+        await failedSource.cancelRequests();
+      }
+      if (transition != _songTransitionCounter) return;
+      await audioPlayer.stop();
       if (transition != _songTransitionCounter) return;
       final currentFailedIndex = _queueList.indexWhere(
         (song) => _queueEntryIds.ensureId(song) == entryId,
@@ -755,6 +774,8 @@ class MusifyAudioHandler extends BaseAudioHandler {
       if (currentFailedIndex < 0 || _currentQueueIndex != currentFailedIndex)
         return;
       _lastError = 'This audio source is unavailable. Try another recording.';
+      _visiblePlaybackError =
+          'Source unavailable. Choose another recording or a local track.';
       _updatePlaybackState();
       _handlePlaybackError(currentFailedIndex);
     } catch (failure) {
@@ -762,6 +783,25 @@ class MusifyAudioHandler extends BaseAudioHandler {
     } finally {
       _runtimeErrorPending = false;
     }
+  }
+
+  Future<void> _handleBoundedSourceFailure(
+    AudioSource source,
+    int transition,
+  ) async {
+    if (transition != _songTransitionCounter ||
+        !identical(source, audioPlayer.audioSource))
+      return;
+    if (_currentLoadingIndex >= 0) {
+      // Interrupt the initial native load; its existing Future owns this
+      // failure. The terminal source guard prohibits a refreshed-URL retry.
+      if (source is GoogleVideoByteSource) await source.cancelRequests();
+      if (transition == _songTransitionCounter) await audioPlayer.stop();
+      return;
+    }
+    await handleRuntimePlaybackError(
+      PlayerException(0, 'Source unavailable', 0),
+    );
   }
 
   /// Handles a failed playback attempt at [failedIndex].
@@ -772,6 +812,9 @@ class MusifyAudioHandler extends BaseAudioHandler {
   /// previously-playing song, so recomputing from it would retry
   /// [failedIndex] again forever instead of advancing past it.
   void _handlePlaybackError(int failedIndex) {
+    _visiblePlaybackError =
+        'Source unavailable. Choose another recording or a local track.';
+    _updatePlaybackState();
     _consecutiveErrors++;
     logger.log(
       'Playback error occurred. Consecutive errors: $_consecutiveErrors',
@@ -805,14 +848,15 @@ class MusifyAudioHandler extends BaseAudioHandler {
     } else if (playNextSongAutomatically.value) {
       // Never recompute next from the restored, previously playing index.
       Future.delayed(_errorRetryDelay, _backgroundAddSongsToQueue);
-    } else {
-      _lastError = null;
     }
   }
 
   @visibleForTesting
   Future<void> handleSongCompletion() async {
     try {
+      // A decoded initial buffer is not evidence of healthy playback. Reset
+      // the failure budget only after a complete track or a fresh user queue.
+      _consecutiveErrors = 0;
       if (_currentQueueIndex >= 0 && _currentQueueIndex < _queueList.length) {
         _addToHistory(_queueList[_currentQueueIndex]);
       }
@@ -1037,6 +1081,7 @@ class MusifyAudioHandler extends BaseAudioHandler {
     try {
       final manuallyAddedSongs = replace ? _getUnplayedManualSongs() : <Map>[];
       if (replace) {
+        _consecutiveErrors = 0;
         _queueList.clear();
         _originalQueueList.clear();
         _currentQueueIndex = 0;
@@ -1351,6 +1396,8 @@ class MusifyAudioHandler extends BaseAudioHandler {
     final currentTransitionId = _songTransitionCounter;
     _currentLoadingIndex = index;
     _currentLoadingTransitionId = currentTransitionId;
+    _visiblePlaybackError = null;
+    _failedAudioSource = null;
 
     try {
       final previousQueueIndex = _currentQueueIndex;
@@ -1379,7 +1426,6 @@ class MusifyAudioHandler extends BaseAudioHandler {
       // Only process result if this is still the current transition
       if (currentTransitionId == _currentLoadingTransitionId) {
         if (success) {
-          _consecutiveErrors = 0;
           _preloadUpcomingSongs();
           // Trigger background song addition if auto-play is enabled
           if (playNextSongAutomatically.value) {
@@ -1699,6 +1745,7 @@ class MusifyAudioHandler extends BaseAudioHandler {
   @override
   Future<void> play() async {
     try {
+      if (_visiblePlaybackError != null) return;
       if (audioPlayer.audioSource == null) {
         final recentSong = _latestResumableSong();
         if (recentSong != null) {
@@ -1743,6 +1790,7 @@ class MusifyAudioHandler extends BaseAudioHandler {
   Future<void> stop() async {
     // Invalidate queued retries and loads so an explicit stop stays stopped.
     _songTransitionCounter++;
+    final stoppedTransition = _songTransitionCounter;
     _debounceTimer?.cancel();
     _completionEventPending = false;
     _currentLoadingIndex = -1;
@@ -1754,6 +1802,9 @@ class MusifyAudioHandler extends BaseAudioHandler {
         countCurrentTick: true,
         wasPlaying: audioPlayer.playing,
       );
+      final source = audioPlayer.audioSource;
+      if (source is GoogleVideoByteSource) await source.cancelRequests();
+      if (stoppedTransition != _songTransitionCounter) return;
       await audioPlayer.stop();
       _resetPreloadingState();
     } catch (e, stackTrace) {
@@ -2092,6 +2143,11 @@ class MusifyAudioHandler extends BaseAudioHandler {
         stackTrace: stackTrace,
       );
 
+      if (audioSource is GoogleVideoByteSource && audioSource.isUnavailable) {
+        _lastError = 'Audio source is unavailable.';
+        return false;
+      }
+
       if (isOffline) {
         // If offline mode is explicitly enabled, do not attempt any online
         // fallback — respect the user's offline-only preference.
@@ -2213,7 +2269,14 @@ class MusifyAudioHandler extends BaseAudioHandler {
         return AudioSource.file(songUrl, tag: tag);
       }
 
-      final audioSource = onlineAudioSource(songUrl, tag: tag);
+      final transition = _songTransitionCounter;
+      late final AudioSource audioSource;
+      audioSource = _onlineSourceFactory(
+        songUrl,
+        tag: tag,
+        onUnavailable: () =>
+            unawaited(_handleBoundedSourceFailure(audioSource, transition)),
+      );
 
       if (!sponsorBlockSupport.value) {
         return audioSource;
@@ -2375,6 +2438,10 @@ class MusifyAudioHandler extends BaseAudioHandler {
 
   Future<void> playAgain() async {
     try {
+      if (_visiblePlaybackError != null ||
+          identical(_failedAudioSource, audioPlayer.audioSource) &&
+              _failedAudioSource != null)
+        return;
       listeningStatsService.finishListeningSession(
         countCurrentTick: true,
         wasPlaying: audioPlayer.playing,

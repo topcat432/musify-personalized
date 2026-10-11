@@ -224,7 +224,9 @@ class _MiniPlayerBodyState extends State<_MiniPlayerBody>
                             key: ValueKey(metadata.id),
                             child: _MetadataWidget(
                               title: metadata.title,
-                              artist: metadata.artist,
+                              artist: state.playbackState.errorMessage == null
+                                  ? metadata.artist
+                                  : 'Source unavailable',
                               colorScheme: colorScheme,
                             ),
                           ),
@@ -414,23 +416,28 @@ class _CircularPlayButton extends StatelessWidget {
             ),
           ),
           if (isLoading)
-            SizedBox(
-              width: 24,
-              height: 24,
-              child: CircularProgressIndicator(
-                strokeWidth: 2.5,
-                valueColor: AlwaysStoppedAnimation<Color>(colorScheme.primary),
+            IconButton(
+              onPressed: audioHandler.stop,
+              tooltip: 'Cancel playback',
+              icon: Icon(
+                FluentIcons.stop_24_regular,
+                color: colorScheme.primary,
+                size: 22,
               ),
             )
           else
             IconButton(
-              onPressed: isCompleted
+              onPressed: playbackState.errorMessage != null
+                  ? null
+                  : isCompleted
                   ? () => audioHandler.playAgain()
                   : (isPlaying ? audioHandler.pause : audioHandler.play),
               splashColor: Colors.transparent,
               highlightColor: Colors.transparent,
               icon: Icon(
-                isCompleted
+                playbackState.errorMessage != null
+                    ? FluentIcons.warning_24_regular
+                    : isCompleted
                     ? FluentIcons.arrow_counterclockwise_24_filled
                     : (isPlaying
                           ? FluentIcons.pause_16_filled

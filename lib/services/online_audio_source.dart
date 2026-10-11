@@ -9,11 +9,19 @@ import 'package:flutter/services.dart' show appFlavor;
 import 'package:http/http.dart' as http;
 import 'package:just_audio/just_audio.dart';
 
+typedef OnlineSourceFactory =
+    AudioSource Function(
+      String url, {
+      dynamic tag,
+      VoidCallback? onUnavailable,
+    });
+
 /// Only the GitHub Android flavor allows the player's IPv4 loopback transport.
 AudioSource onlineAudioSource(
   String url, {
   dynamic tag,
   bool? enableBoundedTransport,
+  VoidCallback? onUnavailable,
 }) {
   final uri = Uri.parse(url);
   final enabled =
@@ -23,7 +31,12 @@ AudioSource onlineAudioSource(
           appFlavor == 'github');
   final length = int.tryParse(uri.queryParameters['clen'] ?? '');
   if (enabled && GoogleVideoByteSource.accepts(uri, length)) {
-    return GoogleVideoByteSource(uri, sourceLength: length!, tag: tag);
+    return GoogleVideoByteSource(
+      uri,
+      sourceLength: length!,
+      tag: tag,
+      onUnavailable: onUnavailable,
+    );
   }
   return AudioSource.uri(uri, tag: tag);
 }
@@ -38,6 +51,7 @@ class GoogleVideoByteSource extends StreamAudioSource {
     http.Client Function()? clientFactory,
     this.chunkSize = 256 * 1024,
     this.timeout = const Duration(seconds: 10),
+    this.onUnavailable,
   }) : _clientFactory = clientFactory ?? http.Client.new {
     if (!accepts(uri, sourceLength) ||
         chunkSize <= 0 ||
@@ -52,8 +66,17 @@ class GoogleVideoByteSource extends StreamAudioSource {
   final int chunkSize;
   final Duration timeout;
   final http.Client Function() _clientFactory;
+  final VoidCallback? onUnavailable;
   final Set<http.Client> _clients = {};
+  final Set<Future<void> Function()> _cancellations = {};
   StateError? _terminalError;
+  bool _cancelled = false;
+  bool get isUnavailable => _terminalError != null;
+
+  Future<void> cancelRequests() async {
+    _cancelled = true;
+    await Future.wait(_cancellations.toList().map((cancel) => cancel()));
+  }
 
   static bool accepts(Uri uri, int? length) =>
       uri.scheme == 'https' &&
@@ -68,6 +91,7 @@ class GoogleVideoByteSource extends StreamAudioSource {
   @override
   Future<StreamAudioResponse> request([int? start, int? end]) async {
     if (_terminalError != null) throw _terminalError!;
+    if (_cancelled) throw StateError('Audio byte source was cancelled.');
     final offset = start ?? 0;
     final limit = end == null || end > sourceLength ? sourceLength : end;
     if (offset < 0 || offset >= sourceLength || limit <= offset) {
@@ -87,20 +111,33 @@ class GoogleVideoByteSource extends StreamAudioSource {
   Stream<List<int>> _rangeStream(int start, int end) {
     http.Client? client;
     StreamSubscription<List<int>>? subscription;
+    late final Future<void> Function() cancel;
+    late final StreamController<List<int>> controller;
     var closed = false;
     void close() {
       if (closed) return;
       closed = true;
+      _cancellations.remove(cancel);
       if (client != null) {
         _clients.remove(client);
         client!.close();
       }
     }
 
-    late final StreamController<List<int>> controller;
+    cancel = () async {
+      // Closing the HTTP client first aborts a pending header/body read.
+      close();
+      await subscription?.cancel();
+      if (!controller.isClosed) unawaited(controller.close());
+    };
     controller = StreamController<List<int>>(
       sync: true,
       onListen: () {
+        if (_cancelled || isUnavailable) {
+          controller.addError(StateError('Audio byte source is unavailable.'));
+          unawaited(controller.close());
+          return;
+        }
         if (_clients.length >= 4) {
           controller.addError(StateError('Too many audio byte requests.'));
           unawaited(controller.close());
@@ -108,6 +145,7 @@ class GoogleVideoByteSource extends StreamAudioSource {
         }
         client = _clientFactory();
         _clients.add(client!);
+        _cancellations.add(cancel);
         subscription = _fetchRanges(client!, start, end, () => closed).listen(
           controller.add,
           onError: controller.addError,
@@ -119,11 +157,7 @@ class GoogleVideoByteSource extends StreamAudioSource {
       },
       onPause: () => subscription?.pause(),
       onResume: () => subscription?.resume(),
-      onCancel: () async {
-        // Close first: this also aborts an in-flight header/body request.
-        close();
-        await subscription?.cancel();
-      },
+      onCancel: cancel,
     );
     return controller.stream;
   }
@@ -136,6 +170,8 @@ class GoogleVideoByteSource extends StreamAudioSource {
   ) async* {
     try {
       for (var cursor = start; cursor < end;) {
+        if (cancelled() || _cancelled) return;
+        if (_terminalError != null) throw _terminalError!;
         final last = (cursor + chunkSize < end ? cursor + chunkSize : end) - 1;
         final expected = last - cursor + 1;
         final request = http.Request('GET', uri)
@@ -172,9 +208,13 @@ class GoogleVideoByteSource extends StreamAudioSource {
         // Native retries may ask the same source again after a denied or
         // damaged range. Fail before local response headers, without another
         // upstream request, a partial-success claim or access fallback.
+        final firstFailure = _terminalError == null;
         _terminalError = StateError(
           'Audio byte source is unavailable after a failed range request.',
         );
+        if (firstFailure && onUnavailable != null) {
+          scheduleMicrotask(onUnavailable!);
+        }
         rethrow;
       }
     }

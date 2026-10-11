@@ -391,6 +391,40 @@ void main() {
   });
 
   test(
+    'explicit source cancellation closes all pending reads without a failure callback',
+    () async {
+      var failures = 0;
+      final clients = <_Client>[];
+      final started = <Completer<void>>[];
+      final source = GoogleVideoByteSource(
+        _uri,
+        sourceLength: 10,
+        onUnavailable: () => failures++,
+        clientFactory: () {
+          final pending = Completer<http.StreamedResponse>();
+          final ready = Completer<void>();
+          started.add(ready);
+          final client = _Client((_) {
+            ready.complete();
+            return pending.future;
+          }, onClose: () => pending.completeError(StateError('cancelled')));
+          clients.add(client);
+          return client;
+        },
+      );
+      for (var i = 0; i < 2; i++) {
+        (await source.request()).stream.listen((_) {}, onError: (Object _) {});
+        await started[i].future;
+      }
+      await source.cancelRequests().timeout(const Duration(milliseconds: 200));
+      expect(clients.every((client) => client.closes == 1), isTrue);
+      expect(failures, 0);
+      await expectLater(source.request(), throwsStateError);
+      expect(clients.length, 2);
+    },
+  );
+
+  test(
     'transport rejects external HTTP, lookalike hosts, invalid lengths and ports',
     () {
       for (final url in [

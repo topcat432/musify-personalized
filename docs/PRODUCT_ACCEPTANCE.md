@@ -108,6 +108,25 @@ on the final code and distinguish it from the real Samsung export.
 
 ## Current execution evidence
 
+### Remaining-work classification after ee5ea7c9
+
+The 34 incomplete rows have different subgates. Primary grouping below covers
+each exactly once; a provider-dependent row can still have safe local tests.
+No external-source denial prevents fixture or local navigation/control checks.
+
+| Primary group | Rows | What remains safe / what actually blocks the full row |
+|---|---|---|
+| Complete media dependency (3) | P01, P02, O01 | Liked/playlist/recents order, local files, offline membership and error/cancel behavior are fixture-testable. Complete online listening/download requires allowed complete media; initial 206 does not prove it. |
+| Safe local or synthetic coverage (28) | D05; P03-P05; I01-I10; L01-L04; S01; O02; T01-T04; U01-U02; V01-V02 | Backup corruption/cancel, review/routing/exclusions, library CRUD, local playback/repeat/seek/queue, navigation, themes/text scaling, clear-dialog cancellation, updater rejection and visual checks can progress independently. I04-I06 online previews and S01 playable-online-result have media subgates; metadata/search can be tested separately. U02 code/invalid-artifact checks are local, but exact signed in-place rehearsal stays gated on CI/signing/product acceptance. |
+| Physical phone only (2) | P06, U03 | Audio focus, screen-off/output/real accessories and exact live in-place smoke require Samsung availability. U03 also requires the conditional release gates. Do not install to manufacture a comparison. |
+| Future-delivery decision (1) | I11 | Individually selected/newly resolved subsets are absent. Their current vs future delivery scope needs an owner decision, not an assumed pass or silent implementation. |
+
+Signing/publication is a separate conditional release gate, not an external
+audio denial and not a reason to skip safe U01/U02 fixture checks. A single
+ordinary unchanged-Samsung playback comparison is authorized if accessible;
+Samsung was absent from ADB at this checkpoint. Reconnect the existing USB/ADB
+connection and leave it unlocked; no debugging/security change is requested.
+
 - Samsung package/version/signer and repeated APK hash rechecked; actual native export saved and independently inspected after unlock. Compile-time source stamp verified.
 - Previous exact code CI and synthetic restore evidence are historical supporting
   checks, not passes for the real-data/current expanded matrix above.
@@ -117,6 +136,16 @@ on the final code and distinguish it from the real Samsung export.
 - Disposable Android repeated selection of the same synthetic document showed favorites 2, then 1 after replacement, then 2 after replacement back; all inspections cancelled. Earlier stale-selection observation was not reproduced in this controlled probe. No cache purge/plugin change or live restore was used.
 
 ### Native public-fixture checkpoint (2026-10-11)
+
+Latest bounded error follow-up: clean local analysis and 225 aggregate tests
+pass, including real loopback truncated/disconnected-response handling, prompt
+Stop during pending headers, no replay after source denial, three-failure
+repeat-all stopping, and selection during an old failure callback. The error
+banner fits widths 320/412 at normal and doubled text size and opens Library.
+These are automated proofs; current-source native verification remains open.
+Both unchanged Windows strict visual suites fail all 35 comparisons; exact
+Linux CI must resolve the reference-platform check. No denied provider source
+was requested again in this follow-up.
 
 Tested Android code: 8f886901cfe018b8c4698c3cd3f2ad51f5ec434f, isolated
 `.preview.debug`, task-owned API 35 emulator. APK SHA-256

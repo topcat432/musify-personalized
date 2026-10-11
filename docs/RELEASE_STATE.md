@@ -225,15 +225,24 @@ parallel candidate. Recovery instructions are in CONTRIBUTING.md.
 
 ## Single operating path
 
-Runtime checkpoint: bfbda9657b977de50666648d48417510f9c81797 passed exact-source
-CI 38131343767 (212 aggregate tests, 35 strict goldens and all build boundaries).
+Runtime checkpoint: ee5ea7c93ecda846c7b3921dc6d134031b5e412d passed exact-source
+CI 38131947201 (213 aggregate tests, 35 strict goldens and all build boundaries).
 Its verified disposable debug APK was installed with byte-exact Hive
-preservation, but the public fixture still failed to advance after source
-denial. The real load path awaited play's entire lifetime and retained its
-loading guard. A focused follow-up releases that handoff and deduplicates
-runtime errors across the transition; real load-path regression and native
-retest are required. Provider 403 and just_audio's first truncated-response
-exceptions remain unresolved. No release/Samsung update has occurred.
+preservation. Native public playback now advances once per failed track and
+stops at the failed tail after exactly three failures. Complete streaming still
+fails: first ranges return 206, but the first nonzero 1 MiB range returns 403
+for two independently checked sources. Probes stopped at denial. A third source
+also truncates in native playback; independent 403 attribution is unproven.
+
+Bounded follow-up observes just_audio stream-response completion errors using
+a licensed local copy of the already pinned 0.10.6 package, cancels failed source
+reads, stops native retries promptly, blocks replay of a known failed source,
+and exposes a Library action with a sanitized error. Synthetic real-loopback
+valid/truncated/disconnected tests and service stop/selection races pass.
+Local analysis is clean and all 225 aggregate tests pass. All 35 Windows strict
+goldens fail; comparisons are unchanged and exact Linux CI is required. No
+provider access workaround, release or Samsung update has occurred. Runtime
+and CI verification of this follow-up must be recorded against its committed SHA.
 
 Read AGENTS.md and CONTRIBUTING.md; use debug.yml for Linux verification and
 signed-release.yml only for separately approved release. Product vision/import
