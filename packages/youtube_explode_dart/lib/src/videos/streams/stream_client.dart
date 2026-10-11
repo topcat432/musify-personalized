@@ -22,6 +22,28 @@ class StreamClient {
   final YoutubeHttpClient _httpClient;
   final StreamController _controller;
   final BaseJSChallengeSolver? _jsChallengeSolver;
+  // Weak object provenance survives passing a stream between extractor instances.
+  static final _requestHeaders = Expando<Map<String, String>>();
+
+  /// Media headers from the same request context that resolved this stream.
+  /// Session cookies, visitor identifiers and authorization are never copied.
+  Map<String, String>? requestHeadersFor(StreamInfo stream) =>
+      _requestHeaders[stream];
+
+  Map<String, String> _mediaHeaders(YoutubeApiClient client) {
+    String? agent = client.payload['context']?['client']?['userAgent'] as String?;
+    if (agent == null) {
+      for (final header in _httpClient.headers.entries) {
+        if (header.key.toLowerCase() == 'user-agent') agent = header.value;
+      }
+    }
+    for (final header in client.headers.entries) {
+      if (header.key.toLowerCase() == 'user-agent') {
+        agent = header.value.toString();
+      }
+    }
+    return Map.unmodifiable({if (agent != null) 'User-Agent': agent});
+  }
 
   /// Initializes an instance of [StreamClient]
   StreamClient(this._httpClient, {BaseJSChallengeSolver? jsSolver})
@@ -112,6 +134,7 @@ class StreamClient {
           final response = await _httpClient.send(
             http.Request('GET', streams.first.url)
               ..followRedirects = false
+              ..headers.addAll(requestHeadersFor(streams.first) ?? const {})
               ..headers['Range'] = 'bytes=0-0',
           );
           await response.stream.listen(null).cancel();
@@ -188,7 +211,8 @@ class StreamClient {
   /// Usually this downloads the bytes of the stream.
   /// For HLS streams all the fragments are concatenated into a single stream.
   Stream<List<int>> get(StreamInfo streamInfo) =>
-      _httpClient.getStream(streamInfo, streamClient: this);
+      _httpClient.getStream(streamInfo,
+          streamClient: this, headers: requestHeadersFor(streamInfo) ?? const {});
 
   Stream<StreamInfo> _getStreams(VideoId videoId,
       {required YoutubeApiClient ytClient,
@@ -196,6 +220,7 @@ class StreamClient {
     // Use await for instead of yield* to catch exceptions
     await for (final stream
         in _getStream(videoId, ytClient, requireWatchPage: requireWatchPage)) {
+      _requestHeaders[stream] = _mediaHeaders(ytClient);
       yield stream;
     }
   }
@@ -227,24 +252,25 @@ class StreamClient {
       );
     }
     yield* _parseStreamInfo(playerResponse.streams,
-        watchPage: watchPage, videoId: videoId);
+        watchPage: watchPage, videoId: videoId, headers: _mediaHeaders(ytClient));
 
     if (!playerResponse.dashManifestUrl.isNullOrWhiteSpace) {
       final dashManifest =
           await _controller.getDashManifest(playerResponse.dashManifestUrl!);
       yield* _parseStreamInfo(dashManifest.streams,
-          watchPage: watchPage, videoId: videoId);
+          watchPage: watchPage, videoId: videoId, headers: _mediaHeaders(ytClient));
     }
     if (!playerResponse.hlsManifestUrl.isNullOrWhiteSpace) {
       final hlsManifest =
           await _controller.getHlsManifest(playerResponse.hlsManifestUrl!);
       yield* _parseStreamInfo(hlsManifest.streams,
-          watchPage: watchPage, videoId: videoId);
+          watchPage: watchPage, videoId: videoId, headers: _mediaHeaders(ytClient));
     }
   }
 
   Stream<StreamInfo> _parseStreamInfo(Iterable<StreamInfoProvider> streams,
-      {WatchPage? watchPage, VideoId? videoId}) async* {
+      {WatchPage? watchPage, VideoId? videoId,
+      Map<String, String> headers = const {}}) async* {
     // First pass: collect all unique challenges
     final nChallenges = <String>{};
     final sigChallenges = <String>{};
@@ -344,7 +370,7 @@ class StreamClient {
       }
 
       final contentLength = stream.contentLength ??
-          (await _httpClient.getContentLength(url, validate: false)) ??
+          (await _httpClient.getContentLength(url, headers: headers, validate: false)) ??
           0;
 
       if (contentLength <= 0) {

@@ -103,6 +103,7 @@ void main() {
     'a bare replace with no explicit shuffle leaves shuffle state off',
     () async {
       final handler = MusifyAudioHandler();
+      addTearDown(handler.audioPlayer.dispose);
 
       final songs = [
         song('shuffle-state-song-e', 'E'),

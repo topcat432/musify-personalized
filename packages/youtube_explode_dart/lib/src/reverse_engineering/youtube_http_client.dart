@@ -182,7 +182,7 @@ class YoutubeHttpClient extends http.BaseClient {
     for (final fragment in streamInfo.fragments) {
       final req = await retry(
         this,
-        () => get(Uri.parse(url.toString() + fragment.path)),
+        () => get(Uri.parse(url.toString() + fragment.path), headers: headers),
       );
       yield req.bodyBytes;
     }
@@ -216,6 +216,7 @@ class YoutubeHttpClient extends http.BaseClient {
             request =
                 http.Request('GET', url.setQueryParam('range', '$from-$to'));
           }
+          request.headers.addAll(headers);
           return send(request);
         });
         if (validate) {
@@ -232,7 +233,9 @@ class YoutubeHttpClient extends http.BaseClient {
                   'Error: Could not find the stream in the new manifest (due to Youtube error)');
               rethrow;
             }
-            url = stream.url;
+            streamInfo = stream;
+            url = streamInfo.url;
+            headers = streamClient.requestHeadersFor(streamInfo) ?? const {};
             continue;
           }
         }

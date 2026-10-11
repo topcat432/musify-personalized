@@ -1,5 +1,28 @@
 # Product acceptance ledger
 
+## Exact request context and upstream result, 2026-10-11
+
+An owned fixture demonstrated that the resolving player request used one
+User-Agent while media preflight used a generic browser agent. The scoped repair
+carries only that existing public transport header, with original stream-object
+or exact-URL cache provenance. It preserves signed URLs, client configuration,
+selected recording/source order and terminal 403 handling. Legacy, partial,
+ambiguous and credential-bearing cache contexts are not guessed; originals remain
+retained. Eight new fixtures cover complete finite ranges, downloader/preflight
+headers, length discovery, cache restart and a permitted refresh followed by a
+transient retry. Analysis and all 261 local tests pass. This proves propagation,
+not sustained provider access.
+
+The verified official upstream 10.5.3 APK reached normal search after an emulator
+startup ANR recovered. One fresh playback selection failed on Android's local
+127.0.0.1 cleartext restriction, independently reproducing the header-proxy issue
+reported in [upstream #983](https://github.com/gokadzev/Musify/issues/983).
+That local failure is distinct from the retained candidate's server-side 403.
+Complete candidate listening/download/preview and physical acceptance remain held;
+there is no new complete-provider pass. Premium-dependent Spotify playback remains
+excluded: Free companion/context capabilities do not guarantee on-demand playback
+of the same recording. Existing export/file import remains independent of Premium.
+
 ## Playback investigation update, 2026-10-11
 
 The prior 70b96f8e checkpoint remains preserved. The selected Samsung baseline

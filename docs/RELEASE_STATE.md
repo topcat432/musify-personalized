@@ -3,6 +3,34 @@
 Recorded 2026-10-11. This is the living map; verify current GitHub heads/runs
 and connected device identity before relying on dated observations.
 
+## Header provenance and independent upstream comparison, 2026-10-11
+
+The last committed checkpoint is f8702efee24711aa2e40f95f3ff61eef447a982b.
+Its exact [Linux CI](https://github.com/topcat432/musify-personalized/actions/runs/38165158295)
+passed analysis, 253 tests, 35 strict visuals, flavor boundaries and unsigned assembly.
+The follow-up repair preserves the User-Agent from the existing resolving request
+through manifest/length probes, downloads, native playback and exact-URL derived
+cache contexts. It changes no client profile or authentication, forwards no session
+credentials and keeps real HTTP 403 terminal. Unknown/partial cache contexts are
+retained but never assigned a guessed identity. No user-data schema changes.
+
+Local analysis and all 261 tests pass, including eight new provenance fixtures and
+restart coverage. Both unchanged strict Windows suites still fail their 35 images;
+the current render artifacts are compared against the retained source control.
+No goldens or comparator were changed. Exact Linux checks for this follow-up and
+a native complete-provider pass remain required.
+
+Official upstream 10.5.3, source a5edc73c501aea5428b419ec14eaa46bc2fef83e,
+was separately installed on the task-owned musify_rehearsal_api35 emulator.
+Startup ANRs preceded playback and recovered after the host reboot and normal
+Wait action. One fresh normal source selection then failed natively because
+Android rejected cleartext HTTP to 127.0.0.1, used by upstream's header proxy.
+The app was stopped after the error. This independently confirms a local upstream
+transport defect; it does not establish a global YouTube failure or candidate
+playback recovery. The fork uses supported native URI headers while preserving
+its existing GitHub-only bounded-source loopback allowance. No security policy,
+phone installation, signing, publication or merge changed.
+
 ## Playback compatibility investigation, 2026-10-11
 
 Checkpoint 70b96f8e93e319da9ccdac4a284788a6e5d77f50 remains recoverable.

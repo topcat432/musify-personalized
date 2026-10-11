@@ -48,6 +48,7 @@ class MusifyAudioHandler extends BaseAudioHandler {
     audioPlayer =
         player ??
         AudioPlayer(
+          useProxyForRequestHeaders: false,
           audioPipeline: AudioPipeline(
             androidAudioEffects: [_androidEqualizer],
           ),

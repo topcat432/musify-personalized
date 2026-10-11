@@ -38,7 +38,7 @@ abstract interface class ReviewSprintAudioPlayer {
 
 class JustAudioReviewSprintPlayer implements ReviewSprintAudioPlayer {
   JustAudioReviewSprintPlayer({AudioPlayer? player})
-      : _player = player ?? AudioPlayer();
+    : _player = player ?? AudioPlayer(useProxyForRequestHeaders: false);
 
   final AudioPlayer _player;
 

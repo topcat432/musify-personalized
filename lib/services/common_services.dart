@@ -32,6 +32,7 @@ import 'package:musify/services/lyrics_manager.dart';
 import 'package:musify/services/playlists_manager.dart';
 import 'package:musify/services/proxy_manager.dart';
 import 'package:musify/services/settings_manager.dart';
+import 'package:musify/services/stream_request_context.dart';
 import 'package:musify/services/stream_url_validation.dart';
 import 'package:musify/utilities/app_utils.dart';
 import 'package:musify/utilities/formatter.dart';
@@ -78,9 +79,7 @@ Future<StreamManifest?> _fetchStreamManifest(String songId) async {
     return ProxyManager().getSongManifest(songId).timeout(_manifestTimeout);
   }
 
-  return ytClient.videos.streams
-      .getManifest(songId)
-      .timeout(_manifestTimeout);
+  return ytClient.videos.streams.getManifest(songId).timeout(_manifestTimeout);
 }
 
 /// Returns a cached song URL if present and still valid.
@@ -99,6 +98,15 @@ Future<String?> _getCachedSongUrl(
   }
 
   final cacheBox = await Hive.openBox('cache');
+  if (StreamRequestContexts.supports(cachedUrl) &&
+      !streamRequestContexts.restore(
+        cachedUrl,
+        cacheBox.get('${cacheKey}_requestContext'),
+      )) {
+    // Retain legacy/partial cache data, but do not guess its resolving identity
+    // or send a media validation request with unknown provenance.
+    return null;
+  }
   final cacheDate = cacheBox.get('${cacheKey}_date') as DateTime?;
   final now = DateTime.now();
   final isOld =
@@ -119,7 +127,10 @@ Future<String?> _getCachedSongUrl(
 
 /// Checks if a cached URL still responds successfully.
 Future<bool> _validateCachedUrl(String cachedUrl) async {
-  return validateStreamUrl(cachedUrl);
+  return validateStreamUrl(
+    cachedUrl,
+    headers: streamRequestContexts.forUrl(cachedUrl) ?? const {},
+  );
 }
 
 Future<List> fetchSongsList(String searchQuery) async {
@@ -568,6 +579,32 @@ Future<String?> fetchSongStreamUrl(String songId, bool isLive) async {
       audioStreams.sortByBitrate(),
     );
     final url = selectedStream.url.toString();
+
+    final requestHeaders = ytClient.videos.streams.requestHeadersFor(
+      selectedStream,
+    );
+    if (StreamRequestContexts.supports(url) && requestHeaders != null) {
+      streamRequestContexts.remember(url, requestHeaders);
+      final context = streamRequestContexts.snapshot(url);
+      if (context != null) {
+        try {
+          await addOrUpdateData<Map<String, Object>>(
+            'cache',
+            '${cacheKey}_requestContext',
+            context,
+          );
+        } catch (error, stackTrace) {
+          logger.log(
+            'Could not cache stream request context',
+            error: error,
+            stackTrace: stackTrace,
+          );
+          // The fresh in-memory source is still usable; do not publish an
+          // incomplete URL/context cache pair or disturb older cached data.
+          return url;
+        }
+      }
+    }
 
     unawaited(addOrUpdateData<String>('cache', cacheKey, url));
 

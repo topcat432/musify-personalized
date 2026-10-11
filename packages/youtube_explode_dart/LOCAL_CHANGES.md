@@ -3,6 +3,17 @@
 Based on upstream youtube_explode_dart 3.1.0; original BSD license retained.
 Upstream comparison: 44a39a65d8e274806247d52af8f0bacd77691d38.
 
+2026-10-11 follow-up: retain only the User-Agent already sent by the request
+that resolves a stream, without changing a client profile or copying cookies,
+visitor identifiers or authorization. Weak stream-object associations preserve
+provenance across extractor instances; unknown/serialized objects return no
+context. Availability and length probes, finite download requests and fragments
+receive that existing header. A permitted non-403 refresh carries its current
+stream object and header into subsequent transient retries instead of pairing
+the new header with an older URL. Actual 403 remains terminal. Tests use owned
+MockClient media, never repeated denied endpoints. App-level native playback and
+exact-URL derived-cache provenance are implemented outside this vendored package.
+
 2026-10-11: manifest availability uses GET with Range bytes=0-0 instead of HEAD.
 Retained paired evidence showed HEAD 403 and ranged GET 206 for the same URL.
 The signed URI, default client configuration and authentication are preserved.

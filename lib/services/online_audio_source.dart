@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show appFlavor;
 import 'package:http/http.dart' as http;
 import 'package:just_audio/just_audio.dart';
+import 'package:musify/services/stream_request_context.dart';
 
 typedef OnlineSourceFactory =
     AudioSource Function(
@@ -35,10 +36,15 @@ AudioSource onlineAudioSource(
       uri,
       sourceLength: length!,
       tag: tag,
+      requestHeaders: streamRequestContexts.forUrl(url) ?? const {},
       onUnavailable: onUnavailable,
     );
   }
-  return AudioSource.uri(uri, tag: tag);
+  return AudioSource.uri(
+    uri,
+    tag: tag,
+    headers: streamRequestContexts.forUrl(url),
+  );
 }
 
 /// Supplies native open-ended reads as finite HTTPS ranges, without caching.
@@ -52,7 +58,11 @@ class GoogleVideoByteSource extends StreamAudioSource {
     this.chunkSize = 256 * 1024,
     this.timeout = const Duration(seconds: 10),
     this.onUnavailable,
-  }) : _clientFactory = clientFactory ?? http.Client.new {
+    Map<String, String> requestHeaders = const {},
+  }) : requestHeaders =
+           StreamRequestContexts.mediaHeaders(requestHeaders) ??
+           (throw ArgumentError('Unsupported media request headers.')),
+       _clientFactory = clientFactory ?? http.Client.new {
     if (!accepts(uri, sourceLength) ||
         chunkSize <= 0 ||
         chunkSize > 256 * 1024 ||
@@ -62,6 +72,7 @@ class GoogleVideoByteSource extends StreamAudioSource {
   }
 
   final Uri uri;
+  final Map<String, String> requestHeaders;
   final int sourceLength;
   final int chunkSize;
   final Duration timeout;
@@ -176,6 +187,7 @@ class GoogleVideoByteSource extends StreamAudioSource {
         final expected = last - cursor + 1;
         final request = http.Request('GET', uri)
           ..followRedirects = false
+          ..headers.addAll(requestHeaders)
           ..headers['Range'] = 'bytes=$cursor-$last';
         final response = await client.send(request).timeout(timeout);
         if (response.statusCode != 206 ||

@@ -37,7 +37,9 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
   static const Duration _timeout = Duration(seconds: 18);
   static const Duration _previewLength = Duration(seconds: 30);
 
-  final AudioPlayer _previewPlayer = AudioPlayer();
+  final AudioPlayer _previewPlayer = AudioPlayer(
+    useProxyForRequestHeaders: false,
+  );
   late final TextEditingController _queryController;
   StreamSubscription<PlayerState>? _playerStateSubscription;
   Timer? _previewTimer;
