@@ -53,6 +53,7 @@ class GoogleVideoByteSource extends StreamAudioSource {
   final Duration timeout;
   final http.Client Function() _clientFactory;
   final Set<http.Client> _clients = {};
+  StateError? _terminalError;
 
   static bool accepts(Uri uri, int? length) =>
       uri.scheme == 'https' &&
@@ -66,6 +67,7 @@ class GoogleVideoByteSource extends StreamAudioSource {
 
   @override
   Future<StreamAudioResponse> request([int? start, int? end]) async {
+    if (_terminalError != null) throw _terminalError!;
     final offset = start ?? 0;
     final limit = end == null || end > sourceLength ? sourceLength : end;
     if (offset < 0 || offset >= sourceLength || limit <= offset) {
@@ -146,7 +148,8 @@ class GoogleVideoByteSource extends StreamAudioSource {
             (response.contentLength != null &&
                 response.contentLength != expected)) {
           throw StateError(
-            'Audio source did not return the requested byte range.',
+            'Audio source did not return the requested byte range '
+            '(HTTP ${response.statusCode}).',
           );
         }
         var received = 0;
@@ -165,7 +168,15 @@ class GoogleVideoByteSource extends StreamAudioSource {
         cursor = last + 1;
       }
     } catch (_) {
-      if (!cancelled()) rethrow;
+      if (!cancelled()) {
+        // Native retries may ask the same source again after a denied or
+        // damaged range. Fail before local response headers, without another
+        // upstream request, a partial-success claim or access fallback.
+        _terminalError = StateError(
+          'Audio byte source is unavailable after a failed range request.',
+        );
+        rethrow;
+      }
     }
   }
 }

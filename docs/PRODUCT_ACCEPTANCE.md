@@ -73,10 +73,10 @@ on the final code and distinguish it from the real Samsung export.
 | D04 | Full Android restart → native re-export | Independent exact keyed semantics; explain every legitimate change | E PASS full Android reboot and native re-export: every typed key/value identical, no exceptions | manual backup_rehearsal tool |
 | D05 | Interrupted/corrupt/repeated/same-name backup selection | Reject corrupt/partial safely; recover rollback; newly selected bytes stay fresh | E PASS bounded same-name inspection 2→1→2; corrupt/partial A prior CI; restart/current-code retest pending | backup service tests; Android file picker |
 | P01 | Liked Songs row / Play / Shuffle | Full list, real track completion advances with repeat off; replacement queue keeps shuffle | E/D UNTESTED | user_songs_page; audio_service; queue_retry_utils |
-| P02 | Playlist / Offline / Recents Play and row tap | Correct full source/order/start index; selected source not silently substituted | E/D UNTESTED | playlist_page; user_songs_page |
-| P03 | Now Playing / mini-player seek, pause, previous, next | State/position synchronized; rapid input bounded; long titles don't overflow | E/D UNTESTED | now_playing; mini_player; audio_service |
-| P04 | Queue / Shuffle on then off | Natural order restored; current track retained; Play Next survives | E/D UNTESTED | audio_service / shuffle state tests |
-| P05 | Track completion / failed stream / retries / repeat off-one-all | Advance once; no replay of failed tail; repeat modes intentional; healthy playback not hung | E/D UNTESTED | audio_service playback retry / queue_retry_utils tests |
+| P02 | Playlist / Offline / Recents Play and row tap | Correct full source/order/start index; selected source not silently substituted | E partial: controlled playlist source/order PASS; sustained public stream FAIL at 1 MiB; Offline/Recents pending | playlist_page; user_songs_page |
+| P03 | Now Playing / mini-player seek, pause, previous, next | State/position synchronized; rapid input bounded; long titles don't overflow | E FAIL source-error state on 9f92; controls/seek and repaired error handler retest pending | now_playing; mini_player; audio_service |
+| P04 | Queue / Shuffle on then off | Natural order restored; current track retained; Play Next survives | E partial PASS shuffle on/off retains tone 3 and restores 1/2/3; Play Next inserts and survives replacement; toggles with inserted entry pending | audio_service / shuffle state tests |
+| P05 | Track completion / failed stream / retries / repeat off-one-all | Advance once; no replay of failed tail; repeat modes intentional; healthy playback not hung | E controlled 1/2/3 natural completion/tail pause PASS; real stream/retry FAIL; repeat one/all native pending | audio_service playback retry / queue_retry_utils tests |
 | P06 | Background/screen off/audio focus/output reconnect | Resume/control correctly, avoid duplicate playback; record attached speaker/wired/BT coverage | D UNTESTED; unavailable accessories explicit | audio_service; Android audio session |
 | I01 | Library → Import CSV → pick/inspect/cancel/replace | Valid rows/provenance retained; no implicit likes changes; failed replacement retains old session | E UNTESTED | spotify_csv_importer; import_session tests |
 | I02 | Matching start/pause/resume/reopen/error | Checkpoint progress; don't redo resolved tracks; fallback failure retains structured candidates | E UNTESTED | track_matching / scoring tests |
@@ -246,3 +246,56 @@ Local candidate validation: clean analyzer and all 208 aggregate tests pass.
 Evidence outside Git: bounded-transport-analysis-final.log and
 bounded-transport-aggregate.log under emulator-rehearsal. Exact pushed CI,
 new APK identity and all affected native paths must be recorded before a pass.
+
+### Exact 9f92 native result and later-range denial (2026-10-11)
+
+Exact candidate 9f92bf55dcdf5377f0bdd797f0d4b4b6023a4264 passed CI
+[38128871154](https://github.com/topcat432/musify-personalized/actions/runs/38128871154):
+analysis, 208 aggregate tests, both strict visual suites (35 images), debug,
+F-Droid boundary and unsigned release verification. Its isolated debug APK
+SHA-256 is 8049a5bda7b5f7b415215eee9f8d7845c74d712a8081594830e2cd3068188c9b.
+Compiled Android XML has base cleartext=false and only 127.0.0.1 with
+includeSubdomains=false. Its in-place disposable update preserved all three
+synthetic Hive files byte-for-byte before launch. This is not signed-release or
+Samsung acceptance.
+
+Controlled native PCM 1/2/3 advance naturally; final tone 3 remains PAUSED at
+45007 ms for at least 24 seconds, with Replay and queue size 3. Shuffle-on
+reorders to 3/1/2 while retaining tone 3; shuffle-off restores 1/2/3. Native
+Play Next inserts tone 1 immediately after current tone 3, preserving 1/2/3/1.
+Later public-playlist replacement retains the manual entry. The native toggle
+test with that inserted entry is still pending. Evidence: controlled-audio/
+9f92-first-play-session.json, 9f92-natural-advance-session.json,
+9f92-natural-tail-session.json, 9f92-completed-tail-session.json and private-ui/
+runtime-9f92-shuffle-on-queue, runtime-9f92-shuffle-off-queue,
+runtime-9f92-play-next-queue XML/PNGs.
+
+Real online Here Comes The Sun (BCGH8eU-_lA) decodes past 4 seconds and buffers
+57481 ms with actual artwork, then fails around 57 seconds. Dreams
+(m8i5WiWCN-c) also decodes past 4 seconds, then fails. Both actual cached native
+URLs are ordinary ANDROID Opus tag 251. Independent bounded diagnostics on
+copied disposable URLs accept bytes 0-262143 with exact 206/body length but deny
+1048576-1310719 with HTTP 403 and no body. No provider parameter, client identity,
+credential, cookie or proxy changes were attempted after denial. This is initial
+decoding evidence and sustained-listening FAIL, not a healthy native stream pass.
+
+The just_audio 0.10.6 loopback server also surfaces truncated-response exceptions
+and native retries after the stream error. Musify did not listen to the current
+errorStream API, leaving stale playing controls after the native session became
+NONE. Pending repair handles runtime errors once, pauses before bounded queue
+advance, rejects further requests to a source after its first failed range, and
+cancels stale retries after new selection/explicit stop. Initial truncated
+response handling and sustained provider access still require acceptance;
+unit success must not hide either failure. Evidence: native-online/
+9f92-public-native-session.json, 9f92-dreams-native-session.json,
+9f92-dreams-sustained-session.json, cached-range-host-diagnostic.json,
+cached-range-m8i5WiWCN-c-host-diagnostic.json and URL/token-redacted native logs.
+
+Runtime-error repair validation: clean local analysis and all 212 aggregate tests
+pass, including later-range terminal failure, duplicate runtime-error ownership,
+new-selection cancellation and explicit-stop cancellation. The new exact-source
+APK/CI and native error-queue retest remain pending.
+
+Four ledger rows have documented baseline/export/restore/restart passes; the
+remaining 34 are open, partial or failed in this expanded round. No signing,
+merge or Samsung update is allowed to proceed on the present listening result.

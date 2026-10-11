@@ -94,6 +94,7 @@ class MusifyAudioHandler extends BaseAudioHandler {
 
   bool _completionEventPending = false;
   bool _completionHandlerLoadStarted = false;
+  bool _runtimeErrorPending = false;
   final _streamSponsorSegments = <String, List<Map<String, dynamic>>>{};
   bool _sponsorSeekPending = false;
 
@@ -180,6 +181,12 @@ class MusifyAudioHandler extends BaseAudioHandler {
   }
 
   void _setupEventSubscriptions() {
+    audioPlayer.errorStream.listen(
+      (error) => unawaited(handleRuntimePlaybackError(error)),
+      onError: (Object error) {
+        logger.log('Native error stream failed', error: error.runtimeType);
+      },
+    );
     audioPlayer.positionStream.listen(
       (position) {
         if (!sponsorBlockSupport.value ||
@@ -261,12 +268,6 @@ class MusifyAudioHandler extends BaseAudioHandler {
               state,
               currentSong: currentSong,
             );
-            if (state.processingState == ProcessingState.idle &&
-                !state.playing &&
-                _lastError != null) {
-              final failedIndex = _currentQueueIndex;
-              Future.microtask(() => _handlePlaybackError(failedIndex));
-            }
             _debouncedStateUpdate();
           },
           onError: (error, stackTrace) {
@@ -723,6 +724,39 @@ class MusifyAudioHandler extends BaseAudioHandler {
     }
   }
 
+  /// Runtime failures arrive separately from initial load failures in
+  /// just_audio 0.10.6. Own this transition once and publish paused state.
+  @visibleForTesting
+  Future<void> handleRuntimePlaybackError(PlayerException error) async {
+    if (_currentLoadingIndex >= 0 ||
+        _runtimeErrorPending ||
+        _currentQueueIndex < 0 ||
+        _currentQueueIndex >= _queueList.length) {
+      return;
+    }
+    _runtimeErrorPending = true;
+    final failedIndex = _currentQueueIndex;
+    final entryId = _queueEntryIds.ensureId(_queueList[failedIndex]);
+    final transition = _songTransitionCounter;
+    try {
+      logger.log('Native playback source failed', error: error.code);
+      await pause();
+      if (transition != _songTransitionCounter) return;
+      final currentFailedIndex = _queueList.indexWhere(
+        (song) => _queueEntryIds.ensureId(song) == entryId,
+      );
+      if (currentFailedIndex < 0 || _currentQueueIndex != currentFailedIndex)
+        return;
+      _lastError = 'This audio source is unavailable. Try another recording.';
+      _updatePlaybackState();
+      _handlePlaybackError(currentFailedIndex);
+    } catch (failure) {
+      logger.log('Native failure handling failed', error: failure.runtimeType);
+    } finally {
+      _runtimeErrorPending = false;
+    }
+  }
+
   /// Handles a failed playback attempt at [failedIndex].
   ///
   /// The retry must target the song after [failedIndex] directly, not
@@ -750,7 +784,17 @@ class MusifyAudioHandler extends BaseAudioHandler {
     );
 
     if (retryIndex != null) {
-      Future.delayed(_errorRetryDelay, () => _playFromQueue(retryIndex));
+      final transition = _songTransitionCounter;
+      final entryId = _queueEntryIds.ensureId(_queueList[retryIndex]);
+      Future.delayed(_errorRetryDelay, () {
+        // A later user selection supersedes this retry. Queue edits may move
+        // its target, so locate the same entry rather than reusing an index.
+        if (transition != _songTransitionCounter) return;
+        final index = _queueList.indexWhere(
+          (song) => _queueEntryIds.ensureId(song) == entryId,
+        );
+        if (index >= 0) unawaited(_playFromQueue(index));
+      });
     } else if (playNextSongAutomatically.value) {
       // Never recompute next from the restored, previously playing index.
       Future.delayed(_errorRetryDelay, _backgroundAddSongsToQueue);
@@ -1690,6 +1734,8 @@ class MusifyAudioHandler extends BaseAudioHandler {
 
   @override
   Future<void> stop() async {
+    // Invalidate queued retries and loads so an explicit stop stays stopped.
+    _songTransitionCounter++;
     _debounceTimer?.cancel();
     _completionEventPending = false;
     _currentLoadingIndex = -1;

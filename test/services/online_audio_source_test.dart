@@ -280,6 +280,41 @@ void main() {
   });
 
   test(
+    'a later denied range permanently fails this source without upstream retry',
+    () async {
+      final client = _Client((request) async {
+        if (request.headers['Range'] == 'bytes=0-3') return _correct(request);
+        return http.StreamedResponse(const Stream.empty(), 403);
+      });
+      var factories = 0;
+      final source = GoogleVideoByteSource(
+        _uri,
+        sourceLength: 10,
+        chunkSize: 4,
+        clientFactory: () {
+          factories++;
+          return client;
+        },
+      );
+      final received = <int>[];
+      await expectLater(
+        (await source.request()).stream.map((bytes) {
+          received.addAll(bytes);
+          return bytes;
+        }).drain<void>(),
+        throwsStateError,
+      );
+      expect(received, [0, 1, 2, 3]);
+      expect(client.requests.length, 2);
+      await expectLater(source.request(4), throwsStateError);
+      await expectLater(source.request(), throwsStateError);
+      expect(client.requests.length, 2);
+      expect(factories, 1);
+      expect(client.closes, 1);
+    },
+  );
+
+  test(
     'four active reads bound concurrency and cancellation releases a slot',
     () async {
       final clients = <_Client>[];

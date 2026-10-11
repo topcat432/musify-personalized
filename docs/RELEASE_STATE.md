@@ -92,8 +92,18 @@ path. Requests are lazy, bounded to 256 KiB, limited to four concurrent reads,
 validated against exact Content-Range, timed out and closed on cancellation.
 No device-wide policy, credentials, cookies, proxy or client impersonation changed.
 Local analysis and all 208 aggregate tests pass. Native healthy playback on this
-new code and exact-source Linux CI remain pending; the prior 26bd failure remains
-the latest native public-track result.
+new code remains blocked. Exact-source CI 38128871154 passed all required gates.
+Its emulator APK SHA-256 is
+8049a5bda7b5f7b415215eee9f8d7845c74d712a8081594830e2cd3068188c9b.
+Native controlled PCM 1/2/3 advance and pause the completed tail correctly;
+shuffle-off restores order and Play Next insertion survives queue replacement.
+Public Here Comes The Sun and Dreams initially decode but truncate after the
+first MiB. Bounded diagnostics of both native cached URLs return HTTP 403 at
+offset 1048576 while accepting the first finite range. No denial workaround was
+attempted. Sustained listening, preview timing, seeking and clean failure remain
+release blockers. Pending repair connects just_audio 0.10.6's separate errorStream
+API, stops repeated upstream requests to a failed source and cancels superseded
+queue retries; exact-source/native acceptance must follow.
 
 The same repair pauses a completed non-repeating queue tail, preserves
 SponsorBlock seeking for byte sources, starts manual preview's 30-second timer

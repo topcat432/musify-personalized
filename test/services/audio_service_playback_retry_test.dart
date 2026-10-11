@@ -2,9 +2,10 @@ import 'dart:io';
 
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:musify/services/settings_manager.dart';
 import 'package:hive/hive.dart';
+import 'package:just_audio/just_audio.dart';
 import 'package:musify/services/audio_service.dart';
+import 'package:musify/services/settings_manager.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -37,6 +38,104 @@ void main() {
   Map<String, dynamic> song(String ytid, String title) {
     return {'ytid': ytid, 'title': title, 'highResImage': ''};
   }
+
+  test(
+    'runtime error pauses once and advances past its actual failed item',
+    () async {
+      playNextSongAutomatically.value = false;
+      repeatNotifier.value = AudioServiceRepeatMode.none;
+      offlineMode.value = true;
+      final attempts = <String>[];
+      final handler = _ControlledHandler((item) async {
+        attempts.add(item['title'] as String);
+        return true;
+      });
+      try {
+        await handler.addPlaylistToQueue(
+          [song('first', 'First'), song('next', 'Next')],
+          replace: true,
+          startIndex: 0,
+        );
+        await Future.wait([
+          handler.handleRuntimePlaybackError(
+            PlayerException(403, 'fixture denied', 0),
+          ),
+          handler.handleRuntimePlaybackError(
+            PlayerException(403, 'fixture denied', 0),
+          ),
+        ]);
+        expect(handler.pauseCalls, 1);
+        await Future<void>.delayed(const Duration(seconds: 3));
+        expect(attempts, ['First', 'Next']);
+        expect(handler.currentSong!['title'], 'Next');
+      } finally {
+        await handler.audioPlayer.dispose();
+        offlineMode.value = false;
+      }
+    },
+  );
+
+  test(
+    'a new user selection supersedes the pending runtime-error retry',
+    () async {
+      playNextSongAutomatically.value = false;
+      repeatNotifier.value = AudioServiceRepeatMode.none;
+      offlineMode.value = true;
+      final attempts = <String>[];
+      final handler = _ControlledHandler((item) async {
+        attempts.add(item['title'] as String);
+        return true;
+      });
+      try {
+        await handler.addPlaylistToQueue(
+          [
+            song('first', 'First'),
+            song('next', 'Next'),
+            song('chosen', 'Chosen'),
+          ],
+          replace: true,
+          startIndex: 0,
+        );
+        await handler.handleRuntimePlaybackError(
+          PlayerException(403, 'fixture denied', 0),
+        );
+        await handler.skipToQueueItem(2);
+        await Future<void>.delayed(const Duration(seconds: 3));
+        expect(attempts, ['First', 'Chosen']);
+        expect(handler.currentSong!['title'], 'Chosen');
+      } finally {
+        await handler.audioPlayer.dispose();
+        offlineMode.value = false;
+      }
+    },
+  );
+
+  test('explicit stop cancels the pending runtime-error retry', () async {
+    playNextSongAutomatically.value = false;
+    repeatNotifier.value = AudioServiceRepeatMode.none;
+    offlineMode.value = true;
+    final attempts = <String>[];
+    final handler = _ControlledHandler((item) async {
+      attempts.add(item['title'] as String);
+      return true;
+    });
+    try {
+      await handler.addPlaylistToQueue(
+        [song('first', 'First'), song('next', 'Next')],
+        replace: true,
+        startIndex: 0,
+      );
+      await handler.handleRuntimePlaybackError(
+        PlayerException(403, 'fixture denied', 0),
+      );
+      await handler.stop();
+      await Future<void>.delayed(const Duration(seconds: 3));
+      expect(attempts, ['First']);
+    } finally {
+      await handler.audioPlayer.dispose();
+      offlineMode.value = false;
+    }
+  });
 
   test('natural repeat-off completion pauses at the final item', () async {
     playNextSongAutomatically.value = false;
