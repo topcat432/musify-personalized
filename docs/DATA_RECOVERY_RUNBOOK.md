@@ -65,6 +65,16 @@ Never wipe or borrow an existing emulator's dataset.
    signed candidate on this restored disposable app and repeat acceptance.
    Ephemeral debug/unsigned builds cannot prove installed-signer continuity.
 
+The task's preserved baseline exposed a selected-file lifetime defect before
+restore validation. The canonical candidate fixes it by awaiting inspection
+before deleting staging. To rehearse that fix while signing is held, use the
+candidate's separate com.topcat432.musifypersonalized.preview.debug package on
+the designated emulator. Record its exact APK/source evidence and keep the
+baseline package intact. A fresh profile can have an empty user database;
+create a clearly synthetic folder through Library first to establish a readable
+pre-restore rollback state. Never initialize or replace live data this way.
+This debug rehearsal does not prove an in-place signed update.
+
 An emulator restore demonstrates Android recovery, not live-phone update,
 background playback or network-source health. Those remain separately gated.
 No fallback/old dataset may be removed to force success. Keep the original

@@ -62,12 +62,21 @@ were deliberately replaced. Subsequent exact-head CI must prove the result.
 Run 38113993655 on 12e709c6 passed analysis, aggregate tests and all 35 strict
 goldens. Its Android build stopped because the runner lacked the pinned NDK;
 both canonical workflows now prepare that exact SDK component explicitly,
-using existing licenses and rejecting new prompts. Full build proof is pending.
+using existing licenses and rejecting new prompts.
 Run 38114487224 passed the same strict gates after the restore fix and reached
 native compilation, then stopped because CMake 3.22.1 was missing. That exact
 component is now explicit too. Verification also checks out the candidate SHA
 directly and embeds it, instead of attributing a temporary PR merge ref to the
-candidate branch. A full run remains required before retiring legacy workflows.
+candidate branch.
+
+Run 38115096390 on exact candidate 953e652c3031abd0dc3e3e59e3ca22875981786d
+completed successfully: analysis, aggregate tests, 35 strict goldens, universal
+debug identity, F-Droid permission boundary and unsigned release integrity/
+package/version/non-debuggable checks. The three obsolete publishing workflows
+fdroid.yml, pre_beta.yml and pre_fdroid.yml are removed in the subsequent
+consolidation: their analysis/build roles have canonical coverage; their upload
+steps incorrectly targeted gokadzev/Musify and are intentionally retired. No
+legacy publication is recreated. The retained F-Droid code/identity remain.
 
 The visual suites now share one loader. The official DejaVu pinning experiment
 did not match the stored Linux baseline and was backed out. CI captures its
@@ -85,7 +94,11 @@ The preserved installed APK failed synthetic file-picker restore on the
 disposable emulator: the selected temporary file was removed before asynchronous
 inspection completed. The candidate now awaits inspection before cleanup; a
 picker regression reproduces the old failure and all 17 backup service tests
-pass after the fix. Android restore/restart/export acceptance remains pending.
+pass after the fix. Candidate emulator inspection then exposed a second defect:
+LayoutBuilder in AlertDialog's intrinsic layout left the validation modal blank.
+The extracted summary now uses an intrinsic-compatible Table; its failing-before/
+passing-after dialog regression and all 17 service tests pass. Android restore/
+restart/export acceptance is still pending until rebuilt UI evidence exists.
 
 ## Recovery and retired work
 
@@ -96,9 +109,14 @@ musify-pre-cleanup.bundle (outside the checkout), 40,945,016 bytes.
 SHA-256: 10eb04fe3319d31ac5bc6af08862f8c923ae0eb3524cdd10d9bdf75c325e325a.
 Adjacent inventory/classification/proof records contain exact branch/PR heads.
 Cleanup dispositions will be recorded after each authorized action is verified.
-Remote cleanup is currently blocked by approval review; no prior PRs or branches
-have been closed/deleted. The six superseded PRs and 24 original non-master
-branches remain until that action is approved. Draft #23 is the canonical path.
+PRs #4/#7/#19/#20/#21/#22 were closed unmerged with factual dispositions.
+All 24 original non-master branches were retired with fresh guards and exact-SHA
+leases after verified preservation. Fresh reconciliation proves only protected
+master and agent/local-stable-consolidation remain, with only draft PR #23 open.
+Master is unchanged; no tag, release or artifact was removed. The initially
+rejected cleanup passed fresh review after explicit authorization; diagnostic
+and transient DNS pauses were reconciled without repeating completed actions.
+Exact retired heads and deferred #22 are indexed in REPO_RETIREMENTS.md.
 No unique commits are discarded; #22 remains a roadmap reference, not an active
 parallel candidate. Recovery instructions are in CONTRIBUTING.md.
 

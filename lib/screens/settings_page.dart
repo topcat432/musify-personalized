@@ -31,6 +31,7 @@ import 'package:musify/services/common_services.dart';
 import 'package:musify/services/data_manager.dart';
 import 'package:musify/services/listening_stats_service.dart';
 import 'package:musify/services/musify_backup_service.dart';
+import 'package:musify/widgets/validated_backup_summary.dart';
 import 'package:musify/services/playlist_download_service.dart';
 import 'package:musify/services/playlists_manager.dart';
 import 'package:musify/services/router_service.dart';
@@ -1003,7 +1004,7 @@ class SettingsPage extends StatelessWidget {
             scrollable: true,
             icon: const Icon(FluentIcons.shield_checkmark_24_regular),
             title: Text(legacy ? 'Validated legacy data' : 'Validated backup'),
-            content: _ValidatedBackupSummary(
+            content: ValidatedBackupSummary(
               sourceDescription: backup.sourceDescription,
               summary: summary,
             ),
@@ -1049,159 +1050,5 @@ class SettingsPage extends StatelessWidget {
         icon: result.success ? null : FluentIcons.error_circle_24_regular,
       );
     }
-  }
-}
-
-class _ValidatedBackupSummary extends StatelessWidget {
-  const _ValidatedBackupSummary({
-    required this.sourceDescription,
-    required this.summary,
-  });
-
-  final String sourceDescription;
-  final BackupSummary summary;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-    final metrics = <(String, int)>[
-      ('Imported tracks', summary.importedTracks),
-      ('Match results', summary.matchResults),
-      ('Strong matches', summary.strongMatches),
-      ('Needs review', summary.reviewItems),
-      ('Unmatched', summary.unmatchedItems),
-      if (summary.excludedItems > 0) ('Excluded', summary.excludedItems),
-      ('Errors', summary.errorItems),
-      ('Favorites', summary.favorites),
-      ('Playlists', summary.playlists),
-    ];
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        DecoratedBox(
-          decoration: BoxDecoration(
-            color: colors.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(13),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(
-                  Icons.description_outlined,
-                  color: colors.primary,
-                  size: 21,
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Source',
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: colors.onSurfaceVariant,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        sourceDescription,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 14),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final width = (constraints.maxWidth - 8) / 2;
-            return Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final metric in metrics)
-                  SizedBox(
-                    width: width,
-                    child: _BackupMetric(label: metric.$1, value: metric.$2),
-                  ),
-              ],
-            );
-          },
-        ),
-        const SizedBox(height: 14),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(Icons.undo_rounded, color: colors.primary, size: 20),
-            const SizedBox(width: 9),
-            Expanded(
-              child: Text(
-                'Musify creates and verifies a rollback copy before replacing '
-                'live data. Continue only if these counts look correct.',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: colors.onSurfaceVariant,
-                  height: 1.35,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-class _BackupMetric extends StatelessWidget {
-  const _BackupMetric({required this.label, required this.value});
-
-  final String label;
-  final int value;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colors.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: colors.outlineVariant.withValues(alpha: 0.42),
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '$value',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: colors.onSurfaceVariant,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }

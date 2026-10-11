@@ -28,7 +28,7 @@ origin/master on one task branch/PR, avoiding competing overhaul branches.
 ## Toolchain and checks
 
 Flutter 3.44.5 / Dart 3.12.2, Java 17, wrapper Gradle 8.14.3, compile SDK 36,
-NDK 28.2.13676358. Pubspec/workflows pin Flutter. Resolve dependencies normally
+NDK 28.2.13676358, CMake 3.22.1. Pubspec/workflows pin Flutter. Resolve dependencies normally
 through pub.dev, Gradle Plugin Portal, Maven Central and Google. Do not bypass
 denials, silently upgrade tools, change security/global Git trust or remove
 shared SDK locks.
@@ -80,7 +80,7 @@ Never clear/reimport to manufacture acceptance. Every device command names its
 approved serial. Keep personal backups/screenshots outside the checkout and
 Library unless sharing that data is explicitly authorized.
 
-The intended workflows are debug.yml (verify) and signed-release.yml (unsigned
+The workflows are debug.yml (verify) and signed-release.yml (unsigned
 build, isolated sign/verify/publish using existing CI-held secrets). Never read
 secret values locally. Signing/publication require separate approval for exact
 current default-tip SHA after checks. See docs/RELEASE_SIGNING.md.
