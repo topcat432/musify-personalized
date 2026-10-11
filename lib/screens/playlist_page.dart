@@ -255,7 +255,12 @@ class _PlaylistPageState extends State<PlaylistPage> {
                   const SliverMiniPlayerBottomSpace(),
                 ],
               )
-            : EmptyPlaylistState(message: context.l10n!.error),
+            : CustomScrollView(
+                slivers: [
+                  EmptyPlaylistState(message: context.l10n!.error),
+                  const SliverMiniPlayerBottomSpace(),
+                ],
+              ),
       ),
     );
   }
@@ -328,12 +333,15 @@ class _PlaylistPageState extends State<PlaylistPage> {
                     onPressed: () async {
                       final songs = _playlist['list'] as List? ?? [];
                       if (songs.isEmpty) return;
-                      final shuffled = List<Map>.from(songs.whereType<Map>())
-                        ..shuffle();
+                      final orderedSongs = List<Map>.from(
+                        songs.whereType<Map>(),
+                      );
+                      if (orderedSongs.isEmpty) return;
                       await audioHandler.addPlaylistToQueue(
-                        shuffled,
+                        orderedSongs,
                         replace: true,
                         startIndex: 0,
+                        shuffle: true,
                       );
                     },
                   ),

@@ -3,6 +3,23 @@
 Recorded 2026-10-11. This is the living map; verify current GitHub heads/runs
 and connected device identity before relying on dated observations.
 
+Expanded production acceptance now has conditional owner authorization for
+integration, the existing signed publication workflow and an in-place Samsung
+update only after backup, product, visual and signed rehearsal gates pass.
+See PRODUCT_ACCEPTANCE.md for the source-linked scope and per-path ledger.
+The Samsung is ADB-authorized but its lock screen currently blocks a real
+app-supported export. No real export, merge, signing or live update has occurred
+in this acceptance round. Historical synthetic restore and CI passes do not
+satisfy that gate.
+
+The current candidate also fixes two reproduced PlaylistPage defects: its
+unavailable-state sliver must be hosted by a scroll view, and its Shuffle button
+must submit natural-order songs with player shuffle enabled. Targeted regressions
+(12 tests), aggregate tests (161) and local analysis pass. Final strict Linux CI
+and actual final-APK runtime coverage remain required. Controlled disposable
+same-name backup inspections read fresh counts 2/1/2 without restoring; the earlier
+stale-selection observation did not reproduce in that bounded check.
+
 ## Source and channels
 
 | Item | Proven state |
