@@ -38,7 +38,7 @@ void main() {
             'playlists': <String>[],
             'customPlaylists': [
               {
-                'ytid': 'synthetic-playlist',
+                'ytid': 'customId-synthetic-rehearsal',
                 'title': 'Synthetic rehearsal playlist',
                 'source': 'user-created',
                 'image': '',
@@ -109,7 +109,29 @@ void main() {
           final comparison = Platform.environment['MUSIFY_BACKUP_COMPARE'];
           if (comparison != null) {
             final second = await _inspect(File(comparison), temp, 'second');
-            expect(second['semanticSha256'], proof['semanticSha256']);
+            if (Platform.environment['MUSIFY_REHEARSAL_UPDATE_CONSENT'] ==
+                'false') {
+              // Explicitly account for pressing No in the first-run prompt
+              // after restart. Every other typed key/value remains exact.
+              final expected = Map<String, dynamic>.from(
+                second['keyedSemanticSha256'] as Map,
+              );
+              final expectedSettings = Map<String, dynamic>.from(
+                expected['settings'] as Map,
+              );
+              expect(
+                expectedSettings.containsKey('shouldWeCheckUpdates'),
+                false,
+              );
+              expectedSettings['shouldWeCheckUpdates'] = _semanticHash(false);
+              expected['settings'] = expectedSettings;
+              expect(proof['keyedSemanticSha256'], expected);
+              proof['explicitRehearsalSettingsAddition'] = {
+                'shouldWeCheckUpdates': false,
+              };
+            } else {
+              expect(second['semanticSha256'], proof['semanticSha256']);
+            }
             proof['semanticComparisonPassed'] = true;
             proof['comparisonFileSha256'] = second['fileSha256'];
           }
@@ -146,6 +168,13 @@ Future<Map<String, dynamic>> _inspect(
     'bytes': bytes.length,
     'fileSha256': sha256.convert(bytes).toString(),
     'summary': backup.summary.toJson(),
+    'keyedSemanticSha256': {
+      for (final box in values.entries)
+        box.key: {
+          for (final entry in (box.value as Map).entries)
+            entry.key: _semanticHash(entry.value),
+        },
+    },
     'semanticSha256': sha256
         .convert(utf8.encode(jsonEncode(_canonical(values))))
         .toString(),
@@ -153,6 +182,9 @@ Future<Map<String, dynamic>> _inspect(
     'deviceOrLiveDataModified': false,
   };
 }
+
+String _semanticHash(dynamic value) =>
+    sha256.convert(utf8.encode(jsonEncode(_canonical(value)))).toString();
 
 dynamic _canonical(dynamic value) {
   if (value is Uint8List) return ['bytes', base64Encode(value)];

@@ -101,3 +101,18 @@ keyed semantic hashes (map order normalized, list order preserved). It prints
 only summary counts and hashes, not song values. Set variables only for that
 process and keep personal documents outside Git/Library. Successful comparison
 is still not device restart or playback proof.
+
+Use a distinct filename for each newly exported/changed document. The bounded
+synthetic rehearsal observed an apparent stale payload when an existing selected
+filename was overwritten; its root cause remains open in RELEASE_STATE.md.
+Synthetic custom IDs must use the app's customId- prefix so UI navigation uses
+the local playlist rather than a YouTube lookup.
+
+The default comparison requires exact whole-map typed semantics. In the recorded
+synthetic rehearsal, pressing No in the first-run update prompt after restart
+explicitly added settings.shouldWeCheckUpdates=false. Only when reproducing that
+known action may MUSIFY_REHEARSAL_UPDATE_CONSENT=false account for that single
+added setting: all original key/value hashes and every other key remain exact,
+and the tool asserts the comparison input did not already contain the key.
+It reports that explicit addition. Never use this flag to excuse an unexplained
+real-data difference; preserve the initial failed whole-map result as evidence.

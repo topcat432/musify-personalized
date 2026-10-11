@@ -78,6 +78,12 @@ consolidation: their analysis/build roles have canonical coverage; their upload
 steps incorrectly targeted gokadzev/Musify and are intentionally retired. No
 legacy publication is recreated. The retained F-Droid code/identity remain.
 
+Run 38117095235 on 73ff5421e3f941909e4e164a6b43c9660b3afa0d also completed
+SUCCESS after both restore fixes and workflow retirement: clean analysis,
+aggregate tests, all 35 strict goldens, debug/F-Droid builds and unsigned release
+verification. The intervening 2f61715e run stopped only on import ordering;
+73ff corrected that directive. No signing or update artifact was published.
+
 The visual suites now share one loader. The official DejaVu pinning experiment
 did not match the stored Linux baseline and was backed out. CI captures its
 exact selected font/toolchain for bounded rendering diagnosis. Windows is not
@@ -86,7 +92,7 @@ the pixel reference. Do not report a visual PASS until strict comparisons pass.
 Official emulator 37.2.12 and Android 35 Google APIs x86_64 image installed on
 DESKTOP-OPE9IIV with existing accepted licenses unchanged and usable WHPX.
 Task-owned AVD musify_rehearsal_api35, emulator-5556, is separate from other
-projects. Real backup/restore/restart evidence is pending; Samsung disconnected
+projects. Real Samsung backup/restore/restart evidence is pending; disconnected
 after the initial check. Historical 2,643/2,454 counts are not today's inventory.
 Signing/publication and live-phone update remain held.
 
@@ -97,8 +103,31 @@ picker regression reproduces the old failure and all 17 backup service tests
 pass after the fix. Candidate emulator inspection then exposed a second defect:
 LayoutBuilder in AlertDialog's intrinsic layout left the validation modal blank.
 The extracted summary now uses an intrinsic-compatible Table; its failing-before/
-passing-after dialog regression and all 17 service tests pass. Android restore/
-restart/export acceptance is still pending until rebuilt UI evidence exists.
+passing-after dialog regression and all 17 service tests pass.
+
+Synthetic Android restore/restart/native export is now verified on that disposable
+AVD using isolated .preview.debug. Tested APK source is
+2f61715e26cda6a3e01e66cfa09f647f0929478e (73ff only reorders an import), SHA-256
+1f8900cc060cafc180da132c03fa9c7a4aa9b5fe90d85b6ba6581410e2d61e09. Its signature,
+embedded source SHA and ZIP integrity passed. Picker/review/restore succeeded;
+UI verified 2 favorites and the custom playlist's recording 2 before recording 1,
+including after a full Android reboot. Android System UI initially stalled but
+recovered after a bounded Wait; the subsequent app restart and export succeeded.
+Native saved-file reopen and an independent Hive inspection proved 5 imported
+tracks/results, 2 strong matches, 1 review, 1 unmatched, 1 excluded, 0 errors,
+2 favorites, 1 playlist and exact original typed key/value/list preservation.
+The explicitly selected first-run No response added only
+settings.shouldWeCheckUpdates=false; whole-map equality without accounting for
+that action correctly failed, and the exact expected addition comparison passed.
+Export SHA-256 b1811e90da8a1b4b9d0f3d941da82a453c02bc9d949f56bfe5dc6194bd9e7af7.
+This is synthetic evidence, not real Samsung data acceptance or playback proof.
+
+Bounded observations to review before production: overwriting a selected backup
+under the same filename appeared to reuse the earlier picker payload; a distinct
+filename restored the corrected synthetic fixture. Root cause is unproven.
+An invalid playlist lookup also exposed a RenderBox/Sliver mismatch in the
+error-screen branch of PlaylistPage. These were recorded, not silently passed
+or expanded into unrelated engineering. Use a distinct export filename meanwhile.
 
 ## Recovery and retired work
 
@@ -108,7 +137,7 @@ Task-local bundle: musify-source-comparison/repo-recovery-20261011/
 musify-pre-cleanup.bundle (outside the checkout), 40,945,016 bytes.
 SHA-256: 10eb04fe3319d31ac5bc6af08862f8c923ae0eb3524cdd10d9bdf75c325e325a.
 Adjacent inventory/classification/proof records contain exact branch/PR heads.
-Cleanup dispositions will be recorded after each authorized action is verified.
+Cleanup dispositions were verified after each authorized action.
 PRs #4/#7/#19/#20/#21/#22 were closed unmerged with factual dispositions.
 All 24 original non-master branches were retired with fresh guards and exact-SHA
 leases after verified preservation. Fresh reconciliation proves only protected
@@ -125,6 +154,7 @@ parallel candidate. Recovery instructions are in CONTRIBUTING.md.
 Read AGENTS.md and CONTRIBUTING.md; use debug.yml for Linux verification and
 signed-release.yml only for separately approved release. Product vision/import
 roadmap and VISUAL_SYSTEM.md remain useful design references. This map tracks
-facts, not blanket permission. Next gates: exact-head CI, disposable real-data
+facts, not blanket permission. Next gates: verify current-head CI, resolve recorded
+picker/error-screen observations, disposable real-data
 restore/restart, reviewed integration, approved signing/publication, then
 separately approved in-place phone acceptance.
