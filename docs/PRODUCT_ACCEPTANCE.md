@@ -1,5 +1,31 @@
 # Product acceptance ledger
 
+## Originating audio failure evidence, 2026-10-11
+
+Checkpoint 77f339a697e0a752db505d93cdf64f695c7fc023 passed exact
+[Linux CI 38173114591](https://github.com/topcat432/musify-personalized/actions/runs/38173114591):
+261 tests, 35 strict visuals, analysis, flavor boundaries and unsigned assembly.
+Its normal fresh owned-emulator playback failed after Opus initialization; the
+primary HTTP status was not retained. This does not prove a new 403. The app was
+stopped at the first error with no manual replay; full-song/next-song remain held.
+
+The follow-up preserves safe structured originating HTTP/range/body failures and
+proxy completion chains. It fixes demonstrated valid Content-Range rejection
+and prevents an already active read yielding bytes after another read fails.
+Original URLs/agents and true-403 terminal handling remain unchanged. Diagnostic
+fields exclude URLs, tokens, arbitrary header/body text and private metadata.
+The old player code 0 can be synthesized by the app and is not HTTP evidence.
+[Transport diagnostics](AUDIO_TRANSPORT_DIAGNOSTICS.md) records contract comparison,
+offline fixtures and the specific next discriminating tests, which have not run.
+Clean analysis and all 277 aggregate tests pass; 60 focused tests cover the
+transport/provenance/runtime paths. Four private offline controls against the
+preserved 77f339a6 source reproduce the old defects. Both strict Windows suites
+still fail all 35 images; 33 images exactly match the retained unchanged-source
+control, with the two About differences confined to prior identity/version fixture
+labels. Representative expected/actual/diff images were inspected. No goldens or
+comparator changed. Exact Linux checks on the new source remain required.
+No phone install, deployment, data migration or new public-media request occurred.
+
 ## Exact request context and upstream result, 2026-10-11
 
 An owned fixture demonstrated that the resolving player request used one

@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:just_audio/just_audio.dart';
 import 'package:musify/services/online_audio_source.dart';
+import 'package:musify/services/audio_transport_failure.dart';
 
 class _Client extends http.BaseClient {
   _Client(this.respond, {this.onClose});
@@ -150,12 +151,7 @@ void main() {
     );
   }
 
-  for (final header in [
-    'bytes 1-9/10',
-    'bytes 0-9/11',
-    'bytes 0-10/10',
-    'bytes 0-9/*',
-  ]) {
+  for (final header in ['bytes 1-9/10', 'bytes 0-9/11', 'bytes 0-10/10']) {
     test('mismatched Content-Range $header rejected', () async {
       final client = _Client(
         (_) async => http.StreamedResponse(
@@ -214,7 +210,13 @@ void main() {
     );
     await expectLater(
       (await source.request()).stream.drain<void>(),
-      throwsA(isA<TimeoutException>()),
+      throwsA(
+        isA<AudioTransportFailure>().having(
+          (e) => e.cause,
+          'originating cause',
+          isA<TimeoutException>(),
+        ),
+      ),
     );
     expect(client.closes, 1);
   });
@@ -237,7 +239,13 @@ void main() {
     );
     await expectLater(
       (await source.request()).stream.drain<void>(),
-      throwsA(isA<TimeoutException>()),
+      throwsA(
+        isA<AudioTransportFailure>().having(
+          (e) => e.cause,
+          'originating cause',
+          isA<TimeoutException>(),
+        ),
+      ),
     );
     expect(cancelled, isTrue);
     expect(client.closes, 1);

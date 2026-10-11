@@ -3,11 +3,13 @@
 // ignore_for_file: experimental_member_use
 
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show appFlavor;
 import 'package:http/http.dart' as http;
 import 'package:just_audio/just_audio.dart';
+import 'package:musify/services/audio_transport_failure.dart';
 import 'package:musify/services/stream_request_context.dart';
 
 typedef OnlineSourceFactory =
@@ -58,6 +60,7 @@ class GoogleVideoByteSource extends StreamAudioSource {
     this.chunkSize = 256 * 1024,
     this.timeout = const Duration(seconds: 10),
     this.onUnavailable,
+    this.onDiagnostic,
     Map<String, String> requestHeaders = const {},
   }) : requestHeaders =
            StreamRequestContexts.mediaHeaders(requestHeaders) ??
@@ -78,11 +81,36 @@ class GoogleVideoByteSource extends StreamAudioSource {
   final Duration timeout;
   final http.Client Function() _clientFactory;
   final VoidCallback? onUnavailable;
+  final ValueChanged<Map<String, Object?>>? onDiagnostic;
   final Set<http.Client> _clients = {};
   final Set<Future<void> Function()> _cancellations = {};
-  StateError? _terminalError;
+  AudioTransportFailure? _terminalError;
+  int _requestId = 0;
   bool _cancelled = false;
   bool get isUnavailable => _terminalError != null;
+  AudioTransportFailure? get failure => _terminalError;
+
+  void _report(Map<String, Object?> diagnostic) {
+    try {
+      if (onDiagnostic != null) {
+        onDiagnostic!(diagnostic);
+      } else {
+        debugPrint('Audio transport diagnostic: ${jsonEncode(diagnostic)}');
+      }
+    } catch (_) {
+      // A diagnostic consumer must not replace the originating failure.
+    }
+  }
+
+  @override
+  void onResponseFailure(StreamAudioResponseFailure failure) {
+    _report({
+      'stage': 'loopback',
+      'sourceCancelled': _cancelled,
+      ...failure.diagnostic,
+      'origin': this.failure?.diagnostic,
+    });
+  }
 
   Future<void> cancelRequests() async {
     _cancelled = true;
@@ -101,11 +129,20 @@ class GoogleVideoByteSource extends StreamAudioSource {
 
   @override
   Future<StreamAudioResponse> request([int? start, int? end]) async {
-    if (_terminalError != null) throw _terminalError!;
+    if (_terminalError != null) {
+      Error.throwWithStackTrace(_terminalError!, _terminalError!.originStack);
+    }
     if (_cancelled) throw StateError('Audio byte source was cancelled.');
     final offset = start ?? 0;
     final limit = end == null || end > sourceLength ? sourceLength : end;
     if (offset < 0 || offset >= sourceLength || limit <= offset) {
+      _report({
+        'stage': 'nativeRequest',
+        'kind': 'invalidRange',
+        'start': offset,
+        'endExclusive': limit,
+        'sourceLength': sourceLength,
+      });
       throw RangeError('Invalid audio byte range.');
     }
     return StreamAudioResponse(
@@ -115,11 +152,11 @@ class GoogleVideoByteSource extends StreamAudioSource {
       contentType: uri.queryParameters['mime'] == 'audio/webm'
           ? 'audio/webm'
           : 'audio/mp4',
-      stream: _rangeStream(offset, limit),
+      stream: _rangeStream(offset, limit, ++_requestId),
     );
   }
 
-  Stream<List<int>> _rangeStream(int start, int end) {
+  Stream<List<int>> _rangeStream(int start, int end, int requestId) {
     http.Client? client;
     StreamSubscription<List<int>>? subscription;
     late final Future<void> Function() cancel;
@@ -145,11 +182,19 @@ class GoogleVideoByteSource extends StreamAudioSource {
       sync: true,
       onListen: () {
         if (_cancelled || isUnavailable) {
-          controller.addError(StateError('Audio byte source is unavailable.'));
+          controller.addError(
+            _terminalError ?? StateError('Audio byte source was cancelled.'),
+            _terminalError?.originStack,
+          );
           unawaited(controller.close());
           return;
         }
         if (_clients.length >= 4) {
+          _report({
+            'stage': 'nativeRequest',
+            'kind': 'concurrencyLimit',
+            'activeRequests': _clients.length,
+          });
           controller.addError(StateError('Too many audio byte requests.'));
           unawaited(controller.close());
           return;
@@ -157,14 +202,15 @@ class GoogleVideoByteSource extends StreamAudioSource {
         client = _clientFactory();
         _clients.add(client!);
         _cancellations.add(cancel);
-        subscription = _fetchRanges(client!, start, end, () => closed).listen(
-          controller.add,
-          onError: controller.addError,
-          onDone: () {
-            close();
-            unawaited(controller.close());
-          },
-        );
+        subscription =
+            _fetchRanges(client!, start, end, requestId, () => closed).listen(
+              controller.add,
+              onError: controller.addError,
+              onDone: () {
+                close();
+                unawaited(controller.close());
+              },
+            );
       },
       onPause: () => subscription?.pause(),
       onResume: () => subscription?.resume(),
@@ -177,57 +223,109 @@ class GoogleVideoByteSource extends StreamAudioSource {
     http.Client client,
     int start,
     int end,
+    int requestId,
     bool Function() cancelled,
   ) async* {
+    var cursor = start;
+    var last = start;
+    var received = 0;
+    var delivered = 0;
+    http.StreamedResponse? response;
+    AudioContentRange? contentRange;
+    var kind = 'network';
+    var phase = 'headers';
     try {
-      for (var cursor = start; cursor < end;) {
+      for (; cursor < end;) {
         if (cancelled() || _cancelled) return;
         if (_terminalError != null) throw _terminalError!;
-        final last = (cursor + chunkSize < end ? cursor + chunkSize : end) - 1;
+        last = (cursor + chunkSize < end ? cursor + chunkSize : end) - 1;
         final expected = last - cursor + 1;
+        received = 0;
+        response = null;
+        contentRange = null;
+        kind = 'network';
+        phase = 'headers';
         final request = http.Request('GET', uri)
           ..followRedirects = false
           ..headers.addAll(requestHeaders)
           ..headers['Range'] = 'bytes=$cursor-$last';
-        final response = await client.send(request).timeout(timeout);
-        if (response.statusCode != 206 ||
-            response.headers['content-range'] !=
-                'bytes $cursor-$last/$sourceLength' ||
-            (response.contentLength != null &&
-                response.contentLength != expected)) {
-          throw StateError(
-            'Audio source did not return the requested byte range '
-            '(HTTP ${response.statusCode}).',
-          );
+        response = await client.send(request).timeout(timeout);
+        if (_terminalError != null) throw _terminalError!;
+        contentRange = AudioContentRange.parse(
+          response.headers['content-range'],
+        );
+        if (response.statusCode != 206) {
+          kind = 'httpStatus';
+          throw StateError('Unexpected media response status.');
         }
-        var received = 0;
+        if (contentRange == null ||
+            contentRange.unsatisfied ||
+            contentRange.start != cursor ||
+            contentRange.last != last ||
+            (contentRange.total != null &&
+                contentRange.total != sourceLength)) {
+          kind = 'contentRange';
+          throw StateError('Media response range does not match.');
+        }
+        if (response.contentLength != null &&
+            response.contentLength != expected) {
+          kind = 'contentLength';
+          throw StateError('Media response length does not match.');
+        }
+        phase = 'body';
         await for (final bytes in response.stream.timeout(timeout)) {
+          if (cancelled() || _cancelled) return;
+          if (_terminalError != null) throw _terminalError!;
           received += bytes.length;
           if (received > expected) {
+            kind = 'oversizedBody';
             throw StateError('Audio source exceeded the requested byte range.');
           }
+          delivered += bytes.length;
           yield bytes;
         }
+        if (cancelled() || _cancelled) return;
         if (received != expected) {
+          kind = 'truncatedBody';
           throw StateError(
             'Audio source ended before the requested byte range.',
           );
         }
         cursor = last + 1;
       }
-    } catch (_) {
-      if (!cancelled()) {
+    } catch (error, stack) {
+      if (!cancelled() && !_cancelled) {
         // Native retries may ask the same source again after a denied or
         // damaged range. Fail before local response headers, without another
         // upstream request, a partial-success claim or access fallback.
         final firstFailure = _terminalError == null;
-        _terminalError = StateError(
-          'Audio byte source is unavailable after a failed range request.',
-        );
+        _terminalError ??= error is AudioTransportFailure
+            ? error
+            : AudioTransportFailure(
+                kind: error is TimeoutException ? 'timeout' : kind,
+                phase: phase,
+                requestId: requestId,
+                nativeStart: start,
+                nativeEndExclusive: end,
+                rangeStart: cursor,
+                rangeLastInclusive: last,
+                sourceLength: sourceLength,
+                receivedBytes: received,
+                deliveredBytes: delivered,
+                httpStatus: response?.statusCode,
+                contentRange: contentRange,
+                contentRangePresent:
+                    response?.headers.containsKey('content-range') ?? false,
+                responseLength: response?.contentLength,
+                cause: error,
+                originStack: stack,
+              );
+        if (firstFailure)
+          _report({'stage': 'origin', ..._terminalError!.diagnostic});
         if (firstFailure && onUnavailable != null) {
           scheduleMicrotask(onUnavailable!);
         }
-        rethrow;
+        Error.throwWithStackTrace(_terminalError!, _terminalError!.originStack);
       }
     }
   }

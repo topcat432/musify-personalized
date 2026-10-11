@@ -15,6 +15,7 @@ import 'package:rxdart/rxdart.dart';
 import 'package:synchronized/synchronized.dart';
 import 'package:uuid/uuid.dart';
 import 'src/stream_audio_response_writer.dart';
+export 'src/stream_audio_response_writer.dart' show StreamAudioResponseFailure;
 
 const _uuid = Uuid();
 
@@ -3324,6 +3325,10 @@ abstract class StreamAudioSource extends IndexedAudioSource {
   /// a 500 response will be sent back to the player.
   Future<StreamAudioResponse> request([int? start, int? end]);
 
+  /// Observes source/write/HTTP failures without replacing the native response.
+  /// The default is silent; subclasses must redact causes before logging them.
+  void onResponseFailure(StreamAudioResponseFailure failure) {}
+
   @override
   AudioSourceMessage _toMessage() => ProgressiveAudioSourceMessage(
       id: _id, uri: _uri.toString(), headers: null, tag: tag);
@@ -3762,12 +3767,20 @@ _ProxyHandler _proxyHandlerForSource(StreamAudioSource source) {
           await source.request(rangeRequest?.start, rangeRequest?.endEx);
       stream = sourceResponse.stream;
     } catch (e, st) {
+      try {
+        source.onResponseFailure(StreamAudioResponseFailure(
+            phase: 'request', cause: e, originStack: st,
+            writtenBytes: 0, expectedBytes: null));
+      } catch (_) {
+        // Observability must not replace the original native failure.
+      }
       // ignore: avoid_print
-      print("Proxy request failed: $e\n$st");
+      print("Proxy request failed: ${e.runtimeType}");
 
       request.response.headers.clear();
       request.response.statusCode = HttpStatus.internalServerError;
-        await writeStreamAudioResponse(const Stream.empty(), request.response);
+      await writeStreamAudioResponse(const Stream.empty(), request.response,
+          onFailure: source.onResponseFailure);
       return;
     }
 
@@ -3792,7 +3805,8 @@ _ProxyHandler _proxyHandlerForSource(StreamAudioSource source) {
       request.response.statusCode = 200;
     }
 
-    await writeStreamAudioResponse(stream, request.response);
+    await writeStreamAudioResponse(stream, request.response,
+        onFailure: source.onResponseFailure);
   }
 
   return handler;

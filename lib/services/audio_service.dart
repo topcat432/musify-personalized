@@ -743,7 +743,10 @@ class MusifyAudioHandler extends BaseAudioHandler {
   /// Runtime failures arrive separately from initial load failures in
   /// just_audio 0.10.6. Own this transition once and publish paused state.
   @visibleForTesting
-  Future<void> handleRuntimePlaybackError(PlayerException error) async {
+  Future<void> handleRuntimePlaybackError(
+    PlayerException error, {
+    bool fromBoundedTransport = false,
+  }) async {
     if (_currentLoadingIndex >= 0 ||
         _runtimeErrorPending ||
         _handledRuntimeErrorTransition == _songTransitionCounter ||
@@ -758,7 +761,16 @@ class MusifyAudioHandler extends BaseAudioHandler {
     _handledRuntimeErrorTransition = transition;
     final failedSource = audioPlayer.audioSource;
     try {
-      logger.log('Native playback source failed', error: error.code);
+      logger.log(
+        'Native playback source failed',
+        error: {
+          'originator': fromBoundedTransport ? 'boundedTransport' : 'nativePlayer',
+          'nativeCode': fromBoundedTransport ? null : error.code,
+          'origin': failedSource is GoogleVideoByteSource
+              ? failedSource.failure?.diagnostic
+              : null,
+        },
+      );
       await pause();
       if (transition != _songTransitionCounter ||
           !identical(failedSource, audioPlayer.audioSource))
@@ -803,6 +815,7 @@ class MusifyAudioHandler extends BaseAudioHandler {
     }
     await handleRuntimePlaybackError(
       PlayerException(0, 'Source unavailable', 0),
+      fromBoundedTransport: true,
     );
   }
 
@@ -2141,8 +2154,13 @@ class MusifyAudioHandler extends BaseAudioHandler {
     } catch (e, stackTrace) {
       logger.log(
         'Error setting audio source',
-        error: e,
-        stackTrace: stackTrace,
+        error: audioSource is GoogleVideoByteSource
+            ? {
+                'nativeCauseType': e.runtimeType.toString(),
+                'origin': audioSource.failure?.diagnostic,
+              }
+            : e,
+        stackTrace: audioSource is GoogleVideoByteSource ? null : stackTrace,
       );
 
       if (audioSource is GoogleVideoByteSource && audioSource.isUnavailable) {

@@ -11,3 +11,12 @@ HTTP completion futures could escape as unhandled content-length exceptions.
 App-owned source failure/cancellation and user-visible errors live in Musify.
 Synthetic real-loopback tests cover valid, truncated and cancelled responses.
 Retire this local patch when a pinned upstream version supplies the same fix.
+
+The writer also reports an optional structured failure to its StreamAudioSource:
+source/request/write/responseDone/close phase, declared/written bytes, original
+cause and stack, and the preceding source failure when a later HTTP close fails.
+Diagnostics never interpolate raw cause messages, URLs, headers or audio tags.
+The app owns the allowlisted originating HTTP/range summary and the same-error
+terminal guard. The default callback is silent; an observer cannot replace a
+stream failure. No padding, successful short response, native decoder change,
+provider retry or new proxy is introduced by this observability patch.
