@@ -3,12 +3,14 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:musify/services/musify_backup_service.dart';
 import 'package:musify/services/personalized_update_service.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   late Directory hiveRoot;
 
   setUp(() async {
@@ -94,6 +96,54 @@ void main() {
     expect(validated.summary.strongMatches, 2619);
     expect(validated.summary.unmatchedItems, 24);
   });
+
+  test(
+    'picked streamed backup survives validation before staging cleanup',
+    () async {
+      final payloads = await _createMatchingPayloads(
+        importedTracks: 3,
+        matched: 1,
+        review: 1,
+        unmatched: 1,
+        namePrefix: 'picker',
+      );
+      final source =
+          await MusifyBackupService.createStreamedBundleFileForTesting(
+            payloads,
+            hiveRoot,
+          );
+      const channel = MethodChannel('miguelruivo.flutter.plugins.filepicker');
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        expect(call.method, 'custom');
+        return [
+          {
+            'path': source.path,
+            'name': 'streamed.musifybackup',
+            'size': await source.length(),
+          },
+        ];
+      });
+      try {
+        final backup = await MusifyBackupService.pickAndInspectBundle();
+        expect(backup, isNotNull);
+        expect(backup!.summary.importedTracks, 3);
+        expect(backup.summary.matchResults, 3);
+        expect(backup.summary.strongMatches, 1);
+        expect(backup.summary.reviewItems, 1);
+        expect(backup.summary.unmatchedItems, 1);
+        expect(backup.payloads['user'], orderedEquals(payloads['user']!));
+        expect(
+          backup.payloads['settings'],
+          orderedEquals(payloads['settings']!),
+        );
+        expect(await source.exists(), isTrue);
+      } finally {
+        messenger.setMockMethodCallHandler(channel, null);
+      }
+    },
+  );
 
   test('preserves excluded import decisions in verified backups', () async {
     final payloads = await _createMatchingPayloads(

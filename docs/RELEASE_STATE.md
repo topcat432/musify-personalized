@@ -59,6 +59,11 @@ Linux reference run 38112105227 on initial candidate: aggregate checks passed;
 Both Linux About before/after pairs were reviewed; only those two PNG baselines
 were deliberately replaced. Subsequent exact-head CI must prove the result.
 
+Run 38113993655 on 12e709c6 passed analysis, aggregate tests and all 35 strict
+goldens. Its Android build stopped because the runner lacked the pinned NDK;
+both canonical workflows now prepare that exact SDK component explicitly,
+using existing licenses and rejecting new prompts. Full build proof is pending.
+
 The visual suites now share one loader. The official DejaVu pinning experiment
 did not match the stored Linux baseline and was backed out. CI captures its
 exact selected font/toolchain for bounded rendering diagnosis. Windows is not
@@ -71,6 +76,12 @@ projects. Real backup/restore/restart evidence is pending; Samsung disconnected
 after the initial check. Historical 2,643/2,454 counts are not today's inventory.
 Signing/publication and live-phone update remain held.
 
+The preserved installed APK failed synthetic file-picker restore on the
+disposable emulator: the selected temporary file was removed before asynchronous
+inspection completed. The candidate now awaits inspection before cleanup; a
+picker regression reproduces the old failure and all 17 backup service tests
+pass after the fix. Android restore/restart/export acceptance remains pending.
+
 ## Recovery and retired work
 
 Before cleanup, all 25 original branches, tags and 22 PR heads were bundled,
@@ -80,6 +91,9 @@ musify-pre-cleanup.bundle (outside the checkout), 40,945,016 bytes.
 SHA-256: 10eb04fe3319d31ac5bc6af08862f8c923ae0eb3524cdd10d9bdf75c325e325a.
 Adjacent inventory/classification/proof records contain exact branch/PR heads.
 Cleanup dispositions will be recorded after each authorized action is verified.
+Remote cleanup is currently blocked by approval review; no prior PRs or branches
+have been closed/deleted. The six superseded PRs and 24 original non-master
+branches remain until that action is approved. Draft #23 is the canonical path.
 No unique commits are discarded; #22 remains a roadmap reference, not an active
 parallel candidate. Recovery instructions are in CONTRIBUTING.md.
 

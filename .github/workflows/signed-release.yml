@@ -163,6 +163,16 @@ jobs:
           channel: stable
           cache: true
 
+      - name: Prepare pinned Android build components
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$sdkmanager"
+          "$sdkmanager" --install "platforms;android-36" "build-tools;36.0.0" \
+            "ndk;28.2.13676358" < <(printf 'n\n')
+          test -f "$ANDROID_HOME/ndk/28.2.13676358/source.properties"
+
       - name: Install dependencies
         run: flutter pub get
 

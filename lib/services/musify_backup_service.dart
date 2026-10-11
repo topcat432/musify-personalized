@@ -376,7 +376,12 @@ class MusifyBackupService {
         }
         await File(path).openRead().pipe(localCopy.openWrite());
       }
-      return _inspectBundleFile(localCopy, sourceDescription: selected.name);
+      // Inspection reads the staged file asynchronously. Keep it alive until
+      // validation has completed before the finally block removes its directory.
+      return await _inspectBundleFile(
+        localCopy,
+        sourceDescription: selected.name,
+      );
     } finally {
       await _deleteDirectoryQuietly(staging);
     }
