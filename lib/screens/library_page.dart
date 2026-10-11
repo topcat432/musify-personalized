@@ -59,10 +59,6 @@ class _LibraryPageState extends State<LibraryPage> {
 
     // Show offline mode message if there is no content
     if (offlineMode.value) {
-      final hasUserContent =
-          userPlaylistFolders.value.isNotEmpty ||
-          userPlaylists.value.isNotEmpty ||
-          userCustomPlaylists.value.isNotEmpty;
       final hasOfflinePlaylists = offlinePlaylistService.offlinePlaylists.value
           .any((p) => p is Map && !PlaylistUtils.isArtistPlaylist(p));
       final hasOfflineArtists = getLikedArtistItems(
@@ -70,10 +66,7 @@ class _LibraryPageState extends State<LibraryPage> {
       ).isNotEmpty;
       final hasOfflineSongs = userOfflineSongs.value.isNotEmpty;
 
-      if (!hasUserContent &&
-          !hasOfflinePlaylists &&
-          !hasOfflineArtists &&
-          !hasOfflineSongs) {
+      if (!hasOfflinePlaylists && !hasOfflineArtists && !hasOfflineSongs) {
         final colorScheme = Theme.of(context).colorScheme;
         return Scaffold(
           appBar: AppBar(title: Text(context.l10n!.library)),
@@ -162,9 +155,7 @@ class _LibraryPageState extends State<LibraryPage> {
 
   Future<void> _openSpotifyImportHub() async {
     await Navigator.of(context).push(
-      personalizedPageRoute<void>(
-        builder: (_) => const SpotifyImportHubPage(),
-      ),
+      personalizedPageRoute<void>(builder: (_) => const SpotifyImportHubPage()),
     );
   }
 
@@ -218,7 +209,11 @@ class _LibraryPageState extends State<LibraryPage> {
       folders,
     );
 
-    final allPlaylistsNotInFolders = getPlaylistsNotInFolders();
+    final allPlaylistsNotInFolders = getPlaylistsNotInFolders()
+        .where(
+          (playlist) => !isOffline || PlaylistUtils.isPlaylistOffline(playlist),
+        )
+        .toList();
     final playlistsNotInFolders = PlaylistUtils.excludePlaylistsWithIds(
       allPlaylistsNotInFolders,
       offlineIdsNotInFolders,
@@ -229,6 +224,21 @@ class _LibraryPageState extends State<LibraryPage> {
     final hasLibraryContent = !isOffline || hasFolders || hasCustomPlaylists;
 
     final slivers = <Widget>[];
+
+    if (isOffline && userOfflineSongs.value.isNotEmpty) {
+      slivers.add(
+        SliverToBoxAdapter(
+          child: PlaylistBar(
+            context.l10n!.offlineSongs,
+            onPressed: () =>
+                NavigationManager.router.go('/library/userSongs/offline'),
+            cubeIcon: FluentIcons.cloud_off_24_regular,
+            borderRadius: commonCustomBarRadius,
+            showBuildActions: false,
+          ),
+        ),
+      );
+    }
 
     if (hasLibraryContent) {
       slivers.add(
