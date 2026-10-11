@@ -61,52 +61,158 @@ bugs or exhaustive coverage without traceable evidence.
 
 ## Feature, screen, button and pathway matrix
 
-Initial state below is deliberately UNTESTED for this expanded acceptance round.
-Earlier synthetic and CI evidence remains in RELEASE_STATE; rerun affected paths
-on the final code and distinguish it from the real Samsung export.
+Current reconciliation dated 2026-10-11. PASS applies only to the named subgates,
+not automatically to every acceptance clause. All 38 rows have evidence or a
+specific prerequisite. The 28 safe rows have local/fixture evidence; complete
+provider, physical-device and exact signed-release subgates remain separate.
+D/R HOLD means D BLOCKED for current full-product phone acceptance (selected
+Samsung unavailable) and R BLOCKED by product/signing/in-place release gates.
+D01/D02 retain their already completed phone identity/export evidence.
 
-| ID | Screen / entry / action | Acceptance, including repeats and errors | Initial level/status | Implementation / automated reference |
+Current automated code: 769d60f404f7b7ad041a6708916dec194574c831, analysis clean,
+245 aggregate tests PASS. Reference Linux CI is
+[38145671652](https://github.com/topcat432/musify-personalized/actions/runs/38145671652),
+completed SUCCESS: 245 tests, both strict suites (35 images), debug/F-Droid
+boundaries and unsigned release assembly.
+The prior exact a3f12e89 code passed
+[38143273232](https://github.com/topcat432/musify-personalized/actions/runs/38143273232),
+including 241 tests, 35 strict Linux images and all APK/channel boundaries.
+Windows strict comparisons remain FAIL; goldens/comparator were not weakened.
+
+Evidence root outside Git: musify-source-comparison/emulator-rehearsal.
+Current native first-N/reboot source a3f12e89a0c0c2be9bbf6d0965ac797209f83aec:
+APK 7f5bb1a4346abb20a42e13ce25bd58260fefe261d441eb48b5a59bda74bd59ae,
+isolated .preview.debug, code 300000002, task-owned API 35 AVD. Previous runtime
+sources are explicitly qualified in the historical checkpoints below: 49d17310
+(controls/repeat), bc702978 (source-error UI), 5da26d94 (paused snapshot/settings).
+Unchanged backup evidence at 2f61715e is retained rather than rerun needlessly.
+No current live-phone or production-signer rehearsal is represented by these APKs.
+
+| ID | Screen / entry / action | Acceptance, including repeats and errors | Current level/status and remaining subgates | Implementation / automated reference |
 |---|---|---|---|---|
-| D01 | Installed app and About | Retained .preview, actual Android version/code/signer; no hardcoded identity | D PASS package/version/code/signer and repeated APK hash; compile-time export source stamp verified; original CI artifact comparison unavailable | installed_app_identity; about_page |
-| D02 | Settings → Create verified backup → local SAF Save | Preserve live data; validate actual saved bytes, schema, both boxes, inventories, semantic values | D PASS actual SAF export 251405 bytes; independent typed inventory; empty library confirmed expected by owner | musify_backup_service; backup service tests |
-| D03 | Disposable Restore → review → confirm | Exact real-data counts/order/selected identities/exclusions/settings; rollback and reopen | E PASS actual Samsung export native inspection/confirm on 26bd; old signed baseline picker fails before restore | backup service / validated summary tests |
-| D04 | Full Android restart → native re-export | Independent exact keyed semantics; explain every legitimate change | E PASS full Android reboot and native re-export: every typed key/value identical, no exceptions | manual backup_rehearsal tool |
-| D05 | Interrupted/corrupt/repeated/same-name backup selection | Reject corrupt/partial safely; recover rollback; newly selected bytes stay fresh | E PASS bounded same-name inspection 2→1→2; corrupt/partial A prior CI; restart/current-code retest pending | backup service tests; Android file picker |
-| P01 | Liked Songs row / Play / Shuffle | Full list, real track completion advances with repeat off; replacement queue keeps shuffle | E/D UNTESTED | user_songs_page; audio_service; queue_retry_utils |
-| P02 | Playlist / Offline / Recents Play and row tap | Correct full source/order/start index; selected source not silently substituted | E partial: controlled playlist source/order PASS; sustained public stream FAIL at 1 MiB; Offline/Recents pending | playlist_page; user_songs_page |
-| P03 | Now Playing / mini-player seek, pause, previous, next | State/position synchronized; rapid input bounded; long titles don't overflow | E FAIL source-error state on 9f92; controls/seek and repaired error handler retest pending | now_playing; mini_player; audio_service |
-| P04 | Queue / Shuffle on then off | Natural order restored; current track retained; Play Next survives | E partial PASS shuffle on/off retains tone 3 and restores 1/2/3; Play Next inserts and survives replacement; toggles with inserted entry pending | audio_service / shuffle state tests |
-| P05 | Track completion / failed stream / retries / repeat off-one-all | Advance once; no replay of failed tail; repeat modes intentional; healthy playback not hung | E controlled 1/2/3 natural completion/tail pause PASS; real stream/retry FAIL; repeat one/all native pending | audio_service playback retry / queue_retry_utils tests |
-| P06 | Background/screen off/audio focus/output reconnect | Resume/control correctly, avoid duplicate playback; record attached speaker/wired/BT coverage | D UNTESTED; unavailable accessories explicit | audio_service; Android audio session |
-| I01 | Library → Import CSV → pick/inspect/cancel/replace | Valid rows/provenance retained; no implicit likes changes; failed replacement retains old session | E UNTESTED | spotify_csv_importer; import_session tests |
-| I02 | Matching start/pause/resume/reopen/error | Checkpoint progress; don't redo resolved tracks; fallback failure retains structured candidates | E UNTESTED | track_matching / scoring tests |
-| I03 | Matching summary → No match / Review / Errors | Permanent reopen without restarting 2,643 rows; unresolved remains after routing | E/D UNTESTED | matching_page; review_workflow tests |
-| I04 | Quick Review entry / artwork / preview / Accept / No match / Later / manual | Discoverable artwork-led cards; 12s preview; equivalent buttons/swipes; save before advance | E UNTESTED | review_sprint_page / swipe_deck tests |
-| I05 | Detailed/manual YouTube and YT Music search | Show scorer-rejected results with warnings; artwork/metadata/preview; explicit correct recording | E UNTESTED | manual_match_page; manual_source tests |
-| I06 | Exact YouTube/YT Music URL → confirmation | Resolve normal song+ytid; preview before save; invalid/private/deleted fails without mutation | E UNTESTED | manual_source / review_workflow tests |
-| I07 | Accept alternate → route → audit → reopen | Exact selected alternative survives all checkpoints and restart | E UNTESTED | review_workflow / destination tests |
-| I08 | Exclude → exact confirmation → repeated review/restart | Preserve source row/audit; drain all review/rescue/totals/destinations; retain existing likes | E UNTESTED | review_workflow / backup tests |
-| I09 | Choose Destination all/first-N → liked/existing/new → preview/confirm | Correct counts/source order/dedupe; success after durable write; partial unresolved stays staged | E UNTESTED | import_destination_page/service tests |
-| I10 | Retry routing / stale session / empty selection / restart | Idempotent; no uncontrolled duplicates/deletion; reject stale/empty safely; destination history retained | E UNTESTED | destination/session tests |
-| I11 | Individually selected/newly resolved subsets | Determine whether current delivery promise or later roadmap; do not invent completion | CODE absent; scope AMBIGUOUS | import roadmap §4; current selectSongs(first-N) |
-| L01 | Library → favorites / playlists / folders / pinned / artists | Membership/counts/order/filter persist; no silently missing real content | E/D UNTESTED | library_page; playlists_manager |
-| L02 | New/edit/rename/delete playlist/folder, cancel, repeat | Changes only disposable data; cancellation safe; duplicate/empty validation; restart persists | E UNTESTED | playlist_folder tests; edit dialogs |
-| L03 | Playlist unavailable/empty/loading → Back | Readable error/empty state, no RenderBox/Sliver exception or stranded navigation | A PASS targeted regression; E UNTESTED | playlist_page; EmptyPlaylistState |
-| L04 | Share/import/export links | Correct entry/preview/cancel; no external sends without explicit authorization | E UNTESTED bounded | playlist_sharing; playlist_bar |
-| S01 | Search query/suggestions/history/result/artist/album/playlist | Real loaded artwork/text, relevant playable result, empty/failure/cancel; offline behavior clear | E/D UNTESTED | search_page; artist/playlist route services |
-| O01 | Download song/playlist → Offline → play/remove/cancel | Correct file/state, interruption/retry bounded; real offline playback; no misleading quality claim | E UNTESTED | playlist_download_service; offline widgets |
-| O02 | Offline switch → navigation/search/local lists | Downloaded-only sources usable; clear empty state; toggle back restores navigation | E/D UNTESTED | router_service; offline_search_placeholder |
-| T01 | Settings themes/quality/shuffle/repeat/update/preferences | Every visible toggle uses correct key; reversible settings persist after restart | E/D UNTESTED | settings_manager; settings_page |
-| T02 | Cache/history/recents/stats/download clear dialogs | Correct scope/confirmation/cancel; execute only on disposable state | E UNTESTED bounded | settings_page; common_services |
-| T03 | Equalizer/lyrics/listening recap/Time Machine | Correct entry/data/empty/error; don't imply unsupported features; no crashes | E/D UNTESTED | equalizer_page; lyrics; time_machine_page |
-| T04 | About/licenses/translation/sponsor | Accurate identity/upstream attribution; working safe entry/Back; no external action/purchase | E/D UNTESTED bounded | about_page; settings_page |
-| U01 | Check personalized update / current/error/invalid manifest | Exact retained package/pinned signer/hash; reject legacy/debug/unsigned/wrong identity; sensible UI | A prior CI; E/D UNTESTED | personalized_update_service/dialog tests |
-| U02 | Signed workflow + disposable in-place rehearsal | Exact default tip; monotonic version; v2/v3/pinned signer/hash; real-data survives | R UNTESTED gated | signed-release.yml; RELEASE_SIGNING |
-| U03 | Samsung in-place install → APK re-extract/data inventory/smoke | No uninstall/clear/live restore; exact artifact and persisted real data; daily critical paths | R/D UNTESTED gated | explicit approved release/install evidence |
-| V01 | Real artwork / long labels / compact + large text / themes | Artwork-led; no Aquaz3y/orbit/KEEP-NOPE branding; readable, no clipping/overflow | E/D UNTESTED | VISUAL_SYSTEM; both strict visual suites |
-| V02 | Scroll/keyboard/mini-player/safe insets/back/rapid gestures | No obscured controls, trapped overlays, stale views or lost decisions | E/D UNTESTED | actual screen recordings + widget regressions |
+| D01 | Installed app and About | Retained .preview, actual Android version/code/signer; no hardcoded identity | D PASS package/version/signer/APK hash and export source stamp; historical CI artifact expired; R HOLD | installed_app_identity; about_page |
+| D02 | Settings → Create verified backup → local SAF Save | Preserve live data; validate actual saved bytes, schema, both boxes, inventories, semantic values | A/D PASS saved real export and independent typed inventory; owner confirms empty library; R HOLD | musify_backup_service; backup service tests |
+| D03 | Disposable Restore → review → confirm | Exact real-data counts/order/selected identities/exclusions/settings; rollback and reopen | A PASS validation/rollback; E PASS real export restore on 26bd; live restore excluded; R HOLD | backup service / validated summary tests |
+| D04 | Full Android restart → native re-export | Independent exact keyed semantics; explain every legitimate change | E PASS real restore/reboot/re-export exact typed semantics on 26bd; synthetic full reboot a3 also byte-exact; D/R HOLD | manual backup_rehearsal tool |
+| D05 | Interrupted/corrupt/repeated/same-name backup selection | Reject corrupt/partial safely; recover rollback; newly selected bytes stay fresh | A PASS corrupt/partial/rollback; E PASS same-name 2/1/2 on unchanged backup implementation at 2f61715e; D/R HOLD | backup service tests; Android file picker |
+| P01 | Liked Songs row / Play / Shuffle | Full list, real track completion advances with repeat off; replacement queue keeps shuffle | A PASS queue/shuffle fixtures; E PASS controlled local queue; complete provider listening FAIL/BLOCKED; D/R HOLD | user_songs_page; audio_service; queue_retry_utils |
+| P02 | Playlist / Offline / Recents Play and row tap | Correct full source/order/start index; selected source not silently substituted | A PASS source/order/start-index fixtures; E PASS controlled playlist, offline/recents local entries; sustained provider playback FAIL/BLOCKED; D/R HOLD | playlist_page; user_songs_page |
+| P03 | Now Playing / mini-player seek, pause, previous, next | State/position synchronized; rapid input bounded; long titles don't overflow | A PASS error ownership, zero/duration, paused snapshot, rapid-input fixtures; E PASS 49d controls, bc error, 5da paused duration; D/R HOLD | now_playing; mini_player; audio_service |
+| P04 | Queue / Shuffle on then off | Natural order restored; current track retained; Play Next survives | A PASS manual-entry shuffle/restoration; E PASS 9f92 current retained, natural order restored and Play Next insertion/replacement; D/R HOLD | audio_service / shuffle state tests |
+| P05 | Track completion / failed stream / retries / repeat off-one-all | Advance once; no replay of failed tail; repeat modes intentional; healthy playback not hung | A PASS stop/stale/three-failure/repeat; E PASS 49d healthy Replay and repeat one/all, natural tail pause; provider terminal callback remains BLOCKED; D/R HOLD | audio_service playback retry / queue_retry_utils tests |
+| P06 | Background/screen off/audio focus/output reconnect | Resume/control correctly, avoid duplicate playback; record attached speaker/wired/BT coverage | D BLOCKED selected phone/output accessories unavailable; E headless output cannot prove audibility/focus/accessory behavior; R HOLD | audio_service; Android audio session |
+| I01 | Library → Import CSV → pick/inspect/cancel/replace | Valid rows/provenance retained; no implicit likes changes; failed replacement retains old session | A PASS parser/provenance/session replacement; E PASS native CSV picker Cancel at 5da; no replacement or matching rerun; D/R HOLD | spotify_csv_importer; import_session tests |
+| I02 | Matching start/pause/resume/reopen/error | Checkpoint progress; don't redo resolved tracks; fallback failure retains structured candidates | A PASS checkpoint/cancel/resume/error; E PASS completed 4/4 checkpoint and current restart retention; D/R HOLD | track_matching / scoring tests |
+| I03 | Matching summary → No match / Review / Errors | Permanent reopen without restarting 2,643 rows; unresolved remains after routing | A PASS reopenable No match/errors after routing in durable fixture; E PASS completed/empty review access without restart matching; D/R HOLD | matching_page; review_workflow tests |
+| I04 | Quick Review entry / artwork / preview / Accept / No match / Later / manual | Discoverable artwork-led cards; 12s preview; equivalent buttons/swipes; save before advance | A PASS actual review widgets/swipes/prefetch; E PASS review entry/empty return and prior decision persistence; complete online preview BLOCKED; D/R HOLD | review_sprint_page / swipe_deck tests |
+| I05 | Detailed/manual YouTube and YT Music search | Show scorer-rejected results with warnings; artwork/metadata/preview; explicit correct recording | A PASS manual unrestricted candidates/warnings/scoring/exact choice; E persisted selected public alternate; complete preview BLOCKED; D/R HOLD | manual_match_page; manual_source tests |
+| I06 | Exact YouTube/YT Music URL → confirmation | Resolve normal song+ytid; preview before save; invalid/private/deleted fails without mutation | A PASS exact ID/oEmbed/denial/timeout/no raw-stream persistence; E selected exact URL decision retained; complete preview BLOCKED; D/R HOLD | manual_source / review_workflow tests |
+| I07 | Accept alternate → route → audit → reopen | Exact selected alternative survives all checkpoints and restart | A PASS selected alternate -> route/audit -> Hive reopen; E PASS exact selected IDs and audit survive a3 full reboot; D/R HOLD | spotify_import_persistence_test; closure-full-reboot-proof.json; closure-after-reboot-inventory.json |
+| I08 | Exclude → exact confirmation → repeated review/restart | Preserve source row/audit; drain all review/rescue/totals/destinations; retain existing likes | A PASS explicit exclusion/source/audit/backup/reopen; E PASS all four source rows and excluded outcome survive reboot; D/R HOLD | spotify_import_persistence_test; review/backup tests; closure-after-reboot-inventory.json |
+| I09 | Choose Destination all/first-N → liked/existing/new → preview/confirm | Correct counts/source order/dedupe; success after durable write; partial unresolved stays staged | A PASS all/first-N to liked/new/existing with source order; E PASS a3 first-one amount retained after confirm/refresh; earlier 5da expansion FAIL repaired; D/R HOLD | spotify_import_destination_page_test; spotify_import_persistence_test; private-ui/closure-a3-first-confirmed and closure-a3-first-repeat-review |
+| I10 | Retry routing / stale session / empty selection / restart | Idempotent; no uncontrolled duplicates/deletion; reject stale/empty safely; destination history retained | A PASS empty/stale target rejection and reopened idempotence; E PASS a3 repeat still 0 new/1 existing and no duplicate library change; D/R HOLD | spotify_import_persistence_test; private-ui/closure-a3-first-repeat-review; closure inventory proof |
+| I11 | Individually selected/newly resolved subsets | Determine whether current delivery promise or later roadmap; do not invent completion | CODE absent; A/E BLOCKED owner delivery-scope decision, not a shipped subset-selection feature; D/R HOLD | import roadmap §4; current selectSongs(first-N) |
+| L01 | Library → favorites / playlists / folders / pinned / artists | Membership/counts/order/filter persist; no silently missing real content | A PASS folder filtering/liked models; E PASS generated folder/member/pin plus original membership across full reboot; D/R HOLD | library_page; playlists_manager |
+| L02 | New/edit/rename/delete playlist/folder, cancel, repeat | Changes only disposable data; cancellation safe; duplicate/empty validation; restart persists | A PASS nested-navigation Cancel/Delete and child retention/reopen; E PASS create/rename/move/pin/unpin/validation/delete Cancel; E PASS repaired folder Delete returns to Library on exact 58f1edbb APK; D/R HOLD | playlist_folder_page_test; closure-folder-navigation-before/after.log; private-ui/closure CRUD captures |
+| L03 | Playlist unavailable/empty/loading → Back | Readable error/empty state, no RenderBox/Sliver exception or stranded navigation | A PASS unavailable/empty widget regressions; E PASS generated empty-folder entry/Back; provider unavailable state represented by local source-error fixture; D/R HOLD | playlist_page; EmptyPlaylistState |
+| L04 | Share/import/export links | Correct entry/preview/cancel; no external sends without explicit authorization | E PASS local share-link copy, no external send, CSV SAF entry/Cancel; CODE compact link expansion uses metadata service; live recipient delivery excluded; D/R HOLD | playlist_sharing; playlist_bar |
+| S01 | Search query/suggestions/history/result/artist/album/playlist | Real loaded artwork/text, relevant playable result, empty/failure/cancel; offline behavior clear | A PASS search/artist/playlist visual fixtures; E PASS native query/suggestions/keyboard Back and offline local navigation; complete playable provider result BLOCKED; D/R HOLD | search_page; artist/playlist route services |
+| O01 | Download song/playlist → Offline → play/remove/cancel | Correct file/state, interruption/retry bounded; real offline playback; no misleading quality claim | A PASS cleanup shared-file ownership and durable registry scope; E local synthetic file playback only; complete provider download/play BLOCKED; D/R HOLD | offline_cleanup_persistence_test; closure-offline-cleanup.log; controlled-audio sessions |
+| O02 | Offline switch → navigation/search/local lists | Downloaded-only sources usable; clear empty state; toggle back restores navigation | A PASS offline placeholder/folder filtering; E PASS 5da three/four-tab toggle and local-file controls; E PASS 769d60f4 downloaded-only Library, Offline Songs entry/3-song Play/pause, online restoration and full reboot; D/R HOLD | router_service; offline_search_placeholder |
+| T01 | Settings themes/quality/shuffle/repeat/update/preferences | Every visible toggle uses correct key; reversible settings persist after restart | A PASS theme/audio shuffle/repeat fixtures; E PASS quality Low/Medium/High restored to High, full settings-byte restart retention; provider/proxy/security changes excluded; D/R HOLD | settings_manager; settings_page |
+| T02 | Cache/history/recents/stats/download clear dialogs | Correct scope/confirmation/cancel; execute only on disposable state | A PASS all clear-dialog Cancel, history/recents/stats confirmed scope after reopen, owned offline cleanup; E PASS native history Cancel; originals retained; D/R HOLD | settings_data_scope_test; offline_cleanup_persistence_test; closure-settings-scope-final.log |
+| T03 | Equalizer/lyrics/listening recap/Time Machine | Correct entry/data/empty/error; don't imply unsupported features; no crashes | A PASS recap and disabled/empty Time Machine fixtures; E PASS Equalizer entry/Back and synthetic Lyrics unavailable; E PASS native Time Machine current-month recap entry/Back at 58f1edbb; no external share; D/R HOLD | equalizer_page; lyrics; time_machine_page |
+| T04 | About/licenses/translation/sponsor | Accurate identity/upstream attribution; working safe entry/Back; no external action/purchase | A PASS actual About identity widget; E PASS About debug version/upstream attribution, Licenses/Back, translation/sponsor entries inspected without sends/purchases; D/R HOLD | about_page; settings_page |
+| U01 | Check personalized update / current/error/invalid manifest | Exact retained package/pinned signer/hash; reject legacy/debug/unsigned/wrong identity; sensible UI | A PASS 14 updater rejection checks incl. old/debug identity, checksum, interrupted body and inspection failure; E PASS disallowed manifest rejection/dismiss with no install; D/R HOLD | personalized_update_service_test; personalized_update_dialog_test; closure-updater-rejection-final.log; private-ui/closure-updater-result |
+| U02 | Signed workflow + disposable in-place rehearsal | Exact default tip; monotonic version; v2/v3/pinned signer/hash; real-data survives | A PASS production workflow/channel/invalid-artifact boundaries; CI unsigned builds only; R BLOCKED exact signed in-place rehearsal and full product gates | signed-release.yml; RELEASE_SIGNING |
+| U03 | Samsung in-place install → APK re-extract/data inventory/smoke | No uninstall/clear/live restore; exact artifact and persisted real data; daily critical paths | D/R BLOCKED phone unavailable and signed/product release gates; no live install/restore/uninstall/clear-data | explicit approved release/install evidence |
+| V01 | Real artwork / long labels / compact + large text / themes | Artwork-led; no Aquaz3y/orbit/KEEP-NOPE branding; readable, no clipping/overflow | A Windows strict FAIL unchanged text-rendering differences; Linux 769d60f4 all 35 strict PASS; E real-artwork/long-label evidence plus readable native screens; D/R HOLD | VISUAL_SYSTEM; both strict visual suites |
+| V02 | Scroll/keyboard/mini-player/safe insets/back/rapid gestures | No obscured controls, trapped overlays, stale views or lost decisions | A PASS actual review, error/text-scale and slider widgets; E PASS keyboard, content scroll, safe Back, paused mini-player; folder-delete root pop FAIL repaired with A proof and native 58f1edbb Library return PASS; D/R HOLD | actual screen recordings + widget regressions |
 
-## Current execution evidence
+## Current closure findings
+
+The first-N destination refresh silently reset 1 to all 3 after a transfer on
+5da26d94. The generated playlist then gained the other 2 after explicit second
+confirmation; this is defect evidence, not a passing first-one repeat. a3f12e89
+preserves the approved count and clamps only if available songs shrink. The
+actual widget regression and native confirm/refresh/review all retain 1; the
+repeat preview remains 0 new and 1 existing, and was cancelled.
+
+Native folder deletion from inside its page popped the root shell and produced
+a blank screen on a3f12e89. The nested-navigation regression reproduces missing
+Library before the fix and passes on 58f1edbb. The repair dismisses the root
+dialog, then pops the folder page's Library navigator. It preserves child
+playlists, with Cancel/Delete and Hive-reopen checks. Native 58f1edbb Delete returns to the Library branch with all four tabs;
+Cancel and child retention remain covered by the actual-widget/Hive regression.
+Generated-fixture cleanup is independently proven in the final inventory.
+
+New durable fixture coverage exercises the actual import/review/destination
+services: accepted alternate identity, original source order, reopenable No
+match/error, explicit exclusion, all/first-N liked/new/existing targets, audits,
+idempotence, stale/empty rejection and independent Hive reopen. Offline cleanup
+proves exclusive files are removed while shared/liked/custom-owned files remain;
+Delete Downloads leaves library/import/settings state intact. Actual Settings
+widgets prove clear-dialog Cancel and confirmed history/recents/stats scope.
+Updater tests reject old/debug package identities, corrupt/interrupted bytes and
+Android-inspection failure, cleaning partial APKs before any install affordance.
+
+The a3 native in-place update and full Android reboot preserve all three Hive
+files byte-for-byte before launch. Boot IDs differ; the reopened Library retains
+the generated folder/member/pin, original three playlists, five likes, four
+imports/results and selected/excluded outcomes. Quality is explicitly High.
+Evidence: a3f12e89-install-preservation-proof.json, closure-full-reboot-proof.json,
+closure-after-reboot-inventory.json and private-ui/closure-a3-reboot-*.
+
+The final code 769d60f4 also repairs offline Library filtering: root custom
+playlists obey the same downloaded-playlist rule as folders/pins, stored online
+content no longer hides the offline empty message, and local-only songs retain
+the existing Offline Songs entry. Three actual-widget regressions pass without
+mutating stored playlists/folders. Native exact-APK Library hides the three
+undownloaded custom playlists and opens the three synthetic local songs; Play
+has queue size 3 and pauses at 8.982 seconds. Returning online restores all four
+tabs and original playlists. A Recents row plays only the selected local tone
+in its six-item source queue and pauses at 14.909 seconds before public rows.
+Evidence: closure-offline-library-before/after.log, private-ui/closure-final769-*,
+controlled-audio/closure-final769-offline-* and closure-final769-recents-*.
+
+Final debug APK SHA-256:
+ccf2c8d9fb0a6e4c1ad08e8774e1c690ae1255cd466c1f46cf1a1032a877024a.
+runtime-debug-769d60f4-proof.json verifies source, package, debug signer, archive
+and compiled network policy. 769d60f4-install-preservation-proof.json and
+closure-final-769d60f4-full-reboot-proof.json prove all three Hive files exact
+across in-place debug update and full Android reboot before launch. The boot ID
+changes; the post-launch final snapshot retains the same three hashes.
+
+Independent closure-final-inventory.json / closure-final-preservation-proof.json
+retain exact original maps/order for three playlists, five likes, four imports
+and four results, selected alternatives/exclusions and all nine original settings.
+Every baseline key remains. The only baseline user changes are three expected
+appended routing audits, local tone 1 moving to the front of Recents with three
+more plays and a newer typed timestamp, and current listening total +26 seconds;
+all per-song stats and other stats fields remain exact. Generated playlists,
+folders and pins are removed, leaving empty folder/pin keys. The only new setting
+is explicitly selected High quality. The disposable offline cache now contains
+only three registered owned synthetic WAV fixtures, all original hashes exact.
+This deliberate fixture registration proves local offline navigation/playback;
+it is not a successful provider download. No original/library/import data was
+cleared and no physical phone or unrelated device was modified.
+
+The current matrix has no pending safe-local native repair listed. Remaining
+online/provider, physical, delivery-scope and signed-release subgates are explicit
+prerequisites; named partial passes do not imply complete product acceptance.
+
+Remaining prerequisites: allowed complete media for online listening/download
+and previews (stopped after denial); reconnect the selected Samsung's existing
+USB/ADB connection and leave it unlocked for phone/focus/output checks; available
+physical outputs/accessories; owner decision for I11 subset delivery; full product
+gates followed by exact signed in-place rehearsal. No merge, signing/publication,
+live-phone update/restore, secret/security/provider workaround or matching rerun.
+
+## Historical execution evidence (superseded statuses)
+
+The sections below retain chronological failures and pending observations.
+Use the reconciled matrix above for current subgate status. Earlier failures
+are retained for traceability and must not override their exact repair evidence.
 
 ### Remaining-work classification after ee5ea7c9
 

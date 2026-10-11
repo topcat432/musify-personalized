@@ -3,6 +3,58 @@
 Recorded 2026-10-11. This is the living map; verify current GitHub heads/runs
 and connected device identity before relying on dated observations.
 
+## Current local acceptance checkpoint
+
+Sole candidate remains draft PR #23. Latest tested code is
+769d60f404f7b7ad041a6708916dec194574c831; protected master remains
+a786323556275a0de745ffca4d3affc088ac2055. Clean local analysis and all 245 tests
+pass. Both Windows strict visual suites still fail with the previously bounded
+text-rendering differences; no goldens/comparator were regenerated or weakened.
+Reference CI is [38145671652](https://github.com/topcat432/musify-personalized/actions/runs/38145671652).
+It completed SUCCESS: 245 tests, both strict Linux suites (35 images), all
+debug/F-Droid boundaries and unsigned release assembly. Prior exact a3f12e89 CI
+[38143273232](https://github.com/topcat432/musify-personalized/actions/runs/38143273232)
+passed 241 tests, 35 strict Linux images, debug/F-Droid boundaries and unsigned
+release assembly. CI builds are not signed updates.
+
+The latest verified disposable debug APK has SHA-256
+ccf2c8d9fb0a6e4c1ad08e8774e1c690ae1255cd466c1f46cf1a1032a877024a,
+package com.topcat432.musifypersonalized.preview.debug, code 300000002 and an
+embedded exact 769d60f4 source stamp. Both recent owned-emulator in-place
+updates preserved all three synthetic Hive files byte-for-byte before launch.
+No Samsung update occurred. Private evidence stays outside Git under
+musify-source-comparison/emulator-rehearsal; see runtime-debug-769d60f4-proof.json
+and 769d60f4-install-preservation-proof.json.
+
+Three additional native defects were reproduced and repaired: destination refresh
+expanded an approved first-N count to all resolved songs; deleting a folder from
+its nested page popped the root shell and left a blank screen; offline Library
+showed undownloaded custom playlists and hid its local-song entry. Actual-widget
+regressions and durable import/cleanup/settings/updater fixtures cover the fixes
+and scope boundaries. First-one confirm/refresh/review passes natively on a3,
+and full Android reboot preserves every Hive byte and selected/excluded state.
+The folder repair passes natively on 58f1edbb; downloaded-only Library and
+local Offline/Recents playback pass on 769d60f4. Final full Android reboot
+preserves all three Hive bytes. Independent closure-final-preservation-proof.json
+retains exact original playlists/likes/imports/results/selected/excluded state
+and nine settings, explicitly accounting for routing audits, local playback
+Recents/stats, selected High quality, empty generated-folder/pin keys and three
+owned fixture cache entries. No provider download is represented by that cache.
+
+PRODUCT_ACCEPTANCE.md now reconciles all 38 matrix rows with named A/E/D/R
+subgates; chronological pending/failure prose below it is historical. All 28
+safe rows have bounded local or fixture evidence; that does not turn online,
+physical-output or exact signed-release subgates into passes. Complete provider
+listening/download/preview remains FAIL/BLOCKED after the observed later-range
+403; no denied media was requested again. Selected Samsung availability,
+physical focus/output/accessories, the I11 subset-delivery scope decision and
+exact signed in-place rehearsal remain prerequisites. Master, signing,
+publication and live-phone changes stay on hold.
+
+The earlier checkpoints below retain source/data/channel history. Treat their
+old test counts and pending repair statements as historical supporting evidence;
+the current checkpoint and reconciled matrix supersede them.
+
 Expanded production acceptance now has conditional owner authorization for
 integration, the existing signed publication workflow and an in-place Samsung
 update only after backup, product, visual and signed rehearsal gates pass.
