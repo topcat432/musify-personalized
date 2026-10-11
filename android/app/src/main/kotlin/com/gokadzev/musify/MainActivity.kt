@@ -55,6 +55,7 @@ class MainActivity : AudioServiceActivity() {
     return mapOf(
       "packageName" to packageName,
       "versionCode" to versionCode(packageInfo),
+      "versionName" to (packageInfo.versionName ?: "unknown"),
       "signerSha256" to signerSha256(packageInfo),
     )
   }

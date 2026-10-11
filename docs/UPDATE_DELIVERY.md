@@ -1,29 +1,43 @@
 # Update delivery plan
 
-## Previous failure
+## Retained stable update identity — local candidate, 2026-10-11
 
-GitHub Actions produced debug APKs on fresh hosted runners. Those APKs were not
-guaranteed to share one persistent debug signing certificate, so Android could
-reject a new APK as an update to an installed build.
+The authorized candidate consolidates PR #20's foundation with corrected PR #21
+playback behavior. PR #22 is deferred. It keeps the installed package
+`com.topcat432.musifypersonalized.preview` and the existing long-lived signer.
+The suffix does not imply a new preview channel. The stable app label is
+`Musify Personalized`; debug builds use `.preview.debug` and the DEBUG label.
+F-Droid's existing package and permission boundary remain unchanged.
 
-## Permanent approach
+The installed Samsung baseline is versionCode `300000001`. The local candidate
+uses `0.1.300000002+300000002`; approved signed releases select their monotonic
+version in `signed-release.yml`. The in-app updater accepts only the retained
+package and matching signer. Legacy releases for
+`com.topcat432.musifypersonalized` remain separate-app historical artifacts and
+are rejected as updates to the retained app.
 
-- Use one permanent application ID for Musify Personalized.
-- Generate one long-lived private Android signing keystore.
-- Store the keystore and credentials only in secure CI secrets and offline backup storage.
-- Build user-facing APKs as signed release/update builds, not ephemeral debug-signed builds.
-- Increment the version code for every distributed build.
-- Verify every release by installing it directly over the previous release without uninstalling.
-- Keep normal full APK updates available even if a future Dart code-push system is added.
+About reads Android versionName/code rather than the former hardcoded `10.1.0`.
+New Android backups record actual package/version metadata and stable/debug
+channel. Schema 1 payloads, checksums, semantic validation and rollback remain
+unchanged. Historical production/debug backup origins remain readable because
+older builds, including the installed preview candidate, recorded those origins.
+Origin metadata alone is not proof of saved data or successful restore.
 
-## Current reset-and-reimport path
+## Remaining acceptance gates
 
-The completed debug dataset remains installed as a fallback. It will not be
-updated, uninstalled, cleared, exported through the old broken backup path, or
-used as the destination for the corrected build.
+This is local implementation, not a signed release or phone-tested update.
+Before distribution: review the final candidate, pass aggregate and visual
+checks, approve repository integration, verify the exact default-branch tip,
+then separately authorize signing/publication through the sole release path.
+Before installation: separately authorize and verify a real data backup and
+independent restore; verify in-place installation, launch, restart, saved data
+invariants and playback. Never uninstall or clear storage to force acceptance.
+The installed APK extraction preserves only the binary, not private app data.
 
-The corrected APK must update the existing production package in place. The
-original Spotify CSV is then imported again into production, automatic strong
-matches are retained, and only uncertain/unmatched tracks require manual work.
-The debug fallback may be removed only after production survives restart and a
-new verified `.musifybackup` passes independent restore testing.
+## Historical plan superseded
+
+Earlier notes proposed reset/reimport into a separate production package and
+assumed a surviving debug dataset. The read-only 2026-10-11 investigation found
+only the retained `.preview` Musify package on the selected Samsung. The user
+selected the data-preserving route. No reset, reimport, migration or fallback
+removal is authorized by this candidate.

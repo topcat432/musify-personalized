@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:musify/services/musify_backup_service.dart';
+import 'package:musify/services/personalized_update_service.dart';
 
 void main() {
   late Directory hiveRoot;
@@ -115,6 +116,86 @@ void main() {
     expect(validated.summary.excludedItems, 1);
     expect(validated.summary.matchResults, 3);
   });
+
+  test(
+    'stable identity and historical origins preserve synthetic backup data',
+    () async {
+      final payloads = await _createMatchingPayloads(
+        importedTracks: 2,
+        matched: 1,
+        review: 1,
+        unmatched: 0,
+      );
+      final bundle = await MusifyBackupService.createBundleBytesForTesting(
+        payloads,
+      );
+      final decoded = Map<String, dynamic>.from(
+        jsonDecode(utf8.decode(bundle)) as Map,
+      );
+      final manifest = Map<String, dynamic>.from(decoded['manifest'] as Map);
+      for (final origin in [
+        ['com.topcat432.musifypersonalized.preview', 'stable'],
+        ['com.topcat432.musifypersonalized.preview.debug', 'debug'],
+        ['com.topcat432.musifypersonalized', 'production'],
+        ['com.topcat432.musifypersonalized.debug', 'debug'],
+        ['com.gokadzev.musify.fdroid', 'stable'],
+        ['com.gokadzev.musify.fdroid.debug', 'debug'],
+      ]) {
+        manifest['app'] = {
+          'package': origin[0],
+          'channel': origin[1],
+          'version': 'synthetic',
+        };
+        decoded['manifest'] = manifest;
+        final validated = await MusifyBackupService.inspectBundleBytes(
+          utf8.encode(jsonEncode(decoded)),
+          sourceDescription: 'synthetic-identity.musifybackup',
+        );
+        expect(validated.summary.importedTracks, 2);
+        expect(validated.summary.reviewItems, 1);
+      }
+      manifest['app'] = {'package': 'another.app', 'channel': 'stable'};
+      decoded['manifest'] = manifest;
+      await expectLater(
+        MusifyBackupService.inspectBundleBytes(
+          utf8.encode(jsonEncode(decoded)),
+          sourceDescription: 'synthetic-unknown.musifybackup',
+        ),
+        throwsA(isA<BackupValidationException>()),
+      );
+    },
+  );
+
+  test(
+    'serialized backup records actual Android version and retained identity',
+    () async {
+      final payloads = await _createMatchingPayloads(
+        importedTracks: 2,
+        matched: 1,
+        review: 1,
+        unmatched: 0,
+      );
+      final bundle = await MusifyBackupService.createBundleBytesForTesting(
+        payloads,
+        identity: const InstalledAppIdentity(
+          packageName: 'com.topcat432.musifypersonalized.preview',
+          versionName: '0.1.300000002',
+          versionCode: 300000002,
+          signerSha256: 'synthetic',
+        ),
+      );
+      final validated = await MusifyBackupService.inspectBundleBytes(
+        bundle,
+        sourceDescription: 'synthetic-version.musifybackup',
+      );
+      final app = validated.manifest['app'] as Map;
+      expect(app['package'], 'com.topcat432.musifypersonalized.preview');
+      expect(app['channel'], 'stable');
+      expect(app['version'], '0.1.300000002');
+      expect(app['versionCode'], 300000002);
+      expect(validated.summary.importedTracks, 2);
+    },
+  );
 
   test('rejects a backup with one required database removed', () async {
     final payloads = await _createMatchingPayloads(
@@ -285,35 +366,43 @@ void main() {
     expect(Hive.box('user').get('spotifyImportTracks'), isNull);
   });
 
-  test('startup recovery rolls back an unverified interrupted restore', () async {
-    for (final boxName in ['user', 'settings']) {
-      await File('${hiveRoot.path}/$boxName.hive').writeAsString('new-$boxName');
-      await File(
-        '${hiveRoot.path}/$boxName.hive.pre-restore',
-      ).writeAsString('old-$boxName');
-    }
-    await File(
-      '${hiveRoot.path}/musify_restore_transaction.json',
-    ).writeAsString(jsonEncode({'state': 'replacing'}));
-
-    await MusifyBackupService.recoverInterruptedRestoreInDirectory(hiveRoot);
-
-    expect(await File('${hiveRoot.path}/user.hive').readAsString(), 'old-user');
-    expect(
-      await File('${hiveRoot.path}/settings.hive').readAsString(),
-      'old-settings',
-    );
-    expect(
+  test(
+    'startup recovery rolls back an unverified interrupted restore',
+    () async {
+      for (final boxName in ['user', 'settings']) {
+        await File(
+          '${hiveRoot.path}/$boxName.hive',
+        ).writeAsString('new-$boxName');
+        await File(
+          '${hiveRoot.path}/$boxName.hive.pre-restore',
+        ).writeAsString('old-$boxName');
+      }
       await File(
         '${hiveRoot.path}/musify_restore_transaction.json',
-      ).exists(),
-      isFalse,
-    );
-  });
+      ).writeAsString(jsonEncode({'state': 'replacing'}));
+
+      await MusifyBackupService.recoverInterruptedRestoreInDirectory(hiveRoot);
+
+      expect(
+        await File('${hiveRoot.path}/user.hive').readAsString(),
+        'old-user',
+      );
+      expect(
+        await File('${hiveRoot.path}/settings.hive').readAsString(),
+        'old-settings',
+      );
+      expect(
+        await File('${hiveRoot.path}/musify_restore_transaction.json').exists(),
+        isFalse,
+      );
+    },
+  );
 
   test('startup recovery commits only a previously verified restore', () async {
     for (final boxName in ['user', 'settings']) {
-      await File('${hiveRoot.path}/$boxName.hive').writeAsString('new-$boxName');
+      await File(
+        '${hiveRoot.path}/$boxName.hive',
+      ).writeAsString('new-$boxName');
       await File(
         '${hiveRoot.path}/$boxName.hive.pre-restore',
       ).writeAsString('old-$boxName');
@@ -357,10 +446,7 @@ Future<Map<String, Uint8List>> _createMatchingPayloads({
     for (var index = 0; index < review; index++)
       {'sourceRow': matched + index + 2, 'status': 'needs_review'},
     for (var index = 0; index < unmatched; index++)
-      {
-        'sourceRow': matched + review + index + 2,
-        'status': 'unmatched',
-      },
+      {'sourceRow': matched + review + index + 2, 'status': 'unmatched'},
     for (var index = 0; index < excluded; index++)
       {
         'sourceRow': matched + review + unmatched + index + 2,

@@ -88,8 +88,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          build_number=$((100000000 + GITHUB_RUN_NUMBER))
-          test "$build_number" -gt 26195006
+          build_number=$((300000001 + GITHUB_RUN_NUMBER))
+          test "$build_number" -gt 300000001
           test "$build_number" -le 2100000000
 
           latest_release="$RUNNER_TEMP/latest-personalized-release.json"
@@ -122,14 +122,17 @@ jobs:
                 "$asset_url"
               if ! published_build_number="$(jq -er '
                 select(.schemaVersion == 1) |
-                select(.packageName == "com.topcat432.musifypersonalized") |
+                select(.packageName == "com.topcat432.musifypersonalized.preview" or
+                       .packageName == "com.topcat432.musifypersonalized") |
                 .versionCode |
                 select(type == "number" and . == floor)
               ' "$latest_manifest")"; then
                 echo "The latest personalized update manifest is invalid."
                 exit 1
               fi
-              if (( build_number <= published_build_number )); then
+              published_package="$(jq -er .packageName "$latest_manifest")"
+              if [[ "$published_package" == "com.topcat432.musifypersonalized.preview" ]] &&
+                 (( build_number <= published_build_number )); then
                 echo "Refusing stale production versionCode $build_number; latest is $published_build_number."
                 exit 1
               fi
@@ -189,6 +192,7 @@ jobs:
       - name: Verify unsigned production identity
         env:
           BUILD_NUMBER: ${{ steps.version.outputs.build_number }}
+          VERSION_NAME: ${{ steps.version.outputs.version_name }}
         shell: bash
         run: |
           set -euo pipefail
@@ -205,8 +209,9 @@ jobs:
           fi
           badging="$($aapt dump badging "$apk")"
           package_line="$(head -1 <<<"$badging")"
-          grep -Fq "package: name='com.topcat432.musifypersonalized'" <<<"$package_line"
+          grep -Fq "package: name='com.topcat432.musifypersonalized.preview'" <<<"$package_line"
           grep -Fq "versionCode='$BUILD_NUMBER'" <<<"$package_line"
+          grep -Fq "versionName='$VERSION_NAME'" <<<"$package_line"
           grep -Fq "application-label:'Musify Personalized'" <<<"$badging"
           ! grep -Fq 'application-debuggable' <<<"$badging"
           cp "$apk" musify-personalized-unsigned.apk
@@ -317,11 +322,14 @@ jobs:
           test "${#signer_shas[@]}" -eq 1
           signer_sha="${signer_shas[0]}"
           test "${signer_sha,,}" = "${expected_signer_sha,,}"
+          # Public certificate fingerprint proven on the installed Samsung app.
+          test "${signer_sha,,}" = "58c5316466da7a426c4411beb33b3b594ef58875bcfa31e092a5afce8cf9999e"
 
           badging="$($aapt dump badging musify-personalized-production.apk)"
           package_line="$(head -1 <<<"$badging")"
-          grep -Fq "package: name='com.topcat432.musifypersonalized'" <<<"$package_line"
+          grep -Fq "package: name='com.topcat432.musifypersonalized.preview'" <<<"$package_line"
           grep -Fq "versionCode='$BUILD_NUMBER'" <<<"$package_line"
+          grep -Fq "versionName='$VERSION_NAME'" <<<"$package_line"
           grep -Fq "application-label:'Musify Personalized'" <<<"$badging"
           ! grep -Fq 'application-debuggable' <<<"$badging"
           unzip -t musify-personalized-production.apk >/dev/null
@@ -334,7 +342,7 @@ jobs:
             --argjson schemaVersion 1 \
             --argjson versionCode "$BUILD_NUMBER" \
             --arg versionName "$VERSION_NAME" \
-            --arg packageName 'com.topcat432.musifypersonalized' \
+            --arg packageName 'com.topcat432.musifypersonalized.preview' \
             --arg signerSha256 "$signer_sha" \
             --arg apkSha256 "$apk_sha" \
             --arg apkUrl "$apk_url" \

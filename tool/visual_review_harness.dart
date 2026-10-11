@@ -163,6 +163,19 @@ void initPriorityReviewTestPlugins() {
   final tempRoot = Directory.systemTemp.createTempSync('vr-plugins-');
 
   messenger
+    // Synthetic Android identity makes About snapshots deterministic.
+    ..setMockMethodCallHandler(
+      const MethodChannel('com.topcat432.musifypersonalized/updater'),
+      (call) async => call.method == 'getInstalledIdentity'
+          ? {
+              'packageName': 'com.topcat432.musifypersonalized.preview',
+              'versionName': '0.1.300000002',
+              'versionCode': 300000002,
+              'signerSha256':
+                  'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+            }
+          : null,
+    )
     ..setMockMethodCallHandler(
       const MethodChannel('plugins.flutter.io/path_provider'),
       (call) async {

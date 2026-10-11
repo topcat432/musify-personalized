@@ -22,16 +22,24 @@
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:musify/constants/app_constants.dart';
-import 'package:musify/constants/version.dart';
 import 'package:musify/extensions/l10n.dart';
+import 'package:musify/services/personalized_update_service.dart';
 import 'package:musify/theme/app_shape.dart';
 import 'package:musify/theme/app_spacing.dart';
 import 'package:musify/utilities/url_launcher.dart';
 import 'package:musify/widgets/mini_player_bottom_space.dart';
 import 'package:musify/widgets/personalized_ui.dart';
 
-class AboutPage extends StatelessWidget {
+class AboutPage extends StatefulWidget {
   const AboutPage({super.key});
+
+  @override
+  State<AboutPage> createState() => _AboutPageState();
+}
+
+class _AboutPageState extends State<AboutPage> {
+  late final Future<InstalledAppIdentity> _identity =
+      const AndroidPersonalizedUpdatePlatform().getInstalledIdentity();
 
   @override
   Widget build(BuildContext context) {
@@ -56,7 +64,8 @@ class AboutPage extends StatelessWidget {
                     // `AppTypography` role, since none of the shared roles
                     // model this one-off wordmark size.
                     Text(
-                      'Musify',
+                      'Musify Personalized',
+                      textAlign: TextAlign.center,
                       style: TextStyle(
                         color: colorScheme.primary,
                         fontSize: 36,
@@ -84,13 +93,21 @@ class AboutPage extends StatelessWidget {
                         color: colorScheme.secondaryContainer,
                         borderRadius: AppShape.pill,
                       ),
-                      child: Text(
-                        'v$appVersion',
-                        style: theme.textTheme.labelLarge?.copyWith(
-                          color: colorScheme.onSecondaryContainer,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0.2,
-                        ),
+                      child: FutureBuilder<InstalledAppIdentity>(
+                        future: _identity,
+                        builder: (context, snapshot) {
+                          final identity = snapshot.data;
+                          return Text(
+                            identity == null
+                                ? 'Build information unavailable'
+                                : 'v${identity.versionName} (${identity.versionCode})',
+                            style: theme.textTheme.labelLarge?.copyWith(
+                              color: colorScheme.onSecondaryContainer,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.2,
+                            ),
+                          );
+                        },
                       ),
                     ),
                   ],

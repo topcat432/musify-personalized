@@ -364,7 +364,7 @@ void main() {
         reducedMotion: true,
       );
 
-      expect(find.text('Musify'), findsOneWidget);
+      expect(find.text('Musify Personalized'), findsOneWidget);
       await expectLater(
         find.byType(Scaffold),
         matchesGoldenFile('visual_review_goldens/priority_about_light.png'),

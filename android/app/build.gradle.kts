@@ -46,9 +46,9 @@ android {
     }
 
     defaultConfig {
-        // Permanent identity for Daniel's personalized build. Do not change this
-        // after the first signed release or Android will treat it as a new app.
-        applicationId = "com.topcat432.musifypersonalized"
+        // Keep the installed personalized identity, including its historical suffix.
+        // Stable branding does not change Android update or private-data identity.
+        applicationId = "com.topcat432.musifypersonalized.preview"
         minSdk = 24
         targetSdk = 36
         versionCode = flutter.versionCode

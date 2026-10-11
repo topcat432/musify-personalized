@@ -4,12 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
-import 'package:musify/constants/version.dart';
 import 'package:musify/screens/about_page.dart';
 
 import '../../tool/visual_review_harness.dart';
 
 void main() {
+  const identityChannel = MethodChannel(
+    'com.topcat432.musifypersonalized/updater',
+  );
   const urlLauncherChannel = MethodChannel('plugins.flutter.io/url_launcher');
   final launchedUrls = <String>[];
   late Directory hiveRoot;
@@ -25,6 +27,16 @@ void main() {
 
     launchedUrls.clear();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          identityChannel,
+          (call) async => {
+            'packageName': 'com.topcat432.musifypersonalized.preview',
+            'versionName': '0.1.300000002',
+            'versionCode': 300000002,
+            'signerSha256': 'synthetic',
+          },
+        );
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(urlLauncherChannel, (call) async {
           switch (call.method) {
             case 'canLaunch':
@@ -38,6 +50,8 @@ void main() {
   });
 
   tearDown(() async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(identityChannel, null);
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(urlLauncherChannel, null);
     await Hive.close();
@@ -65,11 +79,22 @@ void main() {
   testWidgets('renders brand, version, and developer identity', (tester) async {
     await pumpAbout(tester);
 
-    expect(find.text('Musify'), findsOneWidget);
-    expect(find.text('v$appVersion'), findsOneWidget);
+    expect(find.text('Musify Personalized'), findsOneWidget);
+    expect(find.text('v0.1.300000002 (300000002)'), findsOneWidget);
     expect(find.text('Valeri Gokadze'), findsOneWidget);
     expect(find.text('WEB & APP Developer'), findsOneWidget);
 
+    resetNetworkImageOverride();
+  });
+
+  testWidgets('missing identity never shows the hardcoded upstream version', (
+    tester,
+  ) async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(identityChannel, null);
+    await pumpAbout(tester);
+    expect(find.text('Build information unavailable'), findsOneWidget);
+    expect(find.text('v10.1.0'), findsNothing);
     resetNetworkImageOverride();
   });
 

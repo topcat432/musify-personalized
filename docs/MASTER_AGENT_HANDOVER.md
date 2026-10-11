@@ -1,5 +1,24 @@
 # Musify Personalized — Master Agent Handover
 
+## Current local consolidation — 2026-10-11
+
+This task-local candidate retains the verified installed Samsung package
+`com.topcat432.musifypersonalized.preview`, version baseline `300000001`, and
+public signer `58c5316466da7a426c4411beb33b3b594ef58875bcfa31e092a5afce8cf9999e`.
+It starts at PR #20 head `395ecace3da567ef1437c7a2229252ef84ee94de` and incorporates
+corrected PR #21 intent from `76201eeb409594117c873716a41f7ebc6dd3224d`.
+PR #22 and every historical PR/remote branch are untouched. The installed
+binary's strongest source candidate is `0ea1b44dad777efd03c819becd31acffa996427f`,
+but exact binary-source attribution remains unproven.
+
+See `RELEASE_SIGNING.md` and `UPDATE_DELIVERY.md` for the current retained-identity
+contract. Older dated observations below are historical and do not authorize
+reset/reimport, data migration, signing, publication, installation or clearing.
+This is uncommitted local implementation; current check results are in the
+separate candidate validation report. It has not been released or phone-tested.
+The extracted installed APK is not a data backup.
+
+
 > **Purpose:** Give any new coding agent or LLM enough product, safety, architectural, release, and project-history context to contribute without repeating past mistakes.
 >
 > **Snapshot:** 2026-07-14, America/Chicago. GitHub timestamps may appear as 2026-07-15 UTC.

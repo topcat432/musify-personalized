@@ -1,11 +1,11 @@
 name: musify
 description: Music Streaming app made in Flutter!
-homepage: https://github.com/gokadzev/Musify
-repository: https://github.com/gokadzev/Musify
-issue_tracker: https://github.com/gokadzev/Musify/issues
+homepage: https://github.com/topcat432/musify-personalized
+repository: https://github.com/topcat432/musify-personalized
+issue_tracker: https://github.com/topcat432/musify-personalized/issues
 
 publish_to: 'none'
-version: 10.1.0+175 # run update.sh after changing the version
+version: 0.1.300000002+300000002 # Local candidate; signed releases override monotonically.
 
 environment:
   sdk: '>=3.12.0 <4.0.0'

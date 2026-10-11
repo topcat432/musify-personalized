@@ -16,14 +16,15 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
 import 'package:musify/constants/version.dart';
+import 'package:musify/services/personalized_update_service.dart';
 import 'package:path_provider/path_provider.dart';
 
 const String musifyBackupExtension = 'musifybackup';
 const String musifyBackupFormat = 'musify-personalized-backup';
 const int musifyBackupSchemaVersion = 1;
 const List<String> _requiredBoxNames = ['user', 'settings'];
-const String _releasePackage = 'com.topcat432.musifypersonalized';
-const String _debugPackage = 'com.topcat432.musifypersonalized.debug';
+const String _releasePackage = personalizedProductionPackage;
+const String _debugPackage = '$personalizedProductionPackage.debug';
 const String _gitSha = String.fromEnvironment(
   'GIT_SHA',
   defaultValue: 'unknown',
@@ -67,9 +68,7 @@ class BackupSummary {
       reviewItems: count('reviewItems'),
       unmatchedItems: count('unmatchedItems'),
       errorItems: count('errorItems'),
-      excludedItems: json['excludedItems'] == null
-          ? 0
-          : count('excludedItems'),
+      excludedItems: json['excludedItems'] == null ? 0 : count('excludedItems'),
       favorites: count('favorites'),
       playlists: count('playlists'),
       userKeys: count('userKeys'),
@@ -187,6 +186,7 @@ class MusifyBackupService {
         descriptors,
         snapshots,
         summary,
+        appIdentity: await _backupAppIdentity(),
       );
       final bundleFile = File(
         '${stagingDirectory.path}/verified.$musifyBackupExtension',
@@ -244,11 +244,7 @@ class MusifyBackupService {
       );
       return BackupOperationResult(success: false, message: error.message);
     } catch (error, stackTrace) {
-      _logError(
-        'Verified backup failed',
-        error: error,
-        stackTrace: stackTrace,
-      );
+      _logError('Verified backup failed', error: error, stackTrace: stackTrace);
       return BackupOperationResult(
         success: false,
         message: 'Backup failed before verification: $error',
@@ -374,14 +370,13 @@ class MusifyBackupService {
       } else {
         final path = selected.path;
         if (path == null || !await File(path).exists()) {
-          throw BackupValidationException('${selected.name} could not be read.');
+          throw BackupValidationException(
+            '${selected.name} could not be read.',
+          );
         }
         await File(path).openRead().pipe(localCopy.openWrite());
       }
-      return _inspectBundleFile(
-        localCopy,
-        sourceDescription: selected.name,
-      );
+      return _inspectBundleFile(localCopy, sourceDescription: selected.name);
     } finally {
       await _deleteDirectoryQuietly(staging);
     }
@@ -485,14 +480,20 @@ class MusifyBackupService {
 
   @visibleForTesting
   static Future<Uint8List> createBundleBytesForTesting(
-    Map<String, Uint8List> payloads,
-  ) async {
+    Map<String, Uint8List> payloads, {
+    InstalledAppIdentity? identity,
+  }) async {
     final staging = await _newTemporaryDirectory('bundle-test-create');
     try {
       final snapshots = await _validatePayloadSet(payloads, staging);
       final summary = _summaryFromSnapshots(snapshots);
       return _encodeBundle(
-        _buildManifest(payloads, snapshots, summary),
+        _buildManifest(
+          payloads,
+          snapshots,
+          summary,
+          appIdentity: identity == null ? null : _manifestAppIdentity(identity),
+        ),
         payloads,
       );
     } finally {
@@ -624,9 +625,7 @@ class MusifyBackupService {
         );
       }
       _requireMatchingSummary(
-        BackupSummary.fromJson(
-          Map<String, dynamic>.from(manifestSummaryRaw),
-        ),
+        BackupSummary.fromJson(Map<String, dynamic>.from(manifestSummaryRaw)),
         actualSummary,
       );
       _requireMatchingBoxInventories(manifestPayloads, snapshots);
@@ -973,9 +972,7 @@ class MusifyBackupService {
     return Uint8List.fromList(await source.readAsBytes());
   }
 
-  static Map<String, dynamic> _validateManifest(
-    Map<String, dynamic> manifest,
-  ) {
+  static Map<String, dynamic> _validateManifest(Map<String, dynamic> manifest) {
     if (manifest['format'] != musifyBackupFormat) {
       throw const BackupValidationException(
         'This file is not a Musify Personalized backup.',
@@ -996,8 +993,17 @@ class MusifyBackupService {
     final sourcePackage = app['package'];
     final sourceChannel = app['channel'];
     final recognizedIdentity =
-        (sourcePackage == _releasePackage && sourceChannel == 'production') ||
-        (sourcePackage == _debugPackage && sourceChannel == 'debug');
+        (sourcePackage == _releasePackage && sourceChannel == 'stable') ||
+        (sourcePackage == _debugPackage && sourceChannel == 'debug') ||
+        (sourcePackage == 'com.gokadzev.musify.fdroid' &&
+            sourceChannel == 'stable') ||
+        (sourcePackage == 'com.gokadzev.musify.fdroid.debug' &&
+            sourceChannel == 'debug') ||
+        // Historical exports mislabeled the preview binary as production.
+        (sourcePackage == 'com.topcat432.musifypersonalized' &&
+            sourceChannel == 'production') ||
+        (sourcePackage == 'com.topcat432.musifypersonalized.debug' &&
+            sourceChannel == 'debug');
     if (!recognizedIdentity) {
       throw BackupValidationException(
         'Unrecognized backup origin: $sourcePackage / $sourceChannel.',
@@ -1015,8 +1021,9 @@ class MusifyBackupService {
   static Map<String, dynamic> _buildManifest(
     Map<String, Uint8List> payloads,
     Map<String, _BoxSnapshot> snapshots,
-    BackupSummary summary,
-  ) {
+    BackupSummary summary, {
+    Map<String, dynamic>? appIdentity,
+  }) {
     final descriptors = {
       for (final boxName in _requiredBoxNames)
         boxName: _PayloadDescriptor(
@@ -1024,14 +1031,46 @@ class MusifyBackupService {
           sha256: sha256.convert(payloads[boxName]!).toString(),
         ),
     };
-    return _buildManifestFromDescriptors(descriptors, snapshots, summary);
+    return _buildManifestFromDescriptors(
+      descriptors,
+      snapshots,
+      summary,
+      appIdentity: appIdentity,
+    );
+  }
+
+  static Map<String, dynamic> get _fallbackAppIdentity => {
+    'package': kDebugMode ? _debugPackage : _releasePackage,
+    'channel': kDebugMode ? 'debug' : 'stable',
+    'version': appVersion,
+    'gitSha': _gitSha,
+  };
+
+  static Future<Map<String, dynamic>> _backupAppIdentity() async {
+    if (!Platform.isAndroid) return _fallbackAppIdentity;
+    final identity = await const AndroidPersonalizedUpdatePlatform()
+        .getInstalledIdentity();
+    return _manifestAppIdentity(identity);
+  }
+
+  static Map<String, dynamic> _manifestAppIdentity(
+    InstalledAppIdentity identity,
+  ) {
+    return {
+      'package': identity.packageName,
+      'channel': identity.packageName.endsWith('.debug') ? 'debug' : 'stable',
+      'version': identity.versionName,
+      'versionCode': identity.versionCode,
+      'gitSha': _gitSha,
+    };
   }
 
   static Map<String, dynamic> _buildManifestFromDescriptors(
     Map<String, _PayloadDescriptor> descriptors,
     Map<String, _BoxSnapshot> snapshots,
-    BackupSummary summary,
-  ) {
+    BackupSummary summary, {
+    Map<String, dynamic>? appIdentity,
+  }) {
     final payloadManifest = <String, dynamic>{};
     for (final boxName in _requiredBoxNames) {
       final descriptor = descriptors[boxName]!;
@@ -1048,12 +1087,7 @@ class MusifyBackupService {
       'format': musifyBackupFormat,
       'schemaVersion': musifyBackupSchemaVersion,
       'createdAtUtc': DateTime.now().toUtc().toIso8601String(),
-      'app': {
-        'package': kDebugMode ? _debugPackage : _releasePackage,
-        'channel': kDebugMode ? 'debug' : 'production',
-        'version': appVersion,
-        'gitSha': _gitSha,
-      },
+      'app': appIdentity ?? _fallbackAppIdentity,
       'payloads': payloadManifest,
       'summary': summary.toJson(),
     };
@@ -1117,10 +1151,7 @@ class MusifyBackupService {
         if (index > 0) sink.write(',');
         sink.write('"$boxName.hive":"');
         await sink.addStream(
-          source
-              .openRead()
-              .transform(base64.encoder)
-              .transform(utf8.encoder),
+          source.openRead().transform(base64.encoder).transform(utf8.encoder),
         );
         sink.write('"');
       }
@@ -1329,7 +1360,8 @@ class MusifyBackupService {
           'The $boxName key inventory is invalid.',
         );
       }
-      final expectedKeys = rawKeys.map((key) => key.toString()).toList()..sort();
+      final expectedKeys = rawKeys.map((key) => key.toString()).toList()
+        ..sort();
       final actual = snapshots[boxName]!;
       if (!listEquals(expectedKeys, actual.keys)) {
         throw BackupValidationException(
@@ -1567,9 +1599,7 @@ class _CanonicalBundleReader {
         if (decodeLength > 0) {
           try {
             sink.add(
-              base64Decode(
-                ascii.decode(combined.sublist(0, decodeLength)),
-              ),
+              base64Decode(ascii.decode(combined.sublist(0, decodeLength))),
             );
           } catch (_) {
             throw const BackupValidationException(

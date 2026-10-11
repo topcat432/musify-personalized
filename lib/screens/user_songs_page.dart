@@ -218,12 +218,19 @@ class _UserSongsPageState extends State<UserSongsPage> {
                           ? userOfflineSongs.value
                           : userRecentlyPlayed.value;
                       if (songs.isEmpty) return;
-                      final shuffled = List<Map>.from(songs.whereType<Map>())
-                        ..shuffle();
+                      final orderedSongs = List<Map>.from(
+                        songs.whereType<Map>(),
+                      );
+                      if (orderedSongs.isEmpty) return;
+                      // Queue in natural order, then enable shuffle through
+                      // the real toggle so `shuffleNotifier`/the persisted
+                      // setting/the restorable original order all stay
+                      // consistent with what this button did.
                       await audioHandler.addPlaylistToQueue(
-                        shuffled,
+                        orderedSongs,
                         replace: true,
                         startIndex: 0,
+                        shuffle: true,
                       );
                     },
                   ),
@@ -270,10 +277,7 @@ class _UserSongsPageState extends State<UserSongsPage> {
       ],
     );
     return isLikedSongs
-        ? PersonalizedReveal(
-            offset: const Offset(0, 0.02),
-            child: content,
-          )
+        ? PersonalizedReveal(offset: const Offset(0, 0.02), child: content)
         : content;
   }
 

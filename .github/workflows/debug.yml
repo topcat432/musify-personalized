@@ -186,7 +186,7 @@ jobs:
           aapt="$(find "$ANDROID_SDK_ROOT/build-tools" -mindepth 2 -maxdepth 2 -type f -name aapt | sort -V | tail -1)"
           badging="$($aapt dump badging "$apk")"
           permissions="$($aapt dump permissions "$apk")"
-          grep -Fq "package: name='com.topcat432.musifypersonalized.debug'" <<<"$badging"
+          grep -Fq "package: name='com.topcat432.musifypersonalized.preview.debug'" <<<"$badging"
           grep -Fq "application-label:'Musify Personalized DEBUG'" <<<"$badging"
           grep -Fq 'android.permission.REQUEST_INSTALL_PACKAGES' <<<"$permissions"
           ! cmp -s \
@@ -226,7 +226,7 @@ jobs:
           test -f "$apk"
           aapt="$(find "$ANDROID_SDK_ROOT/build-tools" -mindepth 2 -maxdepth 2 -type f -name aapt | sort -V | tail -1)"
           badging="$($aapt dump badging "$apk")"
-          grep -Fq "package: name='com.topcat432.musifypersonalized'" <<<"$badging"
+          grep -Fq "package: name='com.topcat432.musifypersonalized.preview'" <<<"$badging"
           grep -Fq "application-label:'Musify Personalized'" <<<"$badging"
 
       # CI builds are verification inputs only. They are deliberately not
