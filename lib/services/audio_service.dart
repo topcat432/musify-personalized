@@ -2455,6 +2455,9 @@ class MusifyAudioHandler extends BaseAudioHandler {
         );
         unawaited(updateRecentlyPlayed(song['ytid'], songFallback: song));
       }
+      // Completion leaves the healthy tail paused. Seeking alone resets its
+      // position but does not resume playback; play() owns the lifetime Future.
+      await play();
     } catch (e, stackTrace) {
       logger.log('Error playing again', error: e, stackTrace: stackTrace);
     }

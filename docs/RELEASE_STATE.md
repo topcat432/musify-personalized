@@ -237,12 +237,21 @@ also truncates in native playback; independent 403 attribution is unproven.
 Bounded follow-up observes just_audio stream-response completion errors using
 a licensed local copy of the already pinned 0.10.6 package, cancels failed source
 reads, stops native retries promptly, blocks replay of a known failed source,
-and exposes a Library action with a sanitized error. Synthetic real-loopback
-valid/truncated/disconnected tests and service stop/selection races pass.
-Local analysis is clean and all 225 aggregate tests pass. All 35 Windows strict
-goldens fail; comparisons are unchanged and exact Linux CI is required. No
-provider access workaround, release or Samsung update has occurred. Runtime
-and CI verification of this follow-up must be recorded against its committed SHA.
+and exposes a Library action with a sanitized error. This repair is committed
+at d3d353fc1a2ac5483ffb0a74048513b2de7318b1; exact CI 38134013870 passes all
+225 aggregate tests, 35 Linux strict goldens and all build boundaries. All 35
+unchanged Windows strict goldens fail; inspected differences concentrate in
+text rendering. Disposable native damaged-local-file error and Library action
+pass, then the original WAV hash is restored and selecting healthy local audio
+clears the error. This does not prove native denied-source handling or complete
+external streaming. No provider was requested again.
+
+The same native local-control check reproduced two existing defects: zero seek
+reports position 0 to Android but leaves 00:09 on the slider, and completed-tail
+Replay seeks zero but remains paused. A bounded follow-up updates zero/duration
+states without retaining a previous widget's global position and resumes the
+healthy Replay through the existing play handoff. Automated and native checks
+must pin this follow-up's exact committed SHA. No release/Samsung update occurred.
 
 Read AGENTS.md and CONTRIBUTING.md; use debug.yml for Linux verification and
 signed-release.yml only for separately approved release. Product vision/import

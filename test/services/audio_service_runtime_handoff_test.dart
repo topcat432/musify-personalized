@@ -21,6 +21,43 @@ void main() {
     }
   });
 
+  test('Replay after healthy completion seeks zero and resumes without waiting '
+      'for the playback lifetime or reloading the source', () async {
+    offlineMode.value = true;
+    playNextSongAutomatically.value = false;
+    repeatNotifier.value = AudioServiceRepeatMode.none;
+    final file = File('${directory.path}/replay-fixture.wav')
+      ..writeAsBytesSync([0]);
+    final player = _ReplayPlayer();
+    final handler = MusifyAudioHandler(player: player);
+    try {
+      await handler.addPlaylistToQueue(
+        [
+          {
+            'ytid': 'healthy-replay',
+            'title': 'Healthy Replay',
+            'audioPath': file.path,
+            'highResImage': '',
+          },
+        ],
+        replace: true,
+        startIndex: 0,
+      );
+      await handler.handleSongCompletion();
+      expect(player.playing, isFalse);
+      await handler.playAgain().timeout(const Duration(milliseconds: 200));
+      expect(player.seeks, [Duration.zero]);
+      expect(player.playing, isTrue);
+      expect(player.pendingPlay!.isCompleted, isFalse);
+      expect(player.loadedIds, ['Healthy Replay']);
+      expect(handler.queue.value.length, 1);
+    } finally {
+      await handler.stop();
+      await player.dispose();
+      offlineMode.value = false;
+    }
+  });
+
   test('bounded source failure stops and reports within one second, without '
       'another native or upstream attempt', () async {
     offlineMode.value = true;
@@ -324,6 +361,14 @@ class _PendingPlayer extends AudioPlayer {
   Future<void> dispose() async {
     await errors.close();
     await super.dispose();
+  }
+}
+
+class _ReplayPlayer extends _PendingPlayer {
+  final seeks = <Duration>[];
+  @override
+  Future<void> seek(Duration? position, {int? index}) async {
+    seeks.add(position!);
   }
 }
 

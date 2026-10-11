@@ -142,10 +142,17 @@ pass, including real loopback truncated/disconnected-response handling, prompt
 Stop during pending headers, no replay after source denial, three-failure
 repeat-all stopping, and selection during an old failure callback. The error
 banner fits widths 320/412 at normal and doubled text size and opens Library.
-These are automated proofs; current-source native verification remains open.
-Both unchanged Windows strict visual suites fail all 35 comparisons; exact
-Linux CI must resolve the reference-platform check. No denied provider source
-was requested again in this follow-up.
+Exact d3d353fc CI 38134013870 passes all 225 aggregate tests, 35 Linux goldens
+and build boundaries. Both unchanged Windows strict visual suites fail all 35
+comparisons; inspected text differences are retained outside Git. Native local
+damaged-file error, disabled failed-source control and Library navigation pass.
+The synthetic WAV is restored to its original hash; fresh healthy selection
+clears the error. Local Play/resume/pause, Next and tail completion pass with
+queue size 3. Zero seek and completed-tail Replay FAIL on that native APK:
+Android is at 0 while the slider retains 00:09, and Replay remains paused at 0.
+Bounded corrections and final exact-source verification follow. Native Google
+source cancellation remains unproven; synthetic service and loopback tests do
+not replace that evidence. No denied provider source was requested again.
 
 Tested Android code: 8f886901cfe018b8c4698c3cd3f2ad51f5ec434f, isolated
 `.preview.debug`, task-owned API 35 emulator. APK SHA-256
