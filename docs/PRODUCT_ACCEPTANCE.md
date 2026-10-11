@@ -163,3 +163,26 @@ is under `musify-source-comparison/emulator-rehearsal` outside the checkout.
 Current local repair validation: analysis passes and all 162 tests pass, including
 the actual review-card semantics regression. Exact pushed CI and native retests
 must be recorded after the next candidate commit.
+
+Follow-up: exact CI 38122981222 for 43fa69c8003965ecdeb9aef415d03ff44ac2d6ae
+passed analysis, 162 tests, both strict visual suites, debug/F-Droid boundary and
+unsigned release build. Independent post-routing copied-box assertions now pass:
+imported songs retain source order and exact alternate; older likes retain their
+values/order; source rows, unresolved/excluded counts and both routing audits
+remain intact (`runtime-liked-routing-proof.json`). Native Quick Review reopened
+the sole saved No match without rerunning matching and omitted the excluded row.
+Ordinary manual search loaded 39 results. Exact-URL lookup instead failed with
+watch-page metadata retrieval, then a bounded 18-second retry timeout; no decision
+was saved. Exact-URL native acceptance therefore remains FAIL/open.
+
+On one fresh Dreams stream URL, host HEAD returned 403 and bounded ranged GET
+returned 206/1,024 bytes (`runtime-range-stream-PgagPdVM7bk-host-probe.json`).
+Candidate media repair validates cached URLs with GET `Range: bytes=0-0`, accepts
+200/206, closes the client immediately after headers, retains a 10-second bound
+and rejects access-denied/other failures. Direct extraction uses the vendored
+library's ordinary defaults instead of forcing the failing VR-only configuration;
+proxy settings/implementation, credentials and authentication are unchanged.
+Nine regression tests cover HEAD rejection versus GET success, ignored Range
+without consuming the body, denied/error responses, timeout and client closure.
+Analysis and all 171 tests pass. Native playback/preview/completion proof is still
+required before treating this compatibility repair as a runtime pass.

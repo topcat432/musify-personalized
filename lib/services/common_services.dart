@@ -25,8 +25,6 @@ import 'dart:io';
 
 import 'package:flutter/widgets.dart';
 import 'package:hive/hive.dart';
-import 'package:http/http.dart' as http;
-import 'package:musify/constants/clients.dart';
 import 'package:musify/main.dart' show logger;
 import 'package:musify/services/data_manager.dart';
 import 'package:musify/services/io_service.dart';
@@ -34,6 +32,7 @@ import 'package:musify/services/lyrics_manager.dart';
 import 'package:musify/services/playlists_manager.dart';
 import 'package:musify/services/proxy_manager.dart';
 import 'package:musify/services/settings_manager.dart';
+import 'package:musify/services/stream_url_validation.dart';
 import 'package:musify/utilities/app_utils.dart';
 import 'package:musify/utilities/formatter.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
@@ -80,7 +79,7 @@ Future<StreamManifest?> _fetchStreamManifest(String songId) async {
   }
 
   return ytClient.videos.streams
-      .getManifest(songId, ytClients: customClients)
+      .getManifest(songId)
       .timeout(_manifestTimeout);
 }
 
@@ -120,12 +119,7 @@ Future<String?> _getCachedSongUrl(
 
 /// Checks if a cached URL still responds successfully.
 Future<bool> _validateCachedUrl(String cachedUrl) async {
-  try {
-    final response = await http.head(Uri.parse(cachedUrl));
-    return response.statusCode >= 200 && response.statusCode < 300;
-  } catch (_) {
-    return false;
-  }
+  return validateStreamUrl(cachedUrl);
 }
 
 Future<List> fetchSongsList(String searchQuery) async {
