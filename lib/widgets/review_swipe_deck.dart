@@ -263,7 +263,9 @@ class _ReviewSwipeDeckState extends State<ReviewSwipeDeck>
                 offset: Offset(0, nextOffset),
                 child: Transform.scale(
                   scale: nextScale,
-                  child: IgnorePointer(child: widget.nextCard),
+                  child: ExcludeSemantics(
+                    child: IgnorePointer(child: widget.nextCard),
+                  ),
                 ),
               ),
             Transform.translate(

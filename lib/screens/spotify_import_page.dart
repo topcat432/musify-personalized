@@ -210,7 +210,7 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
                   collapsedShape: const Border(),
                   leading: const Icon(Icons.report_gmailerrorred_rounded),
                   title: Text(
-                    '${preview.rejectedRows.length} row${preview.rejectedRows.length == 1 ? '' : 's'} need attention',
+                    '${preview.rejectedRows.length} ${preview.rejectedRows.length == 1 ? 'row needs' : 'rows need'} attention',
                   ),
                   children: [
                     for (final rejected in preview.rejectedRows.take(25))

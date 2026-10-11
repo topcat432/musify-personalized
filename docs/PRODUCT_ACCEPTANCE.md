@@ -115,3 +115,51 @@ on the final code and distinguish it from the real Samsung export.
 
 - Playlist unavailable-state and real Shuffle toolbar regressions reproduced on the prior code. Candidate fixes wrap the sliver error in a scroll view and route natural-order songs through player shuffle. Focused tests cover actual widgets; they do not prove real track completion.
 - Disposable Android repeated selection of the same synthetic document showed favorites 2, then 1 after replacement, then 2 after replacement back; all inspections cancelled. Earlier stale-selection observation was not reproduced in this controlled probe. No cache purge/plugin change or live restore was used.
+
+### Native public-fixture checkpoint (2026-10-11)
+
+Tested Android code: 8f886901cfe018b8c4698c3cd3f2ad51f5ec434f, isolated
+`.preview.debug`, task-owned API 35 emulator. APK SHA-256
+70637f871d7cb9c7e0b517bc7118c47660f516f242eea1bc4fe07360303052ba.
+This evidence uses four synthetic/public-metadata source rows and two existing
+synthetic likes. It is not a Samsung data or signed-release pass. Local evidence
+is under `musify-source-comparison/emulator-rehearsal` outside the checkout.
+
+- I01/I02: native CSV validation showed four valid rows and one rejected row;
+  saved source rows survived the debug update/reopen. Matching finished 4/4,
+  initially one strong/two review/one unmatched. Pause was not exercised: the
+  run had already finished when its control was sought.
+- I04/I07: actual Quick Review loaded alternate artwork and saved Accept for
+  alternate `BCGH8eU-_lA`; independent copied Hive inspection confirms that
+  exact identity and `review_sprint_accept`. No match saved `manual_unmatched`
+  with retained alternatives. Existing likes and all source rows remained exact.
+- I08: exact-track Exclude was confirmed on the invented fixture recording.
+  Copied persistence confirms source row 5 retained, `excluded_from_import`,
+  timestamps and excluded-row list. Matching totals became two strong/one
+  unresolved/one excluded. Restart/re-export and exclusion from every downstream
+  surface remain open, so this is a partial E pass.
+- I09/I10: native all-resolved routing added two songs while one remained
+  unresolved. Repeating the actual transfer reported zero additions/two already
+  present. Independent post-routing inventory and playlist/first-N/restart paths
+  remain open. Evidence: `private-ui/emulator-5556-runtime-liked-review.xml`,
+  `runtime-liked-transfer.xml`, `runtime-liked-repeat-review.xml`,
+  `runtime-liked-repeat-confirm.xml` with matching screenshots.
+- Independent review proof: `runtime-review-persistence-proof.json`, backed by
+  `runtime-inventory-before-review.json` and
+  `runtime-inventory-after-review-exclude.json`. These copied-box assertions pass
+  without writing to the app or exposing live data.
+- I04/V02 accessibility FAIL on tested 8f: covered next-card semantics announced
+  a different recording under the visible current card. Candidate repair hides
+  the covered card's semantics; a before-failing/after-passing widget regression
+  confirms promotion still exposes the next card. Native final-APK retest remains
+  required. Singular import-summary grammar is also corrected.
+- Audio/preview remains FAIL on tested native code: forced ANDROID_VR extraction
+  timed out/reported HTTP 403. Fresh ordinary ranged GETs using the existing
+  library defaults returned 206 and 1,024 bytes for both `lYBUbBu4W08` and
+  `BCGH8eU-_lA` on the host. This is compatibility evidence, not native playback,
+  preview duration, audible output or completion proof. A HEAD 403 alone is
+  inconclusive. No proxy, credential, authentication or security change was used.
+
+Current local repair validation: analysis passes and all 162 tests pass, including
+the actual review-card semantics regression. Exact pushed CI and native retests
+must be recorded after the next candidate commit.

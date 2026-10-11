@@ -20,6 +20,14 @@ and actual final-APK runtime coverage remain required. Controlled disposable
 same-name backup inspections read fresh counts 2/1/2 without restoring; the earlier
 stale-selection observation did not reproduce in that bounded check.
 
+The latest disposable runtime checkpoint is recorded in PRODUCT_ACCEPTANCE.md.
+Native public-fixture decisions preserve the exact accepted alternate, reopenable
+No match metadata, exclusion audit, all source rows and existing likes. All-resolved
+routing and a repeated no-additions transfer ran with an unresolved row retained.
+Additional playlist, restart, backup and playback paths remain open. A reproduced
+covered-card accessibility defect has a candidate repair; local analysis and all
+162 tests pass. Host ranged audio GET success does not satisfy native playback.
+
 ## Source and channels
 
 | Item | Proven state |
