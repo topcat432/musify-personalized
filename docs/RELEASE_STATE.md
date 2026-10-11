@@ -3,7 +3,42 @@
 Recorded 2026-10-11. This is the living map; verify current GitHub heads/runs
 and connected device identity before relying on dated observations.
 
-## Current local acceptance checkpoint
+## Playback compatibility investigation, 2026-10-11
+
+Checkpoint 70b96f8e93e319da9ccdac4a284788a6e5d77f50 remains recoverable.
+The selected Samsung is available again; its unchanged preview APK has the
+previous recorded hash and source stamp. A normal baseline online attempt
+failed at manifest availability (HEAD, stream 313). Existing downloaded audio
+completed and naturally advanced; background/screen-off playback remained active.
+Playback was paused and Offline Mode restored to false. This validates baseline
+local behavior, not candidate physical acceptance or audible output.
+
+Retained candidate URL metadata rules against expiry at the recorded failures:
+the two URLs expired after 14:26 UTC, while failures occurred before 10:07 UTC.
+Signed query strings are unchanged; ranges fit their declared sizes; neither URL
+contains an n challenge. A service requirement on the anonymous media-delivery
+path is the leading remaining hypothesis, not a proven account/IP/token cause.
+The upstream PR #390 discussion independently reports a similar initial-buffer /
+later-range failure. Its proposed client spoofing is outside authorized scope.
+
+Scoped compatibility changes replace the fresh manifest HEAD preflight with a
+one-byte GET, cancel its response body, and treat genuine 403 as terminal without
+client fallback or download URL refresh. A retained same-URL HEAD 403 / GET 206
+pair justifies the method correction. Download requests also use uppercase GET
+and clamp their range to the remaining file length; those defects were reproduced
+by the owned 16-byte fixture. The native bounded transport already did both, so
+these downloader corrections do not explain its earlier mid-song failure.
+
+Local analysis and all 253 aggregate tests pass, including eight new extractor /
+download fixtures. Both strict Windows visual suites retain their prior bounded
+rendering failures; no goldens/comparator changed. Exact Linux CI is required;
+read the current source-pinned checks on PR #23 for its result.
+No denied media was requested again, no credentials or
+security settings changed, and no new native complete-provider playback pass is
+claimed. See PRODUCT_ACCEPTANCE.md for hypotheses and supported integration
+options. Merge, signing, publication and live installation remain held.
+
+## Prior local acceptance checkpoint (70b96f8e)
 
 Sole candidate remains draft PR #23. Latest tested code is
 769d60f404f7b7ad041a6708916dec194574c831; protected master remains

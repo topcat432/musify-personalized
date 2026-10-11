@@ -202,25 +202,27 @@ class YoutubeHttpClient extends http.BaseClient {
       try {
         final response = await retry(this, () async {
           final from = bytesCount;
-          final to = (streamInfo.isThrottled
-                  ? (bytesCount + 10379935)
-                  : streamInfo.size.totalBytes) -
-              1;
+          final chunkEnd = bytesCount + 10379935;
+          final to = (streamInfo.isThrottled &&
+                      chunkEnd < streamInfo.size.totalBytes
+                  ? chunkEnd
+                  : streamInfo.size.totalBytes) - 1;
 
           late final http.Request request;
           if (url.queryParameters['c'] == 'ANDROID') {
-            request = http.Request('get', url);
+            request = http.Request('GET', url);
             request.headers['Range'] = 'bytes=$from-$to';
           } else {
             request =
-                http.Request('get', url.setQueryParam('range', '$from-$to'));
+                http.Request('GET', url.setQueryParam('range', '$from-$to'));
           }
           return send(request);
         });
         if (validate) {
           try {
             _validateResponse(response, response.statusCode);
-          } on FatalFailureException {
+          } on FatalFailureException catch (error) {
+            if (error.statusCode == 403) rethrow;
             final newManifest =
                 await streamClient.getManifest(streamInfo.videoId);
             final stream = newManifest.streams
@@ -248,7 +250,8 @@ class YoutubeHttpClient extends http.BaseClient {
         yield* stream.stream;
       } on HttpClientClosedException {
         break;
-      } on Exception {
+      } on Exception catch (error) {
+        if (error is FatalFailureException && error.statusCode == 403) rethrow;
         if (errorCount == 5) {
           rethrow;
         }

@@ -1,5 +1,88 @@
 # Product acceptance ledger
 
+## Playback investigation update, 2026-10-11
+
+The prior 70b96f8e checkpoint remains preserved. The selected Samsung baseline
+received a HEAD-stage manifest 403 before decoding; an existing downloaded file
+completed and advanced naturally. Background/screen-off session behavior was
+observed, then playback paused and Offline Mode restored to its original false.
+This is baseline evidence, not a candidate physical pass. Audible output,
+accessories and competing audio focus remain unconfirmed.
+
+Ranked hypotheses and discriminating evidence:
+
+1. **Anonymous media-delivery requirements (leading inference).** Candidate
+   Opus streams decoded initially, then a retained finite-range request received
+   403 with declared zero body length. An [upstream engineering report](https://github.com/Hexer10/youtube_explode_dart/pull/390)
+   describes a similar initial-buffer / later-offset failure and attributes it
+   to proof-of-origin requirements. Our retained response does not identify the
+   exact cause: full response headers, provider reason text and native per-chunk
+   request timestamps were not captured. Do not call this proven provider-wide,
+   account, regional or IP blocking. The proposed upstream patches #388-390 use
+   alternate/spoofed identities and are outside this task's permitted approach.
+2. **HEAD preflight mismatch (demonstrated compatibility defect).** The retained
+   same-URL probe has HEAD 403 and bounded GET 206. Fresh manifest resolution
+   still used HEAD on the first stream, potentially a video stream rather than
+   the selected audio. The scoped correction uses one-byte GET with the same
+   URI, cancels the body and makes genuine GET/player/download 403 terminal.
+   This addresses preflight behavior, not sustained delivery. A small successful
+   range still does not certify the entire recording; a preflight may consume a
+   provider request allowance and must be evaluated on a permitted source.
+3. **Expiry/query/range/decoder defects (lower for the native failure).** Both
+   retained candidate URLs were valid for over four hours after their cache
+   timestamps and until after 14:26 UTC; failures were before 10:07 UTC. Query
+   strings survive URI/request construction exactly, contain signatures, and
+   have no n challenge. Observed ranges fit the declared file lengths; initial
+   Opus decoding and local natural advancement weaken a universal decoder issue.
+   Downloader fixtures separately exposed lowercase get and an unclamped
+   10 MB request on a 16-byte source; both are corrected. The native bounded
+   source already used uppercase GET and clamped ranges, so those corrections
+   cannot be presented as its root-cause repair.
+
+Eight new fixtures verify exact request method/query/range, body cancellation,
+terminal denials, complete byte delivery and next-source delivery. Local analysis
+and all 253 aggregate tests pass. Both Windows strict visual suites retain their
+prior bounded failures; exact Linux strict CI remains the reference gate.
+Native full-song/next-song acceptance still
+needs a permitted complete source. No previously denied media is requested again.
+If such a permitted attempt is approved later, capture its initial request shape,
+clock/expiry, range, status, safe response headers and bounded reason metadata;
+stop on its first real denial. Do not retrofit missing observations into old logs.
+
+Supported integration choices require an owner decision rather than new cookies:
+
+- **YouTube visible player:** the [IFrame API](https://developers.google.com/youtube/iframe_api_reference)
+  supplies playback/queue/end events through the provider's player. An Android
+  WebView must identify Musify using its real app ID as described in
+  [embedded-player identity requirements](https://developers.google.com/youtube/terms/required-minimum-functionality).
+  Public playback does not inherently require an OAuth account, while Data API
+  search needs a registered Google project/key. This is feasible for a visible
+  player, with minimum viewport 200x200, provider ads/restrictions and foreground
+  viewing. [Developer policies](https://developers.google.com/youtube/terms/developer-policies)
+  exclude separated audio, background players and unauthorized downloads; adding
+  a Data API key or Premium account does not supply a raw-audio integration.
+- **Spotify companion/control backend:** register an Android developer app,
+  client ID, redirect URI and Musify package/fingerprint; user installs/signs in
+  to Spotify and grants app-remote-control. [Android SDK setup](https://developer.spotify.com/documentation/android/tutorials/getting-started)
+  controls playback in Spotify, with state subscription/next/seek adapters in
+  Musify, rather than providing extractable audio. Web API control additionally
+  uses user-read-playback-state and user-modify-playback-state; its
+  [play endpoint](https://developer.spotify.com/documentation/web-api/reference/start-a-users-playback)
+  requires Premium. Mobile [PKCE](https://developer.spotify.com/documentation/web-api/tutorials/code-pkce-flow)
+  avoids embedding a client secret. Current [development mode](https://developer.spotify.com/documentation/web-api/concepts/quota-modes)
+  requires a Premium app owner and allows up to five allowlisted users, fitting
+  a personal prototype. This adds account/service dependence and catalogue
+  matching; provider audio stays in Spotify, and Musify cannot treat it as its
+  own downloadable cache. Local file/CSV import remains independent.
+- **Owned/licensed local or HTTPS media:** keeps the existing background player
+  model without a service account, but broad commercial catalogue playback needs
+  a licensed provider agreement or user-owned files. Arbitrary HTTPS media needs
+  an explicit provider/source adapter and product approval; synthetic byte tests
+  are engineering evidence only, not a replacement catalogue or live release.
+
+No integration above is enabled, registered, authorized or deployed by this work.
+Complete provider playback remains FAIL/BLOCKED; deployment holds still apply.
+
 Scope recorded 2026-10-11 for the single canonical candidate, PR #23. This is
 an execution ledger, not a claim that every row has passed. Pin the tested SHA,
 APK hash/package/signer, device, fixture/export hash and evidence for each run.

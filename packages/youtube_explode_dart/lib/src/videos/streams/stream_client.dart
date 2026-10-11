@@ -1,5 +1,6 @@
 import 'dart:collection';
 
+import 'package:http/http.dart' as http;
 import 'package:logging/logging.dart';
 
 import '../../exceptions/exceptions.dart';
@@ -105,15 +106,33 @@ class StreamClient {
             );
           }
 
-          final response = await _httpClient.head(streams.first.url);
+          // Some media servers reject HEAD while accepting playback GETs.
+          // Probe one byte with the same signed URI, then cancel the body even
+          // when the server ignores Range. Availability is not full playback.
+          final response = await _httpClient.send(
+            http.Request('GET', streams.first.url)
+              ..followRedirects = false
+              ..headers['Range'] = 'bytes=0-0',
+          );
+          await response.stream.listen(null).cancel();
           if (response.statusCode == 403) {
-            throw YoutubeExplodeException(
+            throw FatalFailureException(
               'Video $videoId returned 403 (stream: ${streams.first.tag})',
+              403,
             );
+          }
+          if (response.statusCode != 200 && response.statusCode != 206) {
+            if (response.statusCode >= 500) {
+              throw TransientFailureException.httpRequest(response);
+            }
+            throw FatalFailureException.httpRequest(response);
           }
           uniqueStreams.addAll(streams);
         });
       } catch (e, s) {
+        // A denied request cannot be repaired by repeating it or changing
+        // client identity. Preserve that failure rather than falling back.
+        if (e is FatalFailureException && e.statusCode == 403) rethrow;
         _logger.severe(
             'Failed to get stream manifest for video $videoId with client: ${client.payload['context']['client']['clientName']}. Reason: $e\n',
             e,

@@ -39,6 +39,7 @@ int getExceptionCost(Exception e) {
     return 2;
   }
   if (e is FatalFailureException) {
+    if (e.statusCode == 403) return 5;
     return 3;
   }
   if (e is VideoUnplayableException) {
