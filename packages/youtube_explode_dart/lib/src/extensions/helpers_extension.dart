@@ -173,8 +173,13 @@ extension StringUtility2 on String? {
     }
 
     var parts = this!.trim().split(' ');
+    // Compact labels such as "Streamed 3mo ago" also include a prefix.
+    while (parts.isNotEmpty &&
+        ['Streamed', 'Premiered', 'Updated'].contains(parts.first)) {
+      parts = parts.skip(1).toList();
+    }
     if (parts.length == 4) {
-      // Streamed x y ago
+      // Preserve the existing interpretation of other four-part labels.
       parts = parts.skip(1).toList();
     }
 
@@ -182,7 +187,10 @@ extension StringUtility2 on String? {
       return null;
     }
 
-    final qty = int.parse(parts.first);
+    final qty = int.tryParse(parts.first);
+    if (qty == null) {
+      return null;
+    }
 
     // Try to get the unit
     final unit = parts[1];

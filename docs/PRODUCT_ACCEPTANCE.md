@@ -1,5 +1,26 @@
 # Product acceptance ledger
 
+## Upstream remedy review and Search metadata correction, 2026-10-11
+
+The actual PR 390 patch and linked alternatives use Apple/VISIONOS identity
+substitution for their reported streaming remedy. That crosses the explicit
+no-spoofing boundary and was not applied. Separable availability/header corrections
+are already present; WEB/HLS hunks do not repair the captured fifth-range refusal.
+Official Musify's related buffering PR 955 was merged then reverted; its current
+cleartext-proxy correction is separate from this provider denial.
+
+A small ordinary date-parser correction from the linked branch was isolated after
+reproducing the retained Search FormatException. Compact streamed date labels now
+leave an unknown optional date while retaining the full results. Four new offline
+fixtures pass (three reproduced failures before repair); analysis and all 281
+aggregate tests pass. Windows strict failures remain, with all 35 actual renders
+exactly unchanged. Original headers, resolver identity, URLs, user-data schema and
+terminal 403 handling are unchanged. The 0bcb90f1 / 4e9325d0 native evidence is
+preserved; no new provider request, APK install or deployment occurred.
+See [the source/patch review](YOUTUBE_UPSTREAM_REMEDY_REVIEW.md) for actual changes,
+release status, reproduction limits and the protected boundary. The Search repair
+is not a provider-completion pass; future roadmap and production gates remain held.
+
 ## Owned native pass and fresh provider denial, 2026-10-11
 
 Runtime source 4e9325d07c0bd0fae4295e6c9226c1a6d904292c retains the production
