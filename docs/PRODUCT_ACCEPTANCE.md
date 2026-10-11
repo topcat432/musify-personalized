@@ -67,10 +67,10 @@ on the final code and distinguish it from the real Samsung export.
 
 | ID | Screen / entry / action | Acceptance, including repeats and errors | Initial level/status | Implementation / automated reference |
 |---|---|---|---|---|
-| D01 | Installed app and About | Retained .preview, actual Android version/code/signer; no hardcoded identity | D verified baseline version; exact APK recheck pending | installed_app_identity; about_page |
-| D02 | Settings → Create verified backup → local SAF Save | Preserve live data; validate actual saved bytes, schema, both boxes, inventories, semantic values | D BLOCKED: unlock required | musify_backup_service; backup service tests |
-| D03 | Disposable Restore → review → confirm | Exact real-data counts/order/selected identities/exclusions/settings; rollback and reopen | E UNTESTED real data | backup service / validated summary tests |
-| D04 | Full Android restart → native re-export | Independent exact keyed semantics; explain every legitimate change | E UNTESTED real data | manual backup_rehearsal tool |
+| D01 | Installed app and About | Retained .preview, actual Android version/code/signer; no hardcoded identity | D PASS package/version/code/signer and repeated APK hash; compile-time export source stamp verified; original CI artifact comparison unavailable | installed_app_identity; about_page |
+| D02 | Settings → Create verified backup → local SAF Save | Preserve live data; validate actual saved bytes, schema, both boxes, inventories, semantic values | D PASS actual SAF export 251405 bytes; independent typed inventory; empty library confirmed expected by owner | musify_backup_service; backup service tests |
+| D03 | Disposable Restore → review → confirm | Exact real-data counts/order/selected identities/exclusions/settings; rollback and reopen | E PASS actual Samsung export native inspection/confirm on 26bd; old signed baseline picker fails before restore | backup service / validated summary tests |
+| D04 | Full Android restart → native re-export | Independent exact keyed semantics; explain every legitimate change | E PASS full Android reboot and native re-export: every typed key/value identical, no exceptions | manual backup_rehearsal tool |
 | D05 | Interrupted/corrupt/repeated/same-name backup selection | Reject corrupt/partial safely; recover rollback; newly selected bytes stay fresh | E PASS bounded same-name inspection 2→1→2; corrupt/partial A prior CI; restart/current-code retest pending | backup service tests; Android file picker |
 | P01 | Liked Songs row / Play / Shuffle | Full list, real track completion advances with repeat off; replacement queue keeps shuffle | E/D UNTESTED | user_songs_page; audio_service; queue_retry_utils |
 | P02 | Playlist / Offline / Recents Play and row tap | Correct full source/order/start index; selected source not silently substituted | E/D UNTESTED | playlist_page; user_songs_page |
@@ -108,10 +108,10 @@ on the final code and distinguish it from the real Samsung export.
 
 ## Current execution evidence
 
-- Baseline Samsung package/version rechecked; screen locked. Unlock requested.
+- Samsung package/version/signer and repeated APK hash rechecked; actual native export saved and independently inspected after unlock. Compile-time source stamp verified.
 - Previous exact code CI and synthetic restore evidence are historical supporting
   checks, not passes for the real-data/current expanded matrix above.
-- No real Samsung export, integration, signing or update performed in this round.
+- Actual real export preserved; the owner confirms its zero-library inventory is expected. No integration, signing or Samsung update performed.
 
 - Playlist unavailable-state and real Shuffle toolbar regressions reproduced on the prior code. Candidate fixes wrap the sliver error in a scroll view and route natural-order songs through player shuffle. Focused tests cover actual widgets; they do not prove real track completion.
 - Disposable Android repeated selection of the same synthetic document showed favorites 2, then 1 after replacement, then 2 after replacement back; all inspections cancelled. Earlier stale-selection observation was not reproduced in this controlled probe. No cache purge/plugin change or live restore was used.
@@ -186,3 +186,63 @@ Nine regression tests cover HEAD rejection versus GET success, ignored Range
 without consuming the body, denied/error responses, timeout and client closure.
 Analysis and all 171 tests pass. Native playback/preview/completion proof is still
 required before treating this compatibility repair as a runtime pass.
+
+### Actual Samsung export rehearsal (2026-10-11)
+
+D02/D03/D04: actual native export 251405 bytes, SHA-256
+9f74763b07e2dbd89336d58c37a3379282a49bfcddf37cbb2dd773957770bc34,
+restored only into task-owned isolated candidate 26bd0e98. Its native validated
+counts matched the independent inventory. Full Android reboot was confirmed by
+distinct boot IDs. Native post-reboot re-export 251451 bytes, SHA-256
+3e80ea244a3eca5c98617776c21e23f640221965e22e2d07d5bf5da81b00f8cd,
+has exactly the same whole typed-map SHA-256
+ae6c1be7d8fe8aa9f1e3b9dc460626c7e7a4f0ab2dcc66410f362eba0468fa17.
+Every key, value and type compares exactly, including both history entries, both
+search entries, listening statistics and all three settings; no ignored changes.
+The owner confirms the empty library is expected and plans a fresh supported
+Spotify export/reimport. Private evidence: phone-real-backup/
+real-restore-reboot-reexport-proof.json and disposable-post-reboot-comparison.log;
+emulator-rehearsal/real-android-reboot-proof.json. No live phone restore/update.
+The old signed baseline reproduced its known pre-inspection temporary-file
+cleanup failure; it did not complete a restore. Final exact signed in-place
+rehearsal remains required.
+
+### Pending bounded transport and completion repair (2026-10-11)
+
+The owner explicitly approved an app-only GitHub-flavor HTTP 127.0.0.1 allowance
+with includeSubdomains=false, external cleartext denied and no device-wide
+change. The candidate uses just_audio 0.10.6's IPv4 loopback random-port server
+and crypto UUID-v4 source path; upstream requests stay HTTPS. Lazy finite ranges
+are at most 256 KiB, enforce exact length/Content-Range, bound four active reads,
+propagate backpressure, time out and cancel the client before awaiting cleanup.
+F-Droid keeps the existing URI source and has no network-security exception.
+Automated negative boundaries include HTTP/lookalike hosts/ports/invalid lengths,
+denied/redirect/error responses, mismatched/truncated/oversized data, stalled
+headers/body, early cancellation and capacity recovery. Native boundary and
+decoded playback checks are still pending; static XML checks alone are not a
+device security-policy pass.
+
+Native controlled 45-second PCM fixtures on 26bd advanced naturally from track
+1 to 2 to 3, then retained playing=true at the completed final track. This is a
+P05 FAIL, recorded in controlled-audio/natural-completion-session.json. The
+candidate pauses the completed non-repeating tail while retaining song/queue;
+a regression failed before and passes after, and repeat-all still wraps.
+Controlled tones do not prove public-track playback or audible output; the
+task-owned headless emulator has audio output disabled.
+
+Manual preview now arms its existing 30-second stop timer when playback starts,
+instead of after the play future completes. Quick Review remains 12 seconds.
+SponsorBlock's bounded-source path seeks over validated absolute segments;
+native timing and SponsorBlock acceptance remain open.
+
+Exact YouTube URL lookup now requests registered public YouTube oEmbed metadata
+over ordinary HTTPS, without watch-page challenge workarounds. It preserves
+the exact ytid and normal metadata, ignores returned embed HTML, and leaves
+duration unknown. Redirect/401/403/404, oversized response and timeout are tested
+to fail without fallback or saved decisions. Host public-metadata success is
+supporting evidence only; I06 native acceptance remains open.
+
+Local candidate validation: clean analyzer and all 208 aggregate tests pass.
+Evidence outside Git: bounded-transport-analysis-final.log and
+bounded-transport-aggregate.log under emulator-rehearsal. Exact pushed CI,
+new APK identity and all affected native paths must be recorded before a pass.

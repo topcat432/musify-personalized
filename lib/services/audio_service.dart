@@ -24,6 +24,7 @@ import 'dart:io';
 
 import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:hive/hive.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:musify/main.dart';
@@ -31,7 +32,9 @@ import 'package:musify/models/position_data.dart';
 import 'package:musify/services/common_services.dart';
 import 'package:musify/services/data_manager.dart';
 import 'package:musify/services/listening_stats_service.dart';
+import 'package:musify/services/online_audio_source.dart';
 import 'package:musify/services/settings_manager.dart';
+import 'package:musify/services/sponsor_skip_target.dart';
 import 'package:musify/utilities/map_utils.dart';
 import 'package:musify/utilities/mediaitem.dart';
 import 'package:musify/utilities/queue_entry_utils.dart';
@@ -91,6 +94,8 @@ class MusifyAudioHandler extends BaseAudioHandler {
 
   bool _completionEventPending = false;
   bool _completionHandlerLoadStarted = false;
+  final _streamSponsorSegments = <String, List<Map<String, dynamic>>>{};
+  bool _sponsorSeekPending = false;
 
   String? _lastError;
   int _consecutiveErrors = 0;
@@ -175,6 +180,49 @@ class MusifyAudioHandler extends BaseAudioHandler {
   }
 
   void _setupEventSubscriptions() {
+    audioPlayer.positionStream.listen(
+      (position) {
+        if (!sponsorBlockSupport.value ||
+            _sponsorSeekPending ||
+            _currentLoadingIndex >= 0 ||
+            audioPlayer.audioSource is! GoogleVideoByteSource) {
+          return;
+        }
+        final source = audioPlayer.audioSource;
+        final segments =
+            _streamSponsorSegments[currentSong?['ytid']?.toString()];
+        if (segments == null) return;
+        final target = sponsorSkipTarget(
+          position,
+          segments,
+          duration: audioPlayer.duration,
+        );
+        if (target == null) return;
+        _sponsorSeekPending = true;
+        unawaited(
+          Future<void>(() async {
+            try {
+              if (identical(source, audioPlayer.audioSource)) {
+                await audioPlayer.seek(target);
+              }
+            } catch (error) {
+              logger.log(
+                'Sponsored-segment seek failed',
+                error: error.runtimeType,
+              );
+            } finally {
+              _sponsorSeekPending = false;
+            }
+          }),
+        );
+      },
+      onError: (Object error) {
+        logger.log(
+          'Sponsored-segment position stream failed',
+          error: error.runtimeType,
+        );
+      },
+    );
     audioPlayer.playbackEventStream
         .throttleTime(const Duration(milliseconds: 100))
         .listen(
@@ -637,7 +685,7 @@ class MusifyAudioHandler extends BaseAudioHandler {
           Future.microtask(() async {
             try {
               if (!sleepTimerExpired && _completionEventPending) {
-                await _handleSongCompletion();
+                await handleSongCompletion();
               }
             } finally {
               // Only reset if still marked as pending (another event didn't override)
@@ -711,7 +759,8 @@ class MusifyAudioHandler extends BaseAudioHandler {
     }
   }
 
-  Future<void> _handleSongCompletion() async {
+  @visibleForTesting
+  Future<void> handleSongCompletion() async {
     try {
       if (_currentQueueIndex >= 0 && _currentQueueIndex < _queueList.length) {
         _addToHistory(_queueList[_currentQueueIndex]);
@@ -721,6 +770,12 @@ class MusifyAudioHandler extends BaseAudioHandler {
       if (repeatNotifier.value == AudioServiceRepeatMode.one) {
         // Repeat single song - play current song again
         await playAgain();
+      } else if (_currentQueueIndex >= _queueList.length - 1 &&
+          repeatNotifier.value == AudioServiceRepeatMode.none &&
+          (!playNextSongAutomatically.value || offlineMode.value)) {
+        // just_audio keeps playing=true after completion until explicitly
+        // paused. Publish a stopped tail without changing its song or queue.
+        await pause();
       } else {
         // For all other cases (next song, repeat all, auto-play), skipToNext handles it
         await skipToNext();
@@ -2097,10 +2152,26 @@ class MusifyAudioHandler extends BaseAudioHandler {
         return AudioSource.file(songUrl, tag: tag);
       }
 
-      final uri = Uri.parse(songUrl);
-      final audioSource = AudioSource.uri(uri, tag: tag);
+      final audioSource = onlineAudioSource(songUrl, tag: tag);
 
       if (!sponsorBlockSupport.value) {
+        return audioSource;
+      }
+
+      if (audioSource is! UriAudioSource) {
+        // StreamAudioSource cannot be a ClippingAudioSource child. Preserve
+        // SponsorBlock by seeking over the same absolute segments instead.
+        try {
+          _streamSponsorSegments[song['ytid']
+              .toString()] = List<Map<String, dynamic>>.from(
+            await getSkipSegments(song['ytid']),
+          );
+          if (_streamSponsorSegments.length > 20) {
+            _streamSponsorSegments.remove(_streamSponsorSegments.keys.first);
+          }
+        } catch (_) {
+          _streamSponsorSegments.remove(song['ytid'].toString());
+        }
         return audioSource;
       }
 

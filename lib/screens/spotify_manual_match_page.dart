@@ -14,6 +14,7 @@ import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:musify/services/common_services.dart';
+import 'package:musify/services/online_audio_source.dart';
 import 'package:musify/services/spotify_manual_source_service.dart';
 import 'package:musify/services/spotify_match_scoring.dart';
 import 'package:musify/services/spotify_review_workflow_service.dart';
@@ -205,8 +206,7 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
         _previewTimer?.cancel();
         await _previewPlayer.pause();
       } else {
-        await _previewPlayer.play();
-        _armPreviewTimer();
+        _startPreviewPlayback();
       }
       return;
     }
@@ -224,7 +224,7 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
         throw StateError('No playable audio stream was found for this result.');
       }
 
-      await _previewPlayer.setUrl(streamUrl);
+      await _previewPlayer.setAudioSource(onlineAudioSource(streamUrl));
       final durationSeconds = _asInt(candidate['duration']);
       final previewStart = durationSeconds != null && durationSeconds > 75
           ? const Duration(seconds: 20)
@@ -237,13 +237,28 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
         _previewingId = songId;
         _previewLoadingId = null;
       });
-      await _previewPlayer.play();
-      _armPreviewTimer();
+      _startPreviewPlayback();
     } catch (error) {
       await _stopPreview();
       if (!mounted) return;
       setState(() => _error = 'Preview failed: $error');
     }
+  }
+
+  void _startPreviewPlayback() {
+    final songId = _previewingId;
+    unawaited(
+      _previewPlayer.play().catchError((Object error, StackTrace _) async {
+        if (!mounted || _previewingId != songId) return;
+        await _stopPreview();
+        if (!mounted) return;
+        setState(() {
+          _error = 'Preview unavailable. Please try another result.';
+        });
+      }),
+    );
+    // just_audio.play completes on pause/stop/end, not when playback begins.
+    _armPreviewTimer();
   }
 
   void _armPreviewTimer() {

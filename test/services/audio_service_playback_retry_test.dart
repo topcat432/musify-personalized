@@ -38,6 +38,60 @@ void main() {
     return {'ytid': ytid, 'title': title, 'highResImage': ''};
   }
 
+  test('natural repeat-off completion pauses at the final item', () async {
+    playNextSongAutomatically.value = false;
+    repeatNotifier.value = AudioServiceRepeatMode.none;
+    offlineMode.value = true;
+    final attempts = <String>[];
+    final handler = _ControlledHandler((item) async {
+      attempts.add(item['title'] as String);
+      return true;
+    });
+    try {
+      await handler.addPlaylistToQueue(
+        [song('first', 'First'), song('final', 'Final')],
+        replace: true,
+        startIndex: 0,
+      );
+      await handler.handleSongCompletion();
+      expect(attempts, ['First', 'Final']);
+      expect(handler.pauseCalls, 0);
+      await handler.handleSongCompletion();
+      expect(attempts, ['First', 'Final']);
+      expect(handler.pauseCalls, 1);
+      expect(handler.currentSong!['title'], 'Final');
+    } finally {
+      await handler.audioPlayer.dispose();
+      offlineMode.value = false;
+    }
+  });
+
+  test('repeat-all completion wraps without pausing', () async {
+    playNextSongAutomatically.value = false;
+    repeatNotifier.value = AudioServiceRepeatMode.all;
+    offlineMode.value = true;
+    final attempts = <String>[];
+    final handler = _ControlledHandler((item) async {
+      attempts.add(item['title'] as String);
+      return true;
+    });
+    try {
+      await handler.addPlaylistToQueue(
+        [song('first', 'First'), song('final', 'Final')],
+        replace: true,
+        startIndex: 1,
+      );
+      await handler.handleSongCompletion();
+      expect(attempts, ['Final', 'First']);
+      expect(handler.pauseCalls, 0);
+      expect(handler.currentSong!['title'], 'First');
+    } finally {
+      await handler.audioPlayer.dispose();
+      offlineMode.value = false;
+      repeatNotifier.value = AudioServiceRepeatMode.none;
+    }
+  });
+
   test(
     'a healthy first track followed by a failed final track is not retried',
     () async {
@@ -133,6 +187,12 @@ void main() {
 class _ControlledHandler extends MusifyAudioHandler {
   _ControlledHandler(this.playback);
   final Future<bool> Function(Map) playback;
+  int pauseCalls = 0;
+  @override
+  Future<void> pause() async {
+    pauseCalls++;
+  }
+
   @override
   Future<bool> playSong(Map song, {String? mediaId, int? transitionId}) =>
       playback(song);

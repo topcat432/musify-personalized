@@ -7,10 +7,11 @@ Expanded production acceptance now has conditional owner authorization for
 integration, the existing signed publication workflow and an in-place Samsung
 update only after backup, product, visual and signed rehearsal gates pass.
 See PRODUCT_ACCEPTANCE.md for the source-linked scope and per-path ledger.
-The Samsung is ADB-authorized but its lock screen currently blocks a real
-app-supported export. No real export, merge, signing or live update has occurred
-in this acceptance round. Historical synthetic restore and CI passes do not
-satisfy that gate.
+The Samsung was unlocked and its actual app-supported export was saved and
+independently inspected. The owner confirms its empty library was expected and
+plans a fresh supported Spotify export/reimport. Do not substitute historical
+imports for this current state. No merge, signing or live update has occurred.
+Disposable real-export restore/full restart/native re-export passed with every typed key/value exact and no exceptions. Final signed in-place rehearsal remains a gate.
 
 The current candidate also fixes two reproduced PlaylistPage defects: its
 unavailable-state sliver must be hosted by a scroll view, and its Shuffle button
@@ -58,10 +59,48 @@ Public signer SHA-256:
 58c5316466da7a426c4411beb33b3b594ef58875bcfa31e092a5afce8cf9999e.
 The signed APK is preserved outside the repo; it is not a data backup.
 
-Strongest source candidate: 0ea1b44dad777efd03c819becd31acffa996427f, original
-preview run 29479259739. Its original artifact expired, and the APK has no
-supported VCS metadata. Exact binary-source attribution remains unproven.
+The actual app-supported export contains the compile-time GIT_SHA source stamp
+0ea1b44dad777efd03c819becd31acffa996427f, verified against that source's
+String.fromEnvironment implementation. Its legacy package/version labels are
+hardcoded; Android package manager and the extracted APK establish identity.
+Original preview run 29479259739's artifact expired, so comparison against that
+original CI artifact remains unavailable. The stamp strengthens source
+attribution without proving an exact historical CI-artifact hash match.
 The old About 10.1.0 was hardcoded and cannot identify the binary.
+
+Actual Samsung export SHA-256:
+9f74763b07e2dbd89336d58c37a3379282a49bfcddf37cbb2dd773957770bc34.
+Its 251,405 bytes contain four user keys and three settings keys: empty liked
+playlists, two recent songs, two search entries, listening statistics and the
+three existing settings. Imports, matches, favorites and custom playlists are
+zero. Independent whole typed-map SHA-256:
+ae6c1be7d8fe8aa9f1e3b9dc460626c7e7a4f0ab2dcc66410f362eba0468fa17.
+Private exports and UI evidence remain outside Git and Library.
+
+Latest tested candidate: 26bd0e98f4980f69c017aee52c62fd93965b1d16,
+CI 38123616644 successful (analysis, 171 tests, 35 strict goldens and APK builds).
+Its exact emulator debug APK hash is
+785f0fadee679c4c2c3f811ebc1207abeb4ad7f4f1e3ca17dc7e0350c884d55b.
+Native public-track playback still fails HTTP 403. Host finite-range GET
+acceptance does not prove native decoding, preview timing or completion. The
+provider accepts a finite 256 KiB range but rejects full and open-ended requests.
+The owner subsequently approved a GitHub-flavor-only IPv4 loopback exception:
+HTTP 127.0.0.1, includeSubdomains=false; external cleartext remains denied.
+The pending candidate uses just_audio's standard byte source to supply finite
+HTTPS ranges through its random-port loopback server and fresh UUID-v4 source
+path. Requests are lazy, bounded to 256 KiB, limited to four concurrent reads,
+validated against exact Content-Range, timed out and closed on cancellation.
+No device-wide policy, credentials, cookies, proxy or client impersonation changed.
+Local analysis and all 208 aggregate tests pass. Native healthy playback on this
+new code and exact-source Linux CI remain pending; the prior 26bd failure remains
+the latest native public-track result.
+
+The same repair pauses a completed non-repeating queue tail, preserves
+SponsorBlock seeking for byte sources, starts manual preview's 30-second timer
+without awaiting playback completion, and uses public YouTube oEmbed metadata
+for exact-video lookup. Quick Review keeps its existing 12-second preview.
+oEmbed has no duration; the candidate does not invent one. Denial, redirect,
+oversized metadata and timeout fail without authentication fallback or saving.
 
 ## Signed published release is a different package
 
@@ -117,8 +156,8 @@ the pixel reference. Do not report a visual PASS until strict comparisons pass.
 Official emulator 37.2.12 and Android 35 Google APIs x86_64 image installed on
 DESKTOP-OPE9IIV with existing accepted licenses unchanged and usable WHPX.
 Task-owned AVD musify_rehearsal_api35, emulator-5556, is separate from other
-projects. Real Samsung backup/restore/restart evidence is pending; disconnected
-after the initial check. Historical 2,643/2,454 counts are not today's inventory.
+projects. Actual Samsung export and disposable restore/full reboot/re-export
+passed as recorded above. Historical 2,643/2,454 counts are not today's inventory.
 Signing/publication and live-phone update remain held.
 
 The preserved installed APK failed synthetic file-picker restore on the
@@ -179,7 +218,6 @@ parallel candidate. Recovery instructions are in CONTRIBUTING.md.
 Read AGENTS.md and CONTRIBUTING.md; use debug.yml for Linux verification and
 signed-release.yml only for separately approved release. Product vision/import
 roadmap and VISUAL_SYSTEM.md remain useful design references. This map tracks
-facts, not blanket permission. Next gates: verify current-head CI, resolve recorded
-picker/error-screen observations, disposable real-data
-restore/restart, reviewed integration, approved signing/publication, then
-separately approved in-place phone acceptance.
+facts, not blanket permission. Next gates: verify current-head CI and full product
+runtime/visual acceptance, exact signed in-place real-data rehearsal, reviewed
+integration and publication, then conditional in-place phone acceptance.
