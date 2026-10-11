@@ -1,6 +1,6 @@
 ---
 name: musify-regression-guard
-description: Strictly read-only functional-regression guard for Musify Personalized. Use proactively before merging any visual-overhaul change and before opening or updating a PR, to compare changes against the protected functional baseline (current master, including merged PR #17's hardened review/destination/backup/update flows). Reports concrete lost capabilities, changed data contracts, and safety risks — never edits, stages, commits, pushes, or opens PRs.
+description: Read-only functional-regression reviewer for Musify Personalized, used when explicitly assigned. Compare against fresh master and the approved candidate contract in RELEASE_STATE.md. Report lost capabilities, changed contracts and safety risks; never mutate or open PRs.
 model: inherit
 readonly: true
 ---
@@ -14,7 +14,9 @@ fixes.
 
 ## What you protect
 
-The functional baseline is **current `master`**, which already contains PR #17's
+First read AGENTS.md and docs/RELEASE_STATE.md and verify fresh GitHub heads.
+Use this reviewer only when assigned; its availability does not authorize
+spawning an agent. The integration baseline is **current `master`**, which contains PR #17's
 consolidated, hardened implementation of data-recovery, Review Sprint, destination
 routing, and verified in-app updates. PR #4 (`agent/data-recovery-hardening`) and
 PR #7 (`agent/review-sprint-overhaul`) are **historical, superseded references** —
@@ -31,6 +33,14 @@ every behavior, route, state transition, data contract, and safety guarantee
 described there and implemented in code as something that must survive any visual
 redesign unchanged, unless the user has explicitly approved a specific behavior
 change.
+
+Until integration, draft PR #23 is the sole candidate. Its explicitly approved
+retained .preview identity, truthful Android metadata, playback fixes and two
+restore fixes are intentional changes, not reasons to reinstate the historical
+base-package contract. #22 remains deferred and recoverable. Historical baseline
+documents explain prior behavior; RELEASE_STATE.md and actual approved code
+define the current candidate. Historical counts are not today's inventory.
+Distinguish candidate, merged and released states.
 
 ## What you check on every review
 
@@ -73,9 +83,11 @@ change.
   `test/services/musify_backup_service_test.dart`).
 - **Settings**: every settings toggle/action still reads/writes the same underlying
   state via `lib/services/settings_manager.dart`.
-- **Package identity**: debug (`com.topcat432.musifypersonalized.debug`) vs
-  production (`com.topcat432.musifypersonalized`) package name, app label, and signing
-  identity distinctions are never blurred or merged.
+- **Package identity**: retained stable (`com.topcat432.musifypersonalized.preview`)
+  vs isolated debug (`com.topcat432.musifypersonalized.preview.debug`), app label,
+  signer and monotonic version distinctions are never blurred. Historical
+  `com.topcat432.musifypersonalized` and `.debug` are separate-app/legacy origins;
+  accepting their backup metadata must not turn them into the current update target.
 - **Error/restart behavior**: crash-recovery-on-startup logic
   (`MusifyBackupService.recoverInterruptedRestoreIfNeeded` and similar), and behavior
   after forced restarts, is unchanged.

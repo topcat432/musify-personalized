@@ -90,7 +90,7 @@ changes.
 
 ## D-007 — Production and debug identities remain isolated
 
-- **Status:** accepted
+- **Status:** historical identities superseded by D-014; isolation principle retained
 - **Recorded:** 2026-07-14 handover snapshot
 - **Decision:** The production package is
   `com.topcat432.musifypersonalized`; the debug package is
