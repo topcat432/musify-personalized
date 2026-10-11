@@ -31,7 +31,6 @@ import 'package:musify/services/common_services.dart';
 import 'package:musify/services/data_manager.dart';
 import 'package:musify/services/listening_stats_service.dart';
 import 'package:musify/services/musify_backup_service.dart';
-import 'package:musify/widgets/validated_backup_summary.dart';
 import 'package:musify/services/playlist_download_service.dart';
 import 'package:musify/services/playlists_manager.dart';
 import 'package:musify/services/router_service.dart';
@@ -48,6 +47,7 @@ import 'package:musify/widgets/confirmation_dialog.dart';
 import 'package:musify/widgets/custom_bar.dart';
 import 'package:musify/widgets/mini_player_bottom_space.dart';
 import 'package:musify/widgets/section_header.dart';
+import 'package:musify/widgets/validated_backup_summary.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
