@@ -79,6 +79,9 @@ void main() {
     );
     try {
       final elapsed = Stopwatch()..start();
+      final miniPlayerError = handler.playbackStateStream.firstWhere(
+        (state) => state.errorMessage != null,
+      );
       await handler.addPlaylistToQueue(
         [
           {
@@ -98,6 +101,10 @@ void main() {
       expect(player.playing, isFalse);
       expect(player.pauseCalls, 1);
       expect(player.stopCalls, 1);
+      expect(
+        (await miniPlayerError.timeout(const Duration(seconds: 1))).errorMessage,
+        contains('Choose another recording'),
+      );
       expect(
         handler.playbackState.value.errorMessage,
         contains('Choose another recording'),

@@ -155,6 +155,7 @@ class MusifyAudioHandler extends BaseAudioHandler {
             _positionDataThreshold.inMilliseconds;
         return prev.playing == curr.playing &&
             prev.processingState == curr.processingState &&
+            prev.errorMessage == curr.errorMessage &&
             prev.queueIndex == curr.queueIndex &&
             prev.speed == curr.speed &&
             prevPositionBucket == currPositionBucket;
