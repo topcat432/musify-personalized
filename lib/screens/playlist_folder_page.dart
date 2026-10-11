@@ -432,14 +432,16 @@ class _PlaylistFolderPageState extends State<PlaylistFolderPage> {
   void _showDeleteFolderDialog() {
     showDialog(
       context: context,
-      builder: (context) => ConfirmationDialog(
+      builder: (dialogContext) => ConfirmationDialog(
         submitMessage: context.l10n!.delete,
         confirmationMessage: context.l10n!.deleteFolderQuestion,
-        onCancel: () => Navigator.of(context).pop(),
+        onCancel: () => Navigator.of(dialogContext).pop(),
         onSubmit: () {
-          Navigator.of(context).pop();
+          Navigator.of(dialogContext).pop();
           deletePlaylistFolder(widget.folderId, context);
-          Navigator.of(context).pop(); // Go back to library
+          // The dialog is on the root navigator; the folder belongs to the
+          // Library branch. Pop the page's navigator to preserve the shell.
+          Navigator.of(context).pop();
         },
       ),
     );

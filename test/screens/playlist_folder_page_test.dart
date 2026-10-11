@@ -143,4 +143,86 @@ void main() {
     expect(result, 'Folder updated successfully');
     expect(userPlaylistFolders.value.single['name'], 'Weekend Mix');
   });
+
+  testWidgets(
+    'deleting a folder returns to its library branch and retains child playlists',
+    (tester) async {
+      final nestedNavigator = GlobalKey<NavigatorState>();
+      final child = playlist('p1', 'Keep child')..['list'] = <Map>[];
+      final original = playlist('p2', 'Keep original')..['list'] = <Map>[];
+      seedFolder('folder-1', 'Disposable folder', [child]);
+      userCustomPlaylists.value = [original];
+      await tester.runAsync(() async {
+        await Hive.box(
+          'user',
+        ).put('playlistFolders', userPlaylistFolders.value);
+        await Hive.box(
+          'user',
+        ).put('customPlaylists', userCustomPlaylists.value);
+      });
+      await tester.pumpWidget(
+        priorityReviewApp(
+          brightness: Brightness.light,
+          child: Navigator(
+            key: nestedNavigator,
+            onGenerateRoute: (settings) => MaterialPageRoute<void>(
+              settings: settings,
+              builder: (_) => settings.name == '/folder'
+                  ? const PlaylistFolderPage(
+                      folderId: 'folder-1',
+                      folderName: 'Disposable folder',
+                    )
+                  : Scaffold(
+                      body: FilledButton(
+                        onPressed: () =>
+                            nestedNavigator.currentState!.pushNamed('/folder'),
+                        child: const Text('Library branch'),
+                      ),
+                    ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Library branch'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(PopupMenuButton<String>).first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delete folder'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(userPlaylistFolders.value, hasLength(1));
+      await tester.tap(find.byType(PopupMenuButton<String>).first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delete folder'));
+      await tester.pumpAndSettle();
+      await tester.runAsync(() async {
+        await tester.tap(find.text('Delete'));
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        await Hive.box('user').flush();
+      });
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.text('Library branch'), findsOneWidget);
+      expect(nestedNavigator.currentState!.canPop(), isFalse);
+      expect(userPlaylistFolders.value, isEmpty);
+      expect(userCustomPlaylists.value.map((item) => item['ytid']), [
+        'p2',
+        'p1',
+      ]);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.runAsync(() async {
+        await Hive.close();
+        await initPriorityReviewHive();
+      });
+      expect(Hive.box('user').get('playlistFolders'), isEmpty);
+      expect(
+        (Hive.box('user').get('customPlaylists') as List).map(
+          (item) => (item as Map)['ytid'],
+        ),
+        ['p2', 'p1'],
+      );
+    },
+  );
 }
