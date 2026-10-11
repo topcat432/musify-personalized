@@ -170,8 +170,9 @@ jobs:
           sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           test -x "$sdkmanager"
           "$sdkmanager" --install "platforms;android-36" "build-tools;36.0.0" \
-            "ndk;28.2.13676358" < <(printf 'n\n')
+            "ndk;28.2.13676358" "cmake;3.22.1" < <(printf 'n\n')
           test -f "$ANDROID_HOME/ndk/28.2.13676358/source.properties"
+          test -x "$ANDROID_HOME/cmake/3.22.1/bin/cmake"
 
       - name: Install dependencies
         run: flutter pub get

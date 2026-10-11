@@ -63,6 +63,11 @@ Run 38113993655 on 12e709c6 passed analysis, aggregate tests and all 35 strict
 goldens. Its Android build stopped because the runner lacked the pinned NDK;
 both canonical workflows now prepare that exact SDK component explicitly,
 using existing licenses and rejecting new prompts. Full build proof is pending.
+Run 38114487224 passed the same strict gates after the restore fix and reached
+native compilation, then stopped because CMake 3.22.1 was missing. That exact
+component is now explicit too. Verification also checks out the candidate SHA
+directly and embeds it, instead of attributing a temporary PR merge ref to the
+candidate branch. A full run remains required before retiring legacy workflows.
 
 The visual suites now share one loader. The official DejaVu pinning experiment
 did not match the stored Linux baseline and was backed out. CI captures its

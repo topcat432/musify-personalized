@@ -18,6 +18,7 @@ concurrency:
 
 env:
   FLUTTER_VERSION: '3.44.5'
+  SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   build:
@@ -28,6 +29,11 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+
+      - name: Verify exact candidate checkout
+        run: test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
@@ -56,8 +62,9 @@ jobs:
           test -x "$sdkmanager"
           # Use the runner's existing license state; reject any new prompt.
           "$sdkmanager" --install "platforms;android-36" "build-tools;36.0.0" \
-            "ndk;28.2.13676358" < <(printf 'n\n')
+            "ndk;28.2.13676358" "cmake;3.22.1" < <(printf 'n\n')
           test -f "$ANDROID_HOME/ndk/28.2.13676358/source.properties"
+          test -x "$ANDROID_HOME/cmake/3.22.1/bin/cmake"
 
       - name: Install dependencies
         run: flutter pub get
@@ -207,7 +214,7 @@ jobs:
       - name: Build universal debug APK
         run: >-
           flutter build apk --no-pub --debug --flavor github
-          --dart-define=GIT_SHA=${{ github.sha }}
+          --dart-define=GIT_SHA=${{ env.SOURCE_SHA }}
 
       - name: Verify debug APK output
         run: test -f build/app/outputs/flutter-apk/app-github-debug.apk
@@ -250,7 +257,7 @@ jobs:
             --flavor github \
             --build-number "$build_number" \
             --build-name "0.1.$build_number" \
-            --dart-define=GIT_SHA="$GITHUB_SHA"
+            --dart-define=GIT_SHA="$SOURCE_SHA"
 
       - name: Verify unsigned release APK output
         shell: bash
