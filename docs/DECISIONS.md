@@ -218,6 +218,23 @@ changes.
 - **Evidence:** `docs/VISUAL_OVERHAUL_PLAN.md` §9 and §16; Phase 3 PR #20
   discussion.
 
+
+## D-014 - One retained-identity consolidation and verification path
+
+- Status: accepted for candidate development/cleanup; merge/release/live update held.
+- Recorded: 2026-10-11, owner authorization to consolidate, run Linux CI,
+  simplify stale work and rehearse backup on a disposable official emulator.
+- Decision: retain com.topcat432.musifypersonalized.preview and its installed
+  public signer; use PR #23 as the sole candidate. Preserve #20's foundation
+  and correct both #21 P1 defects; preserve #22 as deferred work.
+- Consequence: master remains protected integration; one verification workflow
+  and one separately approved sign/publish workflow. Old reset/reimport and
+  separate-production package assumptions are superseded. Secrets are never
+  read locally. Real backup/restart and live acceptance remain evidence gates.
+- Recovery: exact pre-cleanup branch/tag/PR heads are in a verified task-local
+  bundle, SHA-256 10eb04fe3319d31ac5bc6af08862f8c923ae0eb3524cdd10d9bdf75c325e325a.
+- Evidence: PR #23, RELEASE_STATE.md, CONTRIBUTING.md and actual workflows.
+
 ## New decision template
 
 ```text

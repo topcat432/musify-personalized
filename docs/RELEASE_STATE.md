@@ -1,157 +1,93 @@
-# Musify Personalized release state
+# Musify Personalized current state
 
-## Current local consolidation — 2026-10-11
+Recorded 2026-10-11. This is the living map; verify current GitHub heads/runs
+and connected device identity before relying on dated observations.
 
-This task-local candidate retains the verified installed Samsung package
-`com.topcat432.musifypersonalized.preview`, version baseline `300000001`, and
-public signer `58c5316466da7a426c4411beb33b3b594ef58875bcfa31e092a5afce8cf9999e`.
-It starts at PR #20 head `395ecace3da567ef1437c7a2229252ef84ee94de` and incorporates
-corrected PR #21 intent from `76201eeb409594117c873716a41f7ebc6dd3224d`.
-PR #22 and every historical PR/remote branch are untouched. The installed
-binary's strongest source candidate is `0ea1b44dad777efd03c819becd31acffa996427f`,
-but exact binary-source attribution remains unproven.
+## Source and channels
 
-See `RELEASE_SIGNING.md` and `UPDATE_DELIVERY.md` for the current retained-identity
-contract. Older dated observations below are historical and do not authorize
-reset/reimport, data migration, signing, publication, installation or clearing.
-This is uncommitted local implementation; current check results are in the
-separate candidate validation report. It has not been released or phone-tested.
-The extracted installed APK is not a data backup.
+| Item | Proven state |
+|---|---|
+| Repository | topcat432/musify-personalized |
+| Integration | Protected master, observed a786323556275a0de745ffca4d3affc088ac2055 |
+| Sole active candidate | Draft PR #23, agent/local-stable-consolidation |
+| Initial candidate commit | 16d06d92d4da8354a0d03e765ec77a53dbd2f626; check PR HEAD for later commits |
+| Foundation | #20 head 395ecace3da567ef1437c7a2229252ef84ee94de |
+| Playback intent | #21 head 76201eeb409594117c873716a41f7ebc6dd3224d, with both P1 defects corrected |
+| Deferred Home/shell | #22 head f14a73fb7b9b56682d72fa9868a9dec3ffb1a2ac; preserved, not integrated |
+| Retained stable identity | com.topcat432.musifypersonalized.preview |
+| Debug isolation | com.topcat432.musifypersonalized.preview.debug |
+| F-Droid | Existing com.gokadzev.musify.fdroid identity/permission boundary preserved |
 
+Get the current candidate with gh pr view 23 --repo topcat432/musify-personalized
+--json headRefOid,statusCheckRollup. Do not confuse PR test merge refs, branch
+HEAD, installed baseline and published source.
 
-## Purpose
+## Installed binary baseline
 
-This file is the concise release-status ledger for agents and maintainers. It
-must distinguish local repository facts, dated handover evidence, external
-GitHub state, and phone verification. Update it only from evidence; include the
-date and source of every material change.
+Selected Samsung SM_G998U1, Android 15/API 35. Read-only evidence proved
+the daily package com.topcat432.musifypersonalized.preview, label
+Musify Personalized PREVIEW, versionName preview.0.1.1, versionCode 300000001.
+Installed APK SHA-256:
+2dd3360db7f5376fbe6768709554c2ebc8991a1588d87750d474ffe55e3ab1ea.
+Public signer SHA-256:
+58c5316466da7a426c4411beb33b3b594ef58875bcfa31e092a5afce8cf9999e.
+The signed APK is preserved outside the repo; it is not a data backup.
 
-## Local workspace — verified 2026-07-15
+Strongest source candidate: 0ea1b44dad777efd03c819becd31acffa996427f, original
+preview run 29479259739. Its original artifact expired, and the APK has no
+supported VCS metadata. Exact binary-source attribution remains unproven.
+The old About 10.1.0 was hardcoded and cannot identify the binary.
 
-- Repository: the local `musify-personalized` checkout
-- Current branch: `agent/agent-workflow-bootstrap`
-- Base commit before the bootstrap commit:
-  `27256cedefd915e905d7478107104cebdbbecebc`
-- `origin` fetch/push: `https://github.com/topcat432/musify-personalized.git`
-- `upstream` fetch: `https://github.com/gokadzev/Musify.git`
-- `upstream` push: disabled
-- Before this bootstrap, `docs/MASTER_AGENT_HANDOVER.md` was the only untracked
-  file reported by `git status --short`.
-- Before this bootstrap, none of the requested agent-workflow setup files had
-  been committed.
-- `pubspec.yaml` declares `10.1.0+175`, Flutter `3.44.5`, and Dart
-  `>=3.12.0 <4.0.0`.
+## Signed published release is a different package
 
-These are local-worktree facts. They do not establish the current remote
-default-branch tip, open PRs, Actions results, Releases, or installed phone
-version.
+Historical tag personalized-v0.1.100000010, source
+27256cedefd915e905d7478107104cebdbbecebc, package
+com.topcat432.musifypersonalized, versionCode 100000010.
+APK SHA-256:
+d77204a480a56cd5dfb5a62d27b9a8910a148528ec97adf3de37bf4b498059bc.
+Same public signer, different Android data container. It is not an in-place
+update for the current Samsung app. No consolidated candidate has been signed,
+published, merged or installed on that phone.
 
-## Historical GitHub evidence — handover snapshot 2026-07-14
+## Validation and acceptance
 
-`docs/MASTER_AGENT_HANDOVER.md` records:
+Local initial candidate: 157 aggregate tests passed, targeted regressions and
+analyzer passed; unsigned assembly succeeded. Unsigned APK code 300000002,
+versionName 0.1.300000002, retained package, correct label, non-debuggable.
+Linux reference run 38112105227 on initial candidate: aggregate checks passed;
+33 unchanged strict goldens passed, only the two intentional About images failed.
+Both Linux About before/after pairs were reviewed; only those two PNG baselines
+were deliberately replaced. Subsequent exact-head CI must prove the result.
 
-- PR #17 was reviewed and merged into `master`.
-- The known merge/master snapshot was
-  `27256cedefd915e905d7478107104cebdbbecebc`.
-- PR #16 was merged and included in that stack.
-- Exact-head CI run `29383734944` passed analyzer, tests, visual rendering,
-  debug identity checks, F-Droid permission checks, and an unsigned release
-  build.
-- PRs #4 and #7 were still open and described as superseded candidates to
-  inspect and close without merging if they contained no unique work.
-- No open issues were known at that snapshot.
+The visual suites now share one loader. The official DejaVu pinning experiment
+did not match the stored Linux baseline and was backed out. CI captures its
+exact selected font/toolchain for bounded rendering diagnosis. Windows is not
+the pixel reference. Do not report a visual PASS until strict comparisons pass.
 
-This is historical evidence, not a current GitHub query. The recorded SHA must
-not be reused as a release candidate unless it is independently proven to be
-the current exact default-branch tip.
+Official emulator 37.2.12 and Android 35 Google APIs x86_64 image installed on
+DESKTOP-OPE9IIV with existing accepted licenses unchanged and usable WHPX.
+Task-owned AVD musify_rehearsal_api35, emulator-5556, is separate from other
+projects. Real backup/restore/restart evidence is pending; Samsung disconnected
+after the initial check. Historical 2,643/2,454 counts are not today's inventory.
+Signing/publication and live-phone update remain held.
 
-## Publication state — unknown until externally verified
+## Recovery and retired work
 
-The handover states that publication of the merged PR #17 stack through the
-signed production workflow had not been confirmed. This bootstrap did not query
-GitHub Actions or Releases and did not run a release workflow.
+Before cleanup, all 25 original branches, tags and 22 PR heads were bundled,
+restored with identical refs and passed git fsck --full.
+Task-local bundle: musify-source-comparison/repo-recovery-20261011/
+musify-pre-cleanup.bundle (outside the checkout), 40,945,016 bytes.
+SHA-256: 10eb04fe3319d31ac5bc6af08862f8c923ae0eb3524cdd10d9bdf75c325e325a.
+Adjacent inventory/classification/proof records contain exact branch/PR heads.
+Cleanup dispositions will be recorded after each authorized action is verified.
+No unique commits are discarded; #22 remains a roadmap reference, not an active
+parallel candidate. Recovery instructions are in CONTRIBUTING.md.
 
-Therefore, do not currently claim that:
+## Single operating path
 
-- a signed production release containing PR #17 exists;
-- the latest GitHub Release contains the required APK, checksum, manifest, and
-  release proof;
-- the current installed production app came from that workflow; or
-- the in-app updater has passed end-to-end phone testing.
-
-The only approved production workflow in the repository is
-`.github/workflows/signed-release.yml`, named
-`Build and publish signed production APK`. It is manually dispatched with an
-exact full lowercase 40-character candidate SHA and verifies that candidate
-against the current default-branch tip. No workflow was dispatched during this
-bootstrap.
-
-## Follow-up facts — not release claims or authorization
-
-- `.github/workflows/debug.yml`, `fdroid.yml`, `pre_beta.yml`, and
-  `pre_fdroid.yml` remain in the checkout. Some retain upstream-era release
-  behavior or metadata. They are not substitutes for the approved personalized
-  production path and were not changed by this bootstrap.
-- `pubspec.yaml` still points its homepage, repository, and issue tracker at
-  `gokadzev/Musify`, while this checkout's `origin` is
-  `topcat432/musify-personalized`. This is a follow-up metadata fact, not proof
-  of release ownership or permission to modify the package manifest.
-- Current Actions, Releases, open PRs, and installed-phone state remain external
-  facts that require direct verification.
-
-These items may be investigated in a separately approved task. They do not
-authorize workflow, `pubspec.yaml`, signing, release, or repository-setting
-changes.
-
-## Known phone/data evidence — dated, not refreshed
-
-The 2026-07-14 handover records the owner's observations that:
-
-- matching completed in the production app;
-- accepted songs were moved into Liked Songs;
-- a screenshot showed 2,454 songs in Liked Songs;
-- five unwanted voice-over items remained in detailed review; and
-- permanent exclusion for those items was implemented and merged.
-
-The same handover says not to assume that the merged exclusion build was
-installed. It also says the debug app/data may still exist as a fallback and
-must not be deleted.
-
-The streaming backup implementation is recorded as CI-verified, but real-phone
-backup creation and independent restore remained unverified. A prior observation
-that loading from backup appeared to work is not semantic and restart proof.
-
-## Release gates still requiring evidence
-
-Before anyone calls the merged stack released or phone-verified, all applicable
-evidence must be recorded:
-
-1. Current remote default-branch tip and PR #17 merge state.
-2. Current Actions and Releases state.
-3. Successful approved signed-production workflow on the exact tip.
-4. Published production APK, checksum, update manifest, and release proof.
-5. Verified package, label, non-debuggable state, version direction, signer,
-   v2/v3 signatures, and APK hash.
-6. In-place installation over the existing production app without uninstalling
-   or clearing data.
-7. Launch and restart with Liked Songs, playlists, exclusions, import state,
-   settings, counts, and playback intact.
-8. Streamed backup with semantic validation and an independent restore on a
-   disposable installation.
-9. In-app updater proof using a genuinely newer signed production release.
-
-Each item must be labeled CI-verified, phone-verified, or unverified as
-appropriate. Stop before signing, publishing, installing, merging, or any other
-production action unless the owner explicitly authorizes it.
-
-## Update entry template
-
-```text
-Date/time and timezone:
-Evidence source:
-Commit/workflow run/release tag:
-State changed:
-Verification level:
-Remaining unknowns:
-Recorded by:
-```
+Read AGENTS.md and CONTRIBUTING.md; use debug.yml for Linux verification and
+signed-release.yml only for separately approved release. Product vision/import
+roadmap and VISUAL_SYSTEM.md remain useful design references. This map tracks
+facts, not blanket permission. Next gates: exact-head CI, disposable real-data
+restore/restart, reviewed integration, approved signing/publication, then
+separately approved in-place phone acceptance.

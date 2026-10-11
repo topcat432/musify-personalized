@@ -1,122 +1,67 @@
 # Musify Personalized agent instructions
 
-These instructions apply repository-wide. Nested instructions may add
-constraints but may not weaken the safety or release stops below.
+Read docs/RELEASE_STATE.md for the living repository/device map, then
+CONTRIBUTING.md for reproducible development and acceptance. Actual workflows
+override summaries. MASTER_AGENT_HANDOVER.md is an index, not current proof.
 
-## Before editing
+## Work and authorization
 
-Inspect the branch, worktree, remotes, and files in scope. Always read
-`docs/MASTER_AGENT_HANDOVER.md` and `docs/RELEASE_STATE.md`, then read the
-task-relevant source documents:
+Inspect status, remotes, current GitHub heads, PRs and checks. Preserve unrelated
+work; never reset a dirty checkout or force-push over it. Until approved
+integration, PR #23 on agent/local-stable-consolidation is the sole active
+candidate targeting protected master. Continue it only when assigned.
+After integration, use fresh origin/master and one agent/{task} branch/PR.
+Do not revive retired PRs. Use one writer per file; spawn agents only if requested.
+Commit/push/cleanup needs task authorization. Existing explicit approval remains
+valid within scope; do not repeatedly ask for the same action.
 
-- product/import: `docs/PRODUCT_VISION.md` and
-  `docs/IMPORT_AND_MATCHING_ROADMAP.md`;
-- recovery/real data: `docs/DATA_RECOVERY_RUNBOOK.md` and
-  `docs/TESTING_DATA_SAFETY.md`;
-- signing/updates: `docs/RELEASE_SIGNING.md`, `docs/UPDATE_DELIVERY.md`, and the
-  actual `.github/workflows/` definitions;
-- UI: `docs/VISUAL_SYSTEM.md` and the existing shared widgets;
-- repository conventions: `docs/DECISIONS.md`, `CONTRIBUTING.md`, and
-  `pubspec.yaml`.
+## Product and data
 
-The handover and recovery/testing documents are dated or conditional. They are
-not proof of current GitHub, release, or phone state. Verify current claims at
-the authoritative source and label them merged, CI-verified, phone-verified, or
-unverified.
+Read PRODUCT_VISION.md, IMPORT_AND_MATCHING_ROADMAP.md and DECISIONS.md under
+docs for product changes; read VISUAL_SYSTEM.md and reuse shared UI tokens.
 
-## Mandatory stops
+- A song is a canonical recording identity, not just a video URL or ID.
+- Preserve selected sources, source order, memberships, existing library,
+  import sessions and completed work.
+- Unmatched, review, error, accepted, routed and permanently excluded are
+  distinct states; routing is explicit, audited and idempotent.
+- File import remains usable without Premium or mandatory cloud access.
+- Durable changes need migration, old/partial-state tests, rollback and restart
+  coverage. A UI/workflow task does not authorize schema changes.
+- Backup success needs saved-file reopen, checksums, semantic inventories,
+  independent restore and restart proof. A picker/toast is insufficient.
 
-Stop and ask Daniel before:
+## Verification and boundaries
 
-- any destructive Git, device, storage, backup, restore, or real-data action;
-- uninstalling either app, clearing storage, replacing the real library,
-  removing the debug fallback, or rerunning the completed 2,643-track match;
-- changing a package identity, signing configuration, release/update contract,
-  durable data model, or migration when the safe path is unclear;
-- accessing, reconstructing, printing, or requesting secret values or signing
-  material;
-- resolving material product ambiguity that would change user-visible behavior,
-  data meaning, scope, or architecture; or
-- merging, enabling auto-merge, signing, publishing, releasing, installing on
-  the owner's phone, changing repository settings, or touching production.
+Use CONTRIBUTING.md. tool/dev.ps1 configures only the calling Windows process
+from existing tools. Run meaningful targeted tests, aggregate analysis/tests,
+both strict visual suites and required Linux CI. Never use --update-goldens as
+a test, weaken comparisons or declare failures a pass. Inspect before/after/diff
+images; update only named, deliberately reviewed images.
+Never commit personal exports, .musifybackup, device Hive files, histories,
+private diagnostics, keys, passwords, tokens or private client IDs. Use synthetic
+fixtures. Public fingerprints/secret names may be documented, never values.
+Never read signing secrets locally, disable security, change global Git trust,
+delete shared SDK locks or interrupt another workload. Tool installation needs
+authorization; new legal terms require approval.
 
-A general request to code, review, commit, push, or open a PR does not authorize
-merge or production work. Those actions require Daniel's separate, explicit
-approval for the exact action and current state.
-
-Never commit personal exports, histories, device Hive files, `.musifybackup`
-archives, private diagnostics, signing material, passwords, tokens, or private
-client identifiers. Use synthetic fixtures. Secret names and the configured
-alias may be documented; their values must never be exposed.
-
-## Product and data invariants
-
-- A song is a canonical recording identity, not merely a video URL or ID.
-- Import must not silently mutate destinations or discard unresolved rows.
-- Unmatched, review, error, accepted, routed, and permanently excluded are
-  distinct states.
-- Retry/resume preserves completed work; routing is explicit, audited, and
-  idempotent.
-- Existing library contents, user-selected candidates, source order, and
-  playlist membership must survive applicable operations.
-- File import remains usable without Spotify Premium or mandatory cloud access.
-- Backup/restore success requires structural, checksum, semantic, reopen, and
-  restart proof—not a picker result, filename, toast, or file existence.
-- Hive changes require forward migration, failure/rollback behavior, restart
-  coverage, and tests against partial or older data.
-
-## Ownership and Git discipline
-
-Use one active writer per file. Other agents may research or review, but file
-ownership must be handed off explicitly before another agent edits it. Preserve
-unrelated changes and do not force-push over active work.
-
-Use one coherent task per `agent/{short-description}` branch unless Daniel
-chooses otherwise. Do not base work on stale/detached checkouts or superseded PR
-branches. Do not commit, push, open/close a PR, delete a branch, or modify remote
-state unless Daniel requested that specific action.
-
-Before implementation, state scope, likely files, data risk, and verification.
-Documentation/workflow tasks do not authorize product-code changes.
-
-## Implementation and verification
-
-Follow existing Flutter architecture. Reuse
-`lib/widgets/personalized_ui.dart` and `docs/VISUAL_SYSTEM.md` for personalized
-surfaces. Preserve truthful status language, compact layouts, theme behavior,
-safe areas, mini-player/navigation clearance, error/empty/loading states, and
-reduced motion.
-
-Use commands supported by the current workflows and task scope:
-
-```bash
-flutter pub get
-flutter analyze .
-flutter test
-flutter test tool/visual_review_test.dart --update-goldens
-git diff --check
-git status --short
-```
-
-Run targeted checks first and the full suite before merge for product changes.
-Documentation-only changes need text/link/state checks, not an APK build. If a
-required tool is unavailable, report it; do not install software without
-authorization. Current workflow definitions override summarized commands.
-
-## Production workflow
-
-The only approved user-facing production path is
-`.github/workflows/signed-release.yml`, named
-`Build and publish signed production APK`. `debug.yml`, `fdroid.yml`,
-`pre_beta.yml`, and `pre_fdroid.yml` are not substitutes for that path.
-
-Never dispatch the production workflow without Daniel's explicit approval. Its
-candidate must be the exact current default-branch tip and pass its package,
-label, version, non-debuggable, signer, v2/v3 signature, and hash gates. A phone
-update must be in place; never uninstall or clear storage to make it succeed.
+Unless separately approved for the exact action/current state, stop before
+merge/auto-merge, signing/publication, live-phone installation, repository settings,
+uninstall, clear-data, migration, live restore or reimport. Approval to code,
+push, run CI, retire stale branches or rehearse on a disposable emulator does
+not approve production work.
+Retained package: com.topcat432.musifypersonalized.preview. Sole user-facing
+path: .github/workflows/signed-release.yml, which both signs and publishes.
+Preserve installed signer, monotonic version, exact default-tip gate, v2/v3 and
+source/APK hashes. Never uninstall/clear to force an update. Read
+docs/RELEASE_SIGNING.md and docs/UPDATE_DELIVERY.md first.
+For data/device work read DATA_RECOVERY_RUNBOOK.md and TESTING_DATA_SAFETY.md
+under docs. Always name the approved ADB serial, never the first connected
+device. Restore only on a verified disposable target absent live-restore approval.
 
 ## Handoff
 
-Report exact files, behavior/data implications, checks and results, verification
-level, contradictions, unresolved risks, PR/review state, and the single next
-action.
+Report exact SHA, PR/check URLs, changes/data implications, checks/results,
+recovery evidence and blockers. Distinguish merged, CI-verified, emulator-verified
+and phone-verified. Compilation/package/signature proof is not data safety or
+exact installed-source proof. Update the dated living map from evidence.

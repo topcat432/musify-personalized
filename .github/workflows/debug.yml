@@ -5,7 +5,6 @@ on:
   push:
     branches:
       - master
-      - 'agent/**'
   pull_request:
     branches:
       - master
@@ -76,7 +75,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          flutter analyze . 2>&1 | tee flutter-analyze.log
+          flutter analyze --no-pub . 2>&1 | tee flutter-analyze.log
           status=${PIPESTATUS[0]}
           echo "status=$status" >> "$GITHUB_OUTPUT"
           exit 0
@@ -99,7 +98,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          flutter test 2>&1 | tee flutter-test.log
+          flutter test --no-pub 2>&1 | tee flutter-test.log
           status=${PIPESTATUS[0]}
           echo "status=$status" >> "$GITHUB_OUTPUT"
           exit 0
@@ -117,12 +116,36 @@ jobs:
         if: steps.tests.outputs.status != '0'
         run: exit 1
 
+      - name: Record reference visual environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/visual-environment
+          flutter --version > build/visual-environment/flutter-version.txt
+          if [[ -f "$FLUTTER_ROOT/bin/cache/artifacts/material_fonts/Roboto-Regular.ttf" ]]; then
+            visual_font="$FLUTTER_ROOT/bin/cache/artifacts/material_fonts/Roboto-Regular.ttf"
+          else
+            visual_font=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf
+          fi
+          echo "$visual_font" > build/visual-environment/selected-font.txt
+          sha256sum "$visual_font" | tee build/visual-environment/font-sha256.txt
+          cp "$visual_font" build/visual-environment/visualSans.ttf
+          find "$FLUTTER_ROOT/bin/cache/artifacts/material_fonts" -maxdepth 1 -iname '*license*' -exec cp {} build/visual-environment/ \;
+
+      - name: Upload reference visual environment
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-environment-${{ github.run_number }}
+          path: build/visual-environment/
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Run personalized visual review suite
         id: visual_review_personalized
         shell: bash
         run: |
           set +e
-          flutter test tool/visual_review_test.dart 2>&1 | tee flutter-visual-review-personalized.log
+          flutter test --no-pub tool/visual_review_test.dart 2>&1 | tee flutter-visual-review-personalized.log
           status=${PIPESTATUS[0]}
           echo "status=$status" >> "$GITHUB_OUTPUT"
           exit 0
@@ -141,7 +164,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          flutter test tool/visual_review_priority_test.dart 2>&1 | tee flutter-visual-review-priority.log
+          flutter test --no-pub tool/visual_review_priority_test.dart 2>&1 | tee flutter-visual-review-priority.log
           status=${PIPESTATUS[0]}
           echo "status=$status" >> "$GITHUB_OUTPUT"
           exit 0
@@ -172,7 +195,7 @@ jobs:
 
       - name: Build universal debug APK
         run: >-
-          flutter build apk --debug --flavor github
+          flutter build apk --no-pub --debug --flavor github
           --dart-define=GIT_SHA=${{ github.sha }}
 
       - name: Verify debug APK output
@@ -197,7 +220,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          flutter build apk --debug --flavor fdroid -t lib/main_fdroid.dart
+          flutter build apk --no-pub --debug --flavor fdroid -t lib/main_fdroid.dart
           apk=build/app/outputs/flutter-apk/app-fdroid-debug.apk
           test -f "$apk"
           aapt="$(find "$ANDROID_SDK_ROOT/build-tools" -mindepth 2 -maxdepth 2 -type f -name aapt | sort -V | tail -1)"
@@ -210,12 +233,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          build_number=$((200000 + GITHUB_RUN_NUMBER))
-          flutter build apk \
+          build_number=$((300000001 + GITHUB_RUN_NUMBER))
+          flutter build apk --no-pub \
             --release \
             --flavor github \
             --build-number "$build_number" \
-            --build-name "0.1.${GITHUB_RUN_NUMBER}" \
+            --build-name "0.1.$build_number" \
             --dart-define=GIT_SHA="$GITHUB_SHA"
 
       - name: Verify unsigned release APK output
@@ -224,10 +247,23 @@ jobs:
           set -euo pipefail
           apk=build/app/outputs/flutter-apk/app-github-release.apk
           test -f "$apk"
+          test ! -e android/key.properties
+          test ! -e android/app/key.jks
+          unzip -t "$apk" >/dev/null
+          build_number=$((300000001 + GITHUB_RUN_NUMBER))
+          apksigner="$(find "$ANDROID_SDK_ROOT/build-tools" -mindepth 2 -maxdepth 2 -type f -name apksigner | sort -V | tail -1)"
+          test -x "$apksigner"
+          if "$apksigner" verify "$apk" >/dev/null 2>&1; then
+            echo "Verification APK must remain unsigned."
+            exit 1
+          fi
           aapt="$(find "$ANDROID_SDK_ROOT/build-tools" -mindepth 2 -maxdepth 2 -type f -name aapt | sort -V | tail -1)"
           badging="$($aapt dump badging "$apk")"
           grep -Fq "package: name='com.topcat432.musifypersonalized.preview'" <<<"$badging"
+          grep -Fq "versionCode='$build_number'" <<<"$badging"
+          grep -Fq "versionName='0.1.$build_number'" <<<"$badging"
           grep -Fq "application-label:'Musify Personalized'" <<<"$badging"
+          ! grep -Fq 'application-debuggable' <<<"$badging"
 
       # CI builds are verification inputs only. They are deliberately not
       # uploaded because debug signing is ephemeral and unsigned releases are

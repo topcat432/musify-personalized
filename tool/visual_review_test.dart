@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:musify/screens/spotify_import_destination_page.dart';
@@ -16,10 +15,12 @@ import 'package:musify/theme/app_typography.dart';
 import 'package:musify/widgets/personalized_ui.dart';
 import 'package:musify/widgets/personalized_update_dialog.dart';
 
+import 'visual_review_harness.dart' show loadVisualReviewFonts;
+
 void main() {
   late Directory foundationHiveRoot;
 
-  setUpAll(_loadVisualReviewFonts);
+  setUpAll(loadVisualReviewFonts);
 
   // The Phase 1 foundation-token goldens below render through the real
   // production `getAppTheme`, which lazily reads the `settings` Hive box
@@ -524,78 +525,6 @@ ThemeData _reviewTheme(Brightness brightness) {
       ),
     ),
   );
-}
-
-Future<void> _loadVisualReviewFonts() async {
-  final paytoneLoader = FontLoader('paytoneOne')
-    ..addFont(rootBundle.load('assets/fonts/paytone/PaytoneOne-Regular.ttf'));
-  final sansBytes = await _visualSansFont().readAsBytes();
-  final sansLoader = FontLoader('visualSans')
-    ..addFont(Future<ByteData>.value(ByteData.sublistView(sansBytes)));
-  final iconBytes = await _materialIconsFont().readAsBytes();
-  final iconLoader = FontLoader('MaterialIcons')
-    ..addFont(Future<ByteData>.value(ByteData.sublistView(iconBytes)));
-  // Load both Fluent icon families from the bundled package assets so
-  // FluentIcons render as real glyphs (matches the priority harness). The
-  // package's `IconData` carry `fontPackage: 'fluentui_system_icons'`, so the
-  // FontLoader family must use the engine's prefixed `packages/<pkg>/<family>`
-  // form, not the bare family name.
-  final fluentRegularLoader =
-      FontLoader(
-        'packages/fluentui_system_icons/FluentSystemIcons-Regular',
-      )..addFont(
-        rootBundle.load(
-          'packages/fluentui_system_icons/fonts/FluentSystemIcons-Regular.ttf',
-        ),
-      );
-  final fluentFilledLoader =
-      FontLoader('packages/fluentui_system_icons/FluentSystemIcons-Filled')
-        ..addFont(
-          rootBundle.load(
-            'packages/fluentui_system_icons/fonts/FluentSystemIcons-Filled.ttf',
-          ),
-        );
-
-  await Future.wait([
-    paytoneLoader.load(),
-    sansLoader.load(),
-    iconLoader.load(),
-    fluentRegularLoader.load(),
-    fluentFilledLoader.load(),
-  ]);
-}
-
-File _visualSansFont() {
-  final flutterRoot = Platform.environment['FLUTTER_ROOT'];
-  final candidates = <String>[
-    if (flutterRoot != null)
-      '$flutterRoot/bin/cache/artifacts/material_fonts/Roboto-Regular.ttf',
-    '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
-  ];
-
-  for (final path in candidates) {
-    final file = File(path);
-    if (file.existsSync()) {
-      return file;
-    }
-  }
-
-  throw StateError('No readable sans-serif font found for visual reviews.');
-}
-
-File _materialIconsFont() {
-  final flutterRoot = Platform.environment['FLUTTER_ROOT'];
-  if (flutterRoot != null) {
-    final file = File(
-      '$flutterRoot/bin/cache/artifacts/material_fonts/'
-      'MaterialIcons-Regular.otf',
-    );
-    if (file.existsSync()) {
-      return file;
-    }
-  }
-
-  throw StateError('Flutter Material Icons font was not found.');
 }
 
 final List<Map<String, dynamic>> _visualItems = [
