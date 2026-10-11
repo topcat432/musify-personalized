@@ -1,5 +1,57 @@
 # Bounded audio transport diagnostics
 
+## Owned native pass and fresh provider denial, 2026-10-11
+
+Runtime-tested source is 4e9325d07c0bd0fae4295e6c9226c1a6d904292c.
+Production transport is unchanged from 54c3ed85; the additional tool entrypoint
+isolates its Hive directory and supplies generated owned bytes through the actual
+GoogleVideoByteSource, IPv4 just_audio proxy, native Opus decoder and production
+MusifyAudioHandler. [Exact Linux CI 38179065225](https://github.com/topcat432/musify-personalized/actions/runs/38179065225)
+passed analysis, 277 tests, both strict visual suites (35 images), debug/F-Droid
+boundaries and unsigned assembly. The harness itself analyzes cleanly.
+
+On owned emulator-5556 / musify_rehearsal_api35, the 1,145,788-byte 70-second
+Opus/WebM file completed uninterrupted, including finite reads beyond 1 MiB.
+The 35-second seek, 68-second tail seek/completion and natural advancement to the
+complete 8-second second file passed. Independent report inspection confirms
+complete first-file byte coverage, exact delivered range lengths, a 256 KiB
+maximum finite range and no source failure. There were zero provider requests.
+Volume was zero: this proves native decode/session progress, not audibility.
+The first harness bootstrap had no source request because ADB-created external
+fixture storage was unreadable. Existing debug run-as access copied owned inputs
+into private documents and independent readback verified both hashes; no security
+or permission changes were used. See tool/NATIVE_OWNED_TRANSPORT.md.
+
+The normal-entrypoint APK was then installed in place with the same development
+signer. All four normal Hive files were byte-exact through harness execution and
+both installs. Only after the owned pass, one never-denied fresh recording was
+selected through its normal single-song menu action, with automatic next-song
+selection already false. Existing resolver configuration and original User-Agent
+were unchanged. Native Opus initialized and playback advanced, then the first
+origin diagnostic recorded HTTP 403 in the headers phase for range
+1048576-1310719 of a 5,108,604-byte source. Exactly 1,048,576 bytes had been
+delivered; the rejected 262,144-byte range returned no body or Content-Range.
+The loopback source and responseDone failures retained that same origin, and the
+bounded runtime signal correctly reported nativeCode null. The owned package was
+stopped immediately; no manual replay or denied-source retry was performed.
+This is a directly observed provider denial, not the older status-unknown failure.
+It does not identify an account/IP/token cause or prove a global provider outage.
+
+Complete provider listening/download/preview remains FAIL/BLOCKED. The owned
+pass does not turn those gates green. Existing normal data is retained: semantic
+comparison found only expected searchHistory/recentlyPlayedSongs/listening-stat
+changes and eight derived cache additions, with no removed keys and every other
+user value plus all settings and usernobackup values exact. Original cache values
+were unchanged. Search also independently exposed a streamed-date parsing error
+before playback; the fresh source was reached through normal Home playlist UI.
+No search parser or client identity was changed for this test.
+
+Private reports, APKs, fixture originals, raw Hive copies, redacted logs and
+inventories stay outside Git under
+musify-source-comparison/upstream-comparison-20261011/native-owned-transport.
+The normal app entrypoint remains installed and stopped on the owned AVD.
+No phone operation, merge, signing/publication, deployment or data migration ran.
+
 ## Evidence and limits, 2026-10-11
 
 The prior source 77f339a697e0a752db505d93cdf64f695c7fc023 passed exact
@@ -78,22 +130,15 @@ Both strict Windows visual suites fail all 35 images; 33 current test images mat
 the retained unchanged-source control exactly. The two About differences are prior
 identity/version fixture labels. Representative master/current/diff images were
 inspected. Neither goldens nor comparator was modified. Linux source-pinned CI
-is required separately; no local native or provider pass is claimed here.
+is recorded above. Offline checks alone establish neither Android decoding nor
+provider access; the executed native gates are separate evidence.
 
-## Next discriminating validation (not run)
+## Resulting limits
 
-First use owned complete encoded Opus/WebM bytes, longer than multiple finite
-ranges, through the candidate's native byte-source/proxy lifecycle on the owned
-emulator. Compare complete delivery, seek/tail/cancel and natural next-source
-advancement. This separates native decode/proxy/boundary defects from upstream
-access; byte fixtures alone do not close that gate.
-
-Only after that passes, a single normal selection of a never-denied fresh source
-with the same resolver configuration and its original recorded User-Agent can
-capture the first diagnostic. This is an observability test, not a replay of the
-failed endpoint. A captured 403 with range/bytes supports a denial at that stage;
-206 plus bad range/length or early EOF supports a transport mismatch; a timeout
-without status is a connection/header failure. A native decode error after exact
-complete delivery needs separate decoder evidence. Stop on the first failure,
-retain the redacted cause chain and do not repeat a denied endpoint, rotate
-identities or add credentials. No new live validation occurred in this repair.
+The executed owned gate establishes real native finite-source/proxy progress,
+seek/tail handling and natural advancement with controlled complete Opus bytes.
+The single fresh normal-provider gate directly establishes a headers-phase 403
+at the fifth 256 KiB range. Its retained proxy completion error is secondary;
+the upstream origin remains the same. Neither outcome identifies the provider's
+access-policy cause or certifies audible output, complete provider listening,
+downloads, preview or a physical-device update. Denied media was not replayed.

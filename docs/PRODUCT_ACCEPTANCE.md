@@ -1,5 +1,36 @@
 # Product acceptance ledger
 
+## Owned native pass and fresh provider denial, 2026-10-11
+
+Runtime source 4e9325d07c0bd0fae4295e6c9226c1a6d904292c retains the production
+transport correction from 54c3ed85 and adds only an isolated test entrypoint.
+[Exact Linux CI 38179065225](https://github.com/topcat432/musify-personalized/actions/runs/38179065225)
+passed analysis, 277 tests, 35 strict visuals, flavor boundaries and unsigned assembly.
+On owned emulator-5556 / musify_rehearsal_api35, generated Opus/WebM passed full
+70-second playback, 35-second seek, 68-second tail/completion and natural advance
+through a full 8-second second file. Independent range inspection verifies every
+first-file byte, a completed tail beyond 1 MiB and no source failure. No provider
+was requested during the owned test; volume zero does not prove audibility.
+
+After restoring the normal entrypoint, exactly one never-denied fresh recording
+initialized native Opus and advanced, then the originating headers-phase response
+was HTTP 403 for bytes 1048576-1310719 of a 5,108,604-byte source, after exactly
+1 MiB delivered. The proxy source/responseDone chain retains the same origin;
+synthesized runtime nativeCode is null. The URL was unexpired, its original
+User-Agent has exact-URL provenance, and the resolver configuration was unchanged.
+The owned app was stopped immediately, with no manual replay or denied retry.
+This establishes that denial, not its account/IP/token cause or a global outage.
+Complete provider listening/download/preview remains FAIL/BLOCKED.
+
+All four normal Hive files were byte-exact through both owned runs and installs.
+After normal browsing/playback, only search history, recents/listening stats and
+eight derived cache additions changed. Every other user value, all settings,
+usernobackup and original cache values remain exact; no keys were removed.
+The normal app is installed and stopped on the owned AVD. No phone operation,
+merge, signing/publication, deployment or migration ran. See
+[AUDIO_TRANSPORT_DIAGNOSTICS.md](AUDIO_TRANSPORT_DIAGNOSTICS.md) for the native gate,
+fixture setup correction, private evidence location and separate search parser failure.
+
 ## Originating audio failure evidence, 2026-10-11
 
 Checkpoint 77f339a697e0a752db505d93cdf64f695c7fc023 passed exact
