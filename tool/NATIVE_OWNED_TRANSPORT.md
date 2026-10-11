@@ -14,8 +14,11 @@ ffmpeg -f lavfi -i sine=frequency=660:sample_rate=48000:duration=8 -ac 2 -c:a li
 
 Record encoder/version, file sizes and SHA-256. Preserve generated originals;
 container metadata can vary between encodes. The long input must exceed 1 MiB.
-Place both files in the approved package's app-scoped external
-`files/native-owned-transport` directory, and independently verify device hashes.
+Place both files in the approved debug package's private document directory
+`app_flutter/native-owned-inputs` using its existing `run-as` access. Push owned
+fixtures to task-specific `/data/local/tmp` paths, then use `run-as cp` and read
+them back independently to verify SHA-256 hashes. ADB-created external directories
+may be unreadable to the app; do not change permissions or device security.
 Do not use provider audio or modify the normal app's library.
 
 Build `tool/native_owned_transport_rehearsal.dart` explicitly with the GitHub

@@ -223,14 +223,12 @@ Future<void> main() async {
   try {
     if (!RegExp(r'^[a-zA-Z0-9_-]+$').hasMatch(_runId))
       throw StateError('Invalid owned run ID.');
-    final external = await getExternalStorageDirectory();
-    if (external == null) throw StateError('No app-scoped fixture storage.');
     final inputs = <String, File>{
       _longId: File(
-        '${external.path}/native-owned-transport/owned-long-opus.webm',
+        '${documents.path}/native-owned-inputs/owned-long-opus.webm',
       ),
       _nextId: File(
-        '${external.path}/native-owned-transport/owned-next-opus.webm',
+        '${documents.path}/native-owned-inputs/owned-next-opus.webm',
       ),
     };
     for (final entry in inputs.entries) {
