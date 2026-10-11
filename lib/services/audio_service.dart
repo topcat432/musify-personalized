@@ -42,18 +42,22 @@ import 'package:musify/utilities/queue_retry_utils.dart';
 import 'package:rxdart/rxdart.dart';
 
 class MusifyAudioHandler extends BaseAudioHandler {
-  MusifyAudioHandler() {
+  MusifyAudioHandler({AudioPlayer? player}) {
     _androidEqualizer = AndroidEqualizer();
-    audioPlayer = AudioPlayer(
-      audioPipeline: AudioPipeline(androidAudioEffects: [_androidEqualizer]),
-      audioLoadConfiguration: const AudioLoadConfiguration(
-        androidLoadControl: AndroidLoadControl(
-          maxBufferDuration: Duration(seconds: 60),
-          bufferForPlaybackDuration: Duration(milliseconds: 500),
-          bufferForPlaybackAfterRebufferDuration: Duration(seconds: 3),
-        ),
-      ),
-    );
+    audioPlayer =
+        player ??
+        AudioPlayer(
+          audioPipeline: AudioPipeline(
+            androidAudioEffects: [_androidEqualizer],
+          ),
+          audioLoadConfiguration: const AudioLoadConfiguration(
+            androidLoadControl: AndroidLoadControl(
+              maxBufferDuration: Duration(seconds: 60),
+              bufferForPlaybackDuration: Duration(milliseconds: 500),
+              bufferForPlaybackAfterRebufferDuration: Duration(seconds: 3),
+            ),
+          ),
+        );
 
     _setupEventSubscriptions();
     _updatePlaybackState();
@@ -95,6 +99,7 @@ class MusifyAudioHandler extends BaseAudioHandler {
   bool _completionEventPending = false;
   bool _completionHandlerLoadStarted = false;
   bool _runtimeErrorPending = false;
+  int _handledRuntimeErrorTransition = -1;
   final _streamSponsorSegments = <String, List<Map<String, dynamic>>>{};
   bool _sponsorSeekPending = false;
 
@@ -730,6 +735,7 @@ class MusifyAudioHandler extends BaseAudioHandler {
   Future<void> handleRuntimePlaybackError(PlayerException error) async {
     if (_currentLoadingIndex >= 0 ||
         _runtimeErrorPending ||
+        _handledRuntimeErrorTransition == _songTransitionCounter ||
         _currentQueueIndex < 0 ||
         _currentQueueIndex >= _queueList.length) {
       return;
@@ -738,6 +744,7 @@ class MusifyAudioHandler extends BaseAudioHandler {
     final failedIndex = _currentQueueIndex;
     final entryId = _queueEntryIds.ensureId(_queueList[failedIndex]);
     final transition = _songTransitionCounter;
+    _handledRuntimeErrorTransition = transition;
     try {
       logger.log('Native playback source failed', error: error.code);
       await pause();
@@ -2045,18 +2052,26 @@ class MusifyAudioHandler extends BaseAudioHandler {
       // Finish the old session and start the new one as one atomic pair, only
       // after every abort path above is cleared. Finishing before the staleness
       // re-check let a stale transition kill a newer transition's session.
-      // Do this before awaiting play() so Wrapped starts counting from the
-      // first moments of the new track, not after the async handoff.
+      // Start counting at the first moments of the new track.
       listeningStatsService
         ..finishListeningSession(
           countCurrentTick: true,
           wasPlaying: wasPlayingBeforeSwap,
         )
         ..startListeningSession(song, duration: audioPlayer.duration);
-      await audioPlayer.play().catchError((Object e, StackTrace stackTrace) {
-        logger.log('Error starting playback', error: e, stackTrace: stackTrace);
-        _lastError = e.toString();
-      });
+      // just_audio's play future lasts until pause/stop/completion. Loading
+      // is finished now; keeping it pending suppresses runtime error handling
+      // and delays history/cache updates for the entire track.
+      final startedTransition = _songTransitionCounter;
+      unawaited(
+        audioPlayer.play().catchError((Object error) {
+          if (startedTransition != _songTransitionCounter) return;
+          logger.log('Playback request failed', error: error.runtimeType);
+          if (error is PlayerException) {
+            unawaited(handleRuntimePlaybackError(error));
+          }
+        }),
+      );
       unawaited(updateRecentlyPlayed(song['ytid'], songFallback: song));
 
       if (!isOffline) {

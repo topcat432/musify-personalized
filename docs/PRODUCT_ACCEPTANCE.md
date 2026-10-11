@@ -299,3 +299,26 @@ APK/CI and native error-queue retest remain pending.
 Four ledger rows have documented baseline/export/restore/restart passes; the
 remaining 34 are open, partial or failed in this expanded round. No signing,
 merge or Samsung update is allowed to proceed on the present listening result.
+
+### Native loading lifetime regression (2026-10-11)
+
+Exact bfbda9657b977de50666648d48417510f9c81797 debug APK built and was installed
+only on the disposable AVD. APK SHA-256:
+beb27d6f2c6f915ff6d0301c81a1ada52516f63fb13869e3fbce026c7b6c2a28.
+All three Hive files were byte-identical before launch. Here Comes The Sun
+again decoded initially, then reached native NONE without queue advance.
+The terminal source guard prevented new upstream requests from that source;
+just_audio still retried local requests and emitted two truncated-response
+exceptions. P02/P03 remain failed. Evidence outside Git: native-online/
+bfbda965-public-first-session.json, bfbda965-public-late-session.json,
+bfbda965-public-late-redacted.log and bfbda965-install-preservation-proof.json.
+
+The real load path awaited just_audio's play future for the entire track,
+leaving the loading guard active and suppressing runtime error ownership.
+The follow-up repair starts playback without awaiting its lifetime and guards
+duplicate failures for the entire transition. A regression exercises the real
+offline load/handoff with a pending play future and the subscribed errorStream:
+history updates promptly, loading completes, one pause occurs, and one advance
+occurs despite two separately timed reports. New-source native acceptance is
+still required; this does not resolve the observed provider 403 or the first
+truncated-response exception in just_audio.

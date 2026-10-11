@@ -225,6 +225,16 @@ parallel candidate. Recovery instructions are in CONTRIBUTING.md.
 
 ## Single operating path
 
+Runtime checkpoint: bfbda9657b977de50666648d48417510f9c81797 passed exact-source
+CI 38131343767 (212 aggregate tests, 35 strict goldens and all build boundaries).
+Its verified disposable debug APK was installed with byte-exact Hive
+preservation, but the public fixture still failed to advance after source
+denial. The real load path awaited play's entire lifetime and retained its
+loading guard. A focused follow-up releases that handoff and deduplicates
+runtime errors across the transition; real load-path regression and native
+retest are required. Provider 403 and just_audio's first truncated-response
+exceptions remain unresolved. No release/Samsung update has occurred.
+
 Read AGENTS.md and CONTRIBUTING.md; use debug.yml for Linux verification and
 signed-release.yml only for separately approved release. Product vision/import
 roadmap and VISUAL_SYSTEM.md remain useful design references. This map tracks
