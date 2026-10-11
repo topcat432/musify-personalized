@@ -141,7 +141,7 @@ class MusifyAudioHandler extends BaseAudioHandler {
             prev.duration == curr.duration &&
             (prev.bufferedPosition - curr.bufferedPosition).abs() <
                 _positionDataThreshold;
-      }).asBroadcastStream();
+      }).shareReplay(maxSize: 1);
 
   Stream<PositionData> get positionDataStream => _positionDataStream;
 

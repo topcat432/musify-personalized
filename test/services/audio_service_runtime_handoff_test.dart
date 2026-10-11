@@ -9,6 +9,7 @@ import 'package:just_audio/just_audio.dart';
 import 'package:musify/services/audio_service.dart';
 import 'package:musify/services/settings_manager.dart';
 import 'package:musify/services/online_audio_source.dart';
+import 'package:rxdart/rxdart.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -18,6 +19,37 @@ void main() {
     Hive.init(directory.path);
     for (final name in ['settings', 'user', 'userNoBackup', 'cache']) {
       await Hive.openBox(name);
+    }
+  });
+
+  test('a new paused Now Playing subscriber gets current position and duration '
+      'without waiting for resumed playback', () async {
+    final player = _SnapshotPlayer();
+    final handler = MusifyAudioHandler(player: player);
+    final first = handler.positionDataStream.listen((_) {});
+    try {
+      await handler.positionDataStream.first.timeout(
+        const Duration(milliseconds: 200),
+      );
+      player.positions.add(const Duration(seconds: 9));
+      await Future<void>.delayed(Duration.zero);
+      final lateSnapshot = await handler.positionDataStream.first.timeout(
+        const Duration(milliseconds: 200),
+      );
+      expect(player.playing, isFalse);
+      expect(lateSnapshot.position, const Duration(seconds: 9));
+      expect(lateSnapshot.duration, const Duration(seconds: 45));
+      player.positions.add(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+      final zero = await handler.positionDataStream.first.timeout(
+        const Duration(milliseconds: 200),
+      );
+      expect(zero.position, Duration.zero);
+      expect(zero.duration, const Duration(seconds: 45));
+    } finally {
+      await first.cancel();
+      await handler.stop();
+      await player.dispose();
     }
   });
 
@@ -102,7 +134,9 @@ void main() {
       expect(player.pauseCalls, 1);
       expect(player.stopCalls, 1);
       expect(
-        (await miniPlayerError.timeout(const Duration(seconds: 1))).errorMessage,
+        (await miniPlayerError.timeout(
+          const Duration(seconds: 1),
+        )).errorMessage,
         contains('Choose another recording'),
       );
       expect(
@@ -376,6 +410,29 @@ class _ReplayPlayer extends _PendingPlayer {
   @override
   Future<void> seek(Duration? position, {int? index}) async {
     seeks.add(position!);
+  }
+}
+
+class _SnapshotPlayer extends _PendingPlayer {
+  final positions = BehaviorSubject<Duration>.seeded(Duration.zero);
+  final buffered = BehaviorSubject<Duration>.seeded(
+    const Duration(seconds: 45),
+  );
+  final durations = BehaviorSubject<Duration?>.seeded(
+    const Duration(seconds: 45),
+  );
+  @override
+  Stream<Duration> get positionStream => positions.stream;
+  @override
+  Stream<Duration> get bufferedPositionStream => buffered.stream;
+  @override
+  Stream<Duration?> get durationStream => durations.stream;
+  @override
+  Future<void> dispose() async {
+    await positions.close();
+    await buffered.close();
+    await durations.close();
+    await super.dispose();
   }
 }
 
