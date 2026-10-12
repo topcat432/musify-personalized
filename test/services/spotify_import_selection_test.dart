@@ -582,6 +582,111 @@ void main() {
     },
   );
 
+  for (final change in ['excluded', 'alternate']) {
+    test(
+      'legacy pending transfer rejects $change choice before destination write',
+      () async {
+        await seed(legacy: true);
+        final rows = List<Map>.from(
+          Hive.box('user').get('spotifyMatchResults'),
+        );
+        rows[1] = Map.from(rows[1])..remove('sourceRow');
+        await Hive.box('user').put('spotifyMatchResults', rows);
+        final before = copyImportRoutingValue(metadata());
+        var writes = 0;
+        final controlled = SpotifyImportDestinationService(
+          metadataWriter: (box, values) async {
+            await box.put('spotifyImportMetadata', values);
+            if (++writes == 1) {
+              final changed = List<Map>.from(box.get('spotifyMatchResults'));
+              changed[1] = Map.from(changed[1]);
+              if (change == 'excluded') {
+                changed[1]['status'] = 'excluded';
+              } else {
+                changed[1]['bestCandidate'] = recording(
+                  2,
+                  id: 'changed-legacy-alternative',
+                );
+              }
+              await box.put('spotifyMatchResults', changed);
+            }
+          },
+        );
+        await expectLater(
+          controlled.route(
+            snapshot: await service.loadSnapshot(),
+            requestedCount: 0,
+            destinationKind: SpotifyImportDestinationKind.likedSongs,
+            selectionKind: SpotifyImportSelectionKind.individual,
+            selectedRecordingIds: {'chosen-alternate-2'},
+          ),
+          throwsStateError,
+        );
+        expect(userLikedSongsList.value.map((song) => song['ytid']), [
+          'keep-like',
+        ]);
+        expect(metadata(), before);
+      },
+    );
+  }
+
+  for (final prior in [
+    {
+      'operationId': 'prior-incomplete',
+      'selectedRecordingIds': ['recording-1'],
+    },
+    null,
+  ]) {
+    test(
+      'stale retry preserves prior pending ${prior == null ? 'malformed' : 'identified'} uncertainty across reopen',
+      () async {
+        await seed();
+        final old = metadata()
+          ..['routingHistory'] = [
+            {'selectedCount': 1, 'typedDate': DateTime.utc(2026, 1, 1)},
+          ]
+          ..[importRoutingPendingKey] = prior;
+        await Hive.box('user').put('spotifyImportMetadata', old);
+        final history = copyImportRoutingValue(old['routingHistory']);
+        var writes = 0;
+        final controlled = SpotifyImportDestinationService(
+          metadataWriter: (box, values) async {
+            await box.put('spotifyImportMetadata', values);
+            if (++writes == 1) {
+              final rows = List<Map>.from(box.get('spotifyMatchResults'));
+              rows[0] = Map.from(rows[0])..['status'] = 'excluded';
+              await box.put('spotifyMatchResults', rows);
+            }
+          },
+        );
+        await expectLater(
+          controlled.route(
+            snapshot: await service.loadSnapshot(),
+            requestedCount: 1,
+            destinationKind: SpotifyImportDestinationKind.likedSongs,
+          ),
+          throwsStateError,
+        );
+        await reopen();
+        expect(metadata().containsKey(importRoutingPendingKey), isTrue);
+        expect(metadata()[importRoutingPendingKey], prior);
+        expect(metadata()['routingHistory'], history);
+        expect(
+          (metadata()[importRoutingUnverifiedHistoryKey] as List)
+              .single['attempt'],
+          prior,
+        );
+        expect(
+          (await service.loadSnapshot()).newlyResolvedBaselineKnown,
+          isFalse,
+        );
+        expect(userLikedSongsList.value.map((song) => song['ytid']), [
+          'keep-like',
+        ]);
+      },
+    );
+  }
+
   test(
     'verified backup round trip retains legacy audit, baseline and interrupted-attempt evidence',
     () async {

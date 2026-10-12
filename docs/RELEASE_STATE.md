@@ -1,5 +1,23 @@
 # Musify Personalized current state
 
+## Legacy stale-transfer guard repair, 2026-10-12
+
+Final partial-state review reproduced two unsafe completions: a legacy resolved
+row without its historical source position could be excluded or have its chosen
+recording changed during the pending write, yet the obsolete recording transferred.
+The transient stale-check fingerprint now includes those rows and their status;
+durable identity-baseline reliability remains conservative and unchanged.
+A rejected retry also restores an older pending marker, including malformed/null
+markers, so an interrupted transfer cannot become falsely known after rejection.
+Old history and destination contents remain intact. No persisted schema changes.
+
+All 22 targeted selector checks, 323 aggregate tests and clean analysis pass.
+Both strict Windows suites retain their failures; no image/comparator changed.
+Exact Linux and an Android scratch-only stale/pending/reopen check remain required
+for this repair. Prior ef6c0b79/70313ae8 CI and e705fb2b four-mode native evidence
+are retained separately; normal 70313ae8 remains installed and stopped until
+the scoped native guard rehearsal and explicit normal return complete.
+
 ## Selector native completion and normal-entrypoint return, 2026-10-12
 
 Candidate source 70313ae8c0a6c899f646d1f69810ad091dc2f97d passed exact

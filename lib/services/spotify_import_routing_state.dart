@@ -65,16 +65,18 @@ String importRecordingIdentity(Map<String, String> row) =>
     jsonEncode([row['sourceRow'], row['recordingId']]);
 
 class ResolvedImportRecordings {
-  ResolvedImportRecordings(this.rows, this.reliable);
+  ResolvedImportRecordings(this.rows, this.reliable, {String? liveFingerprint})
+    : fingerprint = liveFingerprint ?? jsonEncode(rows);
   final List<Map<String, String>> rows;
   final bool reliable;
-  String get fingerprint => jsonEncode(rows);
+  final String fingerprint;
 }
 
 ResolvedImportRecordings resolvedImportRecordings(
   Iterable<Map<String, dynamic>> results,
 ) {
   final rows = <String, Map<String, String>>{};
+  final liveRows = <Map<String, String?>>[];
   final sourceChoices = <String, String>{};
   var reliable = true;
   for (final result in results) {
@@ -85,6 +87,17 @@ ResolvedImportRecordings resolvedImportRecordings(
     final recording = candidate is Map && candidate['ytid'] is String
         ? (candidate['ytid'] as String).trim()
         : '';
+    // Unknown historical row positions remain unsuitable for a durable
+    // identity baseline, but must still participate in live stale checks.
+    // Otherwise exclusion or a changed choice during the pending write could
+    // route an obsolete legacy recording.
+    liveRows.add({
+      'sourceRow': row,
+      'status': result['status']?.toString(),
+      'recordingId': candidate is Map
+          ? candidate['ytid']?.toString().trim()
+          : null,
+    });
     if (row == null || recording.isEmpty) {
       reliable = false;
       continue;
@@ -96,11 +109,21 @@ ResolvedImportRecordings resolvedImportRecordings(
     rows[importRecordingIdentity(value)] = value;
   }
   final ordered = rows.entries.toList()..sort((a, b) => a.key.compareTo(b.key));
+  if (reliable) {
+    liveRows.sort((left, right) {
+      final byRow = int.parse(
+        left['sourceRow']!,
+      ).compareTo(int.parse(right['sourceRow']!));
+      if (byRow != 0) return byRow;
+      return jsonEncode(left).compareTo(jsonEncode(right));
+    });
+  }
   return ResolvedImportRecordings(
     List.unmodifiable(
       ordered.map((entry) => Map<String, String>.unmodifiable(entry.value)),
     ),
     reliable,
+    liveFingerprint: jsonEncode(liveRows),
   );
 }
 

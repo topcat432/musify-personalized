@@ -1,4 +1,5 @@
 // Android-only synthetic entrypoint. Normal app Hive files are never opened.
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -10,10 +11,27 @@ import 'package:musify/services/spotify_import_routing_state.dart';
 import 'package:musify/theme/app_themes.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'import_selector_stale_native.dart';
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   if (!Platform.isAndroid) throw StateError('Owned Android rehearsal only');
   final normal = await getApplicationDocumentsDirectory();
+  if (const bool.fromEnvironment('I11_GUARD_REHEARSAL')) {
+    final proof = await runOwnedStaleRoutingRehearsal(normal);
+    debugPrint('I11_GUARD_PROOF ${jsonEncode(proof)}');
+    runApp(
+      MaterialApp(
+        home: Scaffold(
+          appBar: AppBar(title: const Text('Owned selector rehearsal')),
+          body: Text(
+            'Legacy guard PASS\n${proof['sourceSha']}\n${proof['scratchRoot']}',
+          ),
+        ),
+      ),
+    );
+    return;
+  }
   final scratch = Directory('${normal.path}/i11_selector_rehearsal_v1');
   await scratch.create(recursive: true);
   Hive.init(scratch.path);

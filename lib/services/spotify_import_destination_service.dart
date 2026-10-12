@@ -341,7 +341,11 @@ class SpotifyImportDestinationService {
       'confirmedAt': DateTime.now().toUtc().toIso8601String(),
     };
     final metadata = _readMap(box.get('spotifyImportMetadata'));
-    if (metadata.containsKey(importRoutingPendingKey)) {
+    final hadPriorPending = metadata.containsKey(importRoutingPendingKey);
+    final priorPending = copyImportRoutingValue(
+      metadata[importRoutingPendingKey],
+    );
+    if (hadPriorPending) {
       final prior = copyImportRoutingValue(metadata[importRoutingPendingKey]);
       final unknown = _readMaps(metadata[importRoutingUnverifiedHistoryKey]);
       final priorId = prior is Map ? prior['operationId'] : null;
@@ -370,7 +374,11 @@ class SpotifyImportDestinationService {
       if (_sessionId(current) == snapshot.importSessionId &&
           (current[importRoutingPendingKey] as Map?)?['operationId'] ==
               operationId) {
-        current.remove(importRoutingPendingKey);
+        if (hadPriorPending) {
+          current[importRoutingPendingKey] = priorPending;
+        } else {
+          current.remove(importRoutingPendingKey);
+        }
         await _writeRoutingMetadata(box, current);
       }
       rethrow;
