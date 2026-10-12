@@ -18,7 +18,14 @@ state. All 14 Hive-backed feature tests and four actual destination-page tests
 pass; full analysis is clean and all 311 aggregate tests pass. Both unchanged
 strict Windows visual suites fail. Deliberate destination changes were inspected
 in before/after/diff images; reference Linux visual verification and exact-source
-CI/native acceptance remain required. No golden or comparator was changed.
+CI/native acceptance remain required. Initial exact Linux run 38212210623 passed
+analysis, 311 tests and all 19 priority visuals, and failed only the three intended
+destination screenshots. Their Linux before/after/diffs were deliberately
+reviewed; only import_destination_light, import_destination_compact_dark and
+import_destination_options_compact_dark were replaced from that pinned run.
+The comparator is unchanged and strict rerun remains required. The normal
+e1b1bbd8 debug APK installed on explicit emulator-5556 / musify_rehearsal_api35
+with all four normal Hive files byte-exact; this is not a signed or phone update.
 
 The takeover preserved all seven inherited dirty files at 251f5c43. The ignored
 D05 native scratch source was preserved outside Git in the existing private

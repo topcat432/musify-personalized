@@ -15,7 +15,11 @@ legacy/partial state, repeats, cancellation, stale snapshots, overlapping writes
 audit failure, restart and verified backup round trip. Full analysis is clean;
 311 aggregate tests pass. Both strict Windows visual suites fail, with intentional
 destination changes reviewed in before/after/diff images. Goldens/comparator are
-unchanged. Exact-source Linux visual/CI and native checks remain required; this
+unchanged in that initial run. Exact Linux run 38212210623 passed analysis,
+311 tests and 19 priority visuals; only three deliberate destination screenshots
+failed. Their reference before/after/diffs were reviewed and those three named
+images replaced; strict rerun remains required. Exact-source CI and native checks
+remain required; this
 is not phone, provider playback, merge or delivery acceptance.
 
 ## Normal Search categories and owned background checkpoint, 2026-10-12
