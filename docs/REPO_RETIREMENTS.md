@@ -2,6 +2,12 @@
 
 Only protected master and agent/local-stable-consolidation remain. Only draft PR #23 is open. Cleanup changed refs/review state, not integration or releases.
 
+2026-10-12 clarification: the owner approved current-version deferred scope.
+The bounded source/test/reference delta preserved at #22's f14a73fb is now
+carried into candidate #23 and passes current source-pinned checks. The original
+retirement dispositions below remain historical; #22 and its branch are not
+revived, integrated or shipped. See RELEASE_STATE.md for current acceptance.
+
 Before retirement, every original branch/tag and 22 PR heads were preserved in musify-pre-cleanup.bundle, cloned back with identical refs and passed git fsck --full. Bundle SHA-256: 10eb04fe3319d31ac5bc6af08862f8c923ae0eb3524cdd10d9bdf75c325e325a (40,945,016 bytes). The task-local/Library bundle and accompanying inventory remain outside this checkout. Keep that recoverable artifact; GitHub old refs alone are not the recovery plan.
 
 PR dispositions: #4 already contained in master; #7 divergent older stack preserved, selected-alternative P2 still roadmap work; #19 older audit superseded; #20 exact foundation retained by #23; #21 intent carried with both P1 defects corrected; #22 useful Home/shell/accessibility delta deferred at f14a73fb7b9b56682d72fa9868a9dec3ffb1a2ac. All six closed unmerged with factual recovery comments. #22 is not integrated/shipped.

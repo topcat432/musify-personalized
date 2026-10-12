@@ -270,6 +270,25 @@ changes.
 - Evidence: owner clarification in the current task; PRODUCT_VISION.md,
   YOUTUBE_UPSTREAM_REMEDY_REVIEW.md and preserved native acceptance records.
 
+## D-016 - Current-version selectors and approved deferred scope
+
+- Status: accepted for candidate implementation/verification; production gates held.
+- Recorded: 2026-10-12, owner direction to include individual/newly resolved
+  selection and approved current-version deferred work in the existing lane.
+- Decision: preserve all/first-N, exact alternate recordings, source order and
+  existing data. Snapshot all resolved source-row/recording identities at the
+  last successful transfer, separately from selected IDs. Legacy count-only
+  audits and interrupted tracking remain unknown. Carry the bounded preserved
+  Home/shell/accessibility delta from #22 into sole candidate #23.
+- Consequence: versioned audit metadata stays in existing import maps with
+  old/partial-state, failure, rollback, backup and restart coverage. No adapter
+  migration, completed-work reset, retired-PR revival or competing lane. Broader
+  future product decisions return to the owner; this does not authorize phone,
+  production signing/publication, merge, account or security actions.
+- Evidence: selector/service/widget regressions; exact 70313ae8 CI 38216623100
+  (319 tests, 40 strict visuals); e705fb2b isolated native four-mode/restart proof;
+  normal 70313ae8 restored with independent preservation evidence in RELEASE_STATE.md.
+
 ## New decision template
 
 ```text

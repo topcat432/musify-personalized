@@ -9,8 +9,10 @@ and IMPORT_AND_MATCHING_ROADMAP.md under docs.
 Repository: https://github.com/topcat432/musify-personalized.
 Protected integration branch: master. Until approved integration, draft PR #23
 on agent/local-stable-consolidation is the one active candidate. It preserves
-#20's foundation, corrected #21 intent and installed identity. #22 Home/shell
-work is recoverably preserved as a deferred roadmap item.
+#20's foundation, corrected #21 intent and installed identity. Following the
+owner's 2026-10-12 current-version clarification, the preserved bounded #22
+Home/shell/accessibility delta is carried into this candidate. Retired #22 stays
+closed and unmerged; broad future phases remain planning references.
 
 Before work:
 ~~~bash
