@@ -1,5 +1,23 @@
 # Product acceptance ledger
 
+## Current-version selector and deferred-scope acceptance, 2026-10-12
+
+I11 and the approved preserved Home/shell token/accessibility delta are implemented
+in the sole candidate. Exact 70313ae8 Linux CI 38216623100 passes analysis,
+319 tests, all 40 strict visuals and build boundaries. Native scratch e705fb2b
+passes individual/newly-resolved/all/first-N, repeat, source order/alternate,
+six audit inventories and exact restart persistence. The nonempty newly-resolved
+transfer contains only the newly resolved row and omits the pre-existing unselected
+row. Normal app files remain byte-exact throughout that isolated rehearsal.
+
+The explicit normal 70313ae8 entrypoint is restored and stopped after Home/Library
+checks, with exact user/settings/offline values and one explained cache timestamp.
+The synthetic entrypoint remains under test/support and is not production startup.
+These are source-pinned CI/emulator passes, not phone or provider completion.
+Provider/physical/signed-delivery subgates remain held. See RELEASE_STATE.md for
+APK hashes and independent preservation evidence. Older scope-hold prose below
+is historical and does not reopen the I11 decision.
+
 ## Owner-approved subset selectors, 2026-10-12
 
 I11 is approved for the current version, superseding the historical delivery-scope
@@ -378,7 +396,7 @@ No current live-phone or production-signer rehearsal is represented by these APK
 | D02 | Settings → Create verified backup → local SAF Save | Preserve live data; validate actual saved bytes, schema, both boxes, inventories, semantic values | A/D PASS saved real export and independent typed inventory; owner confirms empty library; R HOLD | musify_backup_service; backup service tests |
 | D03 | Disposable Restore → review → confirm | Exact real-data counts/order/selected identities/exclusions/settings; rollback and reopen | A PASS validation/rollback; E PASS real export restore on 26bd; live restore excluded; R HOLD | backup service / validated summary tests |
 | D04 | Full Android restart → native re-export | Independent exact keyed semantics; explain every legitimate change | E PASS real restore/reboot/re-export exact typed semantics on 26bd; synthetic full reboot a3 also byte-exact; D/R HOLD | manual backup_rehearsal tool |
-| D05 | Interrupted/corrupt/repeated/same-name backup selection | Reject corrupt/partial safely; recover rollback; newly selected bytes stay fresh | A PASS corrupt/partial/rollback; E PASS same-name 2/1/2 on unchanged backup implementation at 2f61715e; D/R HOLD | backup service tests; Android file picker |
+| D05 | Interrupted/corrupt/repeated/same-name backup selection | Reject corrupt/partial safely; recover rollback; newly selected bytes stay fresh | A PASS; E PASS same-name 2/1/2 at 2f61715e; E PASS 251f5c43 malformed/truncated/tampered rejection, cancellation, rollback and five staged production recovery cases in scratch directories; D/R HOLD | backup service tests; Android picker; private d05-final-checkpoint.json |
 | P01 | Liked Songs row / Play / Shuffle | Full list, real track completion advances with repeat off; replacement queue keeps shuffle | A PASS queue/shuffle fixtures; E PASS controlled local queue; complete provider listening FAIL/BLOCKED; D/R HOLD | user_songs_page; audio_service; queue_retry_utils |
 | P02 | Playlist / Offline / Recents Play and row tap | Correct full source/order/start index; selected source not silently substituted | A PASS source/order/start-index fixtures; E PASS controlled playlist, offline/recents local entries; sustained provider playback FAIL/BLOCKED; D/R HOLD | playlist_page; user_songs_page |
 | P03 | Now Playing / mini-player seek, pause, previous, next | State/position synchronized; rapid input bounded; long titles don't overflow | A PASS error ownership, zero/duration, paused snapshot, rapid-input fixtures; E PASS 49d controls, bc error, 5da paused duration; D/R HOLD | now_playing; mini_player; audio_service |
@@ -395,7 +413,7 @@ No current live-phone or production-signer rehearsal is represented by these APK
 | I08 | Exclude → exact confirmation → repeated review/restart | Preserve source row/audit; drain all review/rescue/totals/destinations; retain existing likes | A PASS explicit exclusion/source/audit/backup/reopen; E PASS all four source rows and excluded outcome survive reboot; D/R HOLD | spotify_import_persistence_test; review/backup tests; closure-after-reboot-inventory.json |
 | I09 | Choose Destination all/first-N → liked/existing/new → preview/confirm | Correct counts/source order/dedupe; success after durable write; partial unresolved stays staged | A PASS all/first-N to liked/new/existing with source order; E PASS a3 first-one amount retained after confirm/refresh; earlier 5da expansion FAIL repaired; D/R HOLD | spotify_import_destination_page_test; spotify_import_persistence_test; private-ui/closure-a3-first-confirmed and closure-a3-first-repeat-review |
 | I10 | Retry routing / stale session / empty selection / restart | Idempotent; no uncontrolled duplicates/deletion; reject stale/empty safely; destination history retained | A PASS empty/stale target rejection and reopened idempotence; E PASS a3 repeat still 0 new/1 existing and no duplicate library change; D/R HOLD | spotify_import_persistence_test; private-ui/closure-a3-first-repeat-review; closure inventory proof |
-| I11 | Individually selected/newly resolved subsets | Current version approved; preserve chosen recordings/order and honestly unknown legacy tracking | CODE implemented; 18 targeted checks PASS; full exact-source/native verification pending; D/R HOLD | import roadmap §4; spotify_import_selection_test.dart; spotify_import_destination_page_test.dart |
+| I11 | Individually selected/newly resolved subsets | Current version approved; preserve chosen recordings/order and honestly unknown legacy tracking | A PASS 18 targeted checks, 319 aggregate and exact CI 70313ae8; E PASS e705fb2b four modes, nonempty delta, alternate/order, idempotence, six audit inventories and restart with normal files exact; D/R HOLD | import roadmap §4; selection/widget tests; private i11-scratch-native-proof.json |
 | L01 | Library → favorites / playlists / folders / pinned / artists | Membership/counts/order/filter persist; no silently missing real content | A PASS folder filtering/liked models; E PASS generated folder/member/pin plus original membership across full reboot; D/R HOLD | library_page; playlists_manager |
 | L02 | New/edit/rename/delete playlist/folder, cancel, repeat | Changes only disposable data; cancellation safe; duplicate/empty validation; restart persists | A PASS nested-navigation Cancel/Delete and child retention/reopen; E PASS create/rename/move/pin/unpin/validation/delete Cancel; E PASS repaired folder Delete returns to Library on exact 58f1edbb APK; D/R HOLD | playlist_folder_page_test; closure-folder-navigation-before/after.log; private-ui/closure CRUD captures |
 | L03 | Playlist unavailable/empty/loading → Back | Readable error/empty state, no RenderBox/Sliver exception or stranded navigation | A PASS unavailable/empty widget regressions; E PASS generated empty-folder entry/Back; provider unavailable state represented by local source-error fixture; D/R HOLD | playlist_page; EmptyPlaylistState |
@@ -410,7 +428,7 @@ No current live-phone or production-signer rehearsal is represented by these APK
 | U01 | Check personalized update / current/error/invalid manifest | Exact retained package/pinned signer/hash; reject legacy/debug/unsigned/wrong identity; sensible UI | A PASS 14 updater rejection checks incl. old/debug identity, checksum, interrupted body and inspection failure; E PASS disallowed manifest rejection/dismiss with no install; D/R HOLD | personalized_update_service_test; personalized_update_dialog_test; closure-updater-rejection-final.log; private-ui/closure-updater-result |
 | U02 | Signed workflow + disposable in-place rehearsal | Exact default tip; monotonic version; v2/v3/pinned signer/hash; real-data survives | A PASS production workflow/channel/invalid-artifact boundaries; CI unsigned builds only; R BLOCKED exact signed in-place rehearsal and full product gates | signed-release.yml; RELEASE_SIGNING |
 | U03 | Samsung in-place install → APK re-extract/data inventory/smoke | No uninstall/clear/live restore; exact artifact and persisted real data; daily critical paths | D/R BLOCKED phone unavailable and signed/product release gates; no live install/restore/uninstall/clear-data | explicit approved release/install evidence |
-| V01 | Real artwork / long labels / compact + large text / themes | Artwork-led; no Aquaz3y/orbit/KEEP-NOPE branding; readable, no clipping/overflow | A Windows strict FAIL unchanged text-rendering differences; Linux 769d60f4 all 35 strict PASS; E real-artwork/long-label evidence plus readable native screens; D/R HOLD | VISUAL_SYSTEM; both strict visual suites |
+| V01 | Real artwork / long labels / compact + large text / themes | Artwork-led; no Aquaz3y/orbit/KEEP-NOPE branding; readable, no clipping/overflow | A Windows strict FAIL; exact Linux 70313ae8 all 40 strict PASS, only named deliberate images reviewed; E real-artwork/long-label evidence and normal Home/Library at 70313ae8; D/R HOLD | VISUAL_SYSTEM; both strict visual suites |
 | V02 | Scroll/keyboard/mini-player/safe insets/back/rapid gestures | No obscured controls, trapped overlays, stale views or lost decisions | A PASS actual review, error/text-scale and slider widgets; E PASS keyboard, content scroll, safe Back, paused mini-player; folder-delete root pop FAIL repaired with A proof and native 58f1edbb Library return PASS; D/R HOLD | actual screen recordings + widget regressions |
 
 ## Current closure findings
@@ -488,7 +506,7 @@ prerequisites; named partial passes do not imply complete product acceptance.
 Remaining prerequisites: allowed complete media for online listening/download
 and previews (stopped after denial); reconnect the selected Samsung's existing
 USB/ADB connection and leave it unlocked for phone/focus/output checks; available
-physical outputs/accessories; owner decision for I11 subset delivery; full product
+physical outputs/accessories; full product
 gates followed by exact signed in-place rehearsal. No merge, signing/publication,
 live-phone update/restore, secret/security/provider workaround or matching rerun.
 

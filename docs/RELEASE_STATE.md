@@ -1,5 +1,49 @@
 # Musify Personalized current state
 
+## Selector native completion and normal-entrypoint return, 2026-10-12
+
+Candidate source 70313ae8c0a6c899f646d1f69810ad091dc2f97d passed exact
+[Linux CI 38216623100](https://github.com/topcat432/musify-personalized/actions/runs/38216623100):
+clean analysis, 319 aggregate tests, all 40 strict visual comparisons, debug and
+F-Droid boundaries and unsigned release assembly. Only the six deliberately
+reviewed selector/hub reference images changed across this work; five preserved
+Home/shell references were added. The comparator and other references are intact.
+
+The isolated Android selector entrypoint at e705fb2bce3853d41005181cfc3328cf931fff05
+passed all four selection modes on explicit emulator-5556 / musify_rehearsal_api35.
+Individual selection retained the alternate and source order; a repeat added zero.
+Resolving only scratch row 4 produced a one-recording newly resolved transfer,
+excluding the previously unselected resolved row. All mode added only the one
+remaining recording. First-N retained two after transfer and repeat. Independent
+copied-Hive inspection verifies all six audits, source rows, chosen identities,
+existing like and exact scratch values across process restart. All four normal
+Hive files remained byte-exact through scratch installation, execution and restart.
+Scratch files are retained separately; there was no normal dataset replacement.
+
+Explicit lib/main.dart source 70313ae8 was then built and restored in place.
+APK SHA-256: 2e0e2158a8f8da887800351d7e28f828d92717c1b2fd5ac667362182bb728dde.
+Installed APK hash, embedded source stamp, debug package/signer and all four normal
+Hive files were verified. Normal Home/Library navigation passes; independent
+inspection retains every user/settings/offline value and identifies exactly one
+derived cache timestamp change. The normal app is stopped; the synthetic entrypoint
+is not wired into production startup. Post-70313 changes in this checkpoint are
+documentation only and do not change its tested product code.
+
+Private supporting records remain outside Git in continuing-acceptance-20261012:
+i11-scratch-native-proof.json, normal-70313ae8-proof.json and
+normal-70313-resume-preservation-proof.json. Retained D05 source 251f5c43 evidence
+also passes actual malformed/truncated/tampered picker rejection, valid-control
+cancellation, in-process rollback and five staged recovery cases (first replacement,
+between renames, corrupt/missing journal and verified new pair). The staged cases
+use the production recovery routine in scratch directories, not a claim of killing
+an actual restore at each instruction. Original normal files remained exact.
+
+The approved bounded deferred Home/shell delta is in the sole draft PR #23.
+Master remains a786323556275a0de745ffca4d3affc088ac2055; nothing is merged.
+Complete provider listening/download/preview, physical focus/audibility/accessories,
+signed in-place rehearsal and production delivery remain held. No provider-media,
+phone, signing/publication, deployment, account or security action ran.
+
 ## Approved deferred Home/shell scope, 2026-10-12
 
 The owner approved carrying current-version deferred work into the sole candidate.
