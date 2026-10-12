@@ -1,5 +1,58 @@
 # Musify Personalized current state
 
+## Controlled lookup and production-shell acceptance, 2026-10-12
+
+Product source 67496cfaa074e72c2a2da3d01658d4f8f472d347 passes
+[exact Linux CI 38264000991](https://github.com/topcat432/musify-personalized/actions/runs/38264000991):
+clean analysis, 355 tests, all 40 strict visuals and required Android boundaries.
+Fifteen targeted matching checks pass. Before-failing controlled tests exposed
+cancelled fallback requests, unavailable sources falsely marked unmatched, stale
+review/overlap/exclusion overwrites and mutable checkpoint-list aliasing. Matching
+now validates the import and saved results/cursor/exclusions between lookup stages,
+preserves newer decisions, keeps healthy candidates, distinguishes unavailable
+from empty sources and isolates checkpoint list containers. No durable schema or
+adapter change was introduced. Windows strict suites remain FAIL; references and
+comparisons are unchanged.
+
+Native emulator-5556/acceptance_lookup_v1 verifies real matching-page disposal
+while an owned delayed HTTP response is pending: one music request, no fallback,
+paused 1/4 cursor and unchanged retained alternative/like. Process stop while the
+next owned request is pending leaves the durable 1/4 checkpoint intact. Restart
+and resume reach 4/4 with ordered unique manually-matched/unmatched/error/excluded
+states. Independent copied-Hive reopen and owned request telemetry verify these
+claims; this is not provider catalog or playable recording proof.
+
+Separate acceptance_mini_v1 runs the real Musify router, shell and mini-player
+with a paused two-track local synthetic queue. Inspected normal and dimension-
+checked 320-dp/1.6-text screenshots preserve player/navigation usability; the final
+Library row and its menu remain accessible above the player at the scroll end.
+Dynamic accent, pure-black and predictive-back switches survive actual process
+restart, and independent settings reopen confirms all original values restored.
+Earlier two normal preference restart/restore checks remain pinned to d35b4b4e.
+Neither these fixtures nor waveform playback establish physical acoustic/focus/
+accessory acceptance. Corrected album-classification native retest and remaining
+unlisted preference combinations are still open; no blanket row-level PASS.
+
+Normal lib/main.dart 67496cfa is restored in place and stopped after Home/Library.
+This emulator-only android-x64 debug APK is SHA-256
+0dc5877f188875236cfadf63047cf37953f2f79e988512373716a8340f411144,
+with the retained debug signer. Four normal files are byte-exact through install;
+independent post-startup comparison confirms every stored value exact and zero
+new cache timestamp changes relative to the pre-install checkpoint. The earlier
+one derived timestamp refresh during normal preference testing remains separately
+recorded. Display overrides are reset. All evidence remains outside Git in
+continuing-acceptance-20261012, including matching-lookup-native-proof.json and
+normal-674-final-proof.json.
+
+Host disk-full compiler failures were recorded as failures. Space recovery removed
+only hash-verified duplicate task build outputs and regeneratable task-local native
+intermediates/Dart build cache; source, unique APKs and recovery evidence were
+preserved. Only compiler-failed task-owned Dart runners were stopped; shared SDK
+locks and other workloads were untouched. There was no approval-review denial.
+Master remains a786323556275a0de745ffca4d3affc088ac2055. PR23 stays draft/unmerged.
+Provider playback remains blocked after the retained denial; no new denied-provider
+request, phone operation, production signing/publication or deployment occurred.
+
 ## Lyrics, offline transfer and compact Library continuation, 2026-10-12
 
 Completed source 4939fffed242fb37fedefb2f4b77c8a19c6b7720 passes

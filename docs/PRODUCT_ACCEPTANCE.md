@@ -1,5 +1,32 @@
 # Product acceptance ledger
 
+## Matching interruption and mini-player continuation, 2026-10-12
+
+Product source 67496cfa passes exact Linux CI 38264000991: analysis, 355 tests,
+all 40 strict visuals and required Android boundaries. Fifteen targeted matching
+checks include before-failing cancellation/error/race/cache-alias cases. Windows
+strict suites remain FAIL; no comparator/reference changes.
+
+Native actual matching page on owned loopback responses: Back cancels a pending
+lookup without fallback or result publication, durable 1/4 checkpoint survives
+process stop, and restart/resume reaches ordered unique 4/4 with unmatched/error/
+excluded states distinct and retained alternate/like exact. This supersedes the
+older I02 controlled-network-unrun entry. Real provider results remain unverified.
+
+Native real application shell on separate synthetic storage: paused local queue,
+normal and 320-dp/1.6-text mini-player/navigation, scroll-end final Library row/menu
+accessibility, and dynamic-accent/pure-black/predictive-back persistence across
+restart with independently restored settings pass. Earlier normal stats/next-song
+preference checks are retained. This supersedes those bounded T01/V01/V02 unrun
+clauses; it does not close all gesture, preference, physical output or phone cases.
+Corrected album classification still needs its own native retest.
+
+Normal 67496cfa lib/main.dart is restored and stopped, with unchanged debug signer,
+byte-exact installation and exact independent post-startup stored inventories
+(zero new timestamp changes). Display defaults restored; evidence outside Git.
+Provider completion/recording provenance, physical phone/focus/accessories,
+rename/registry crash windows and signed delivery remain distinct open gates.
+
 ## Continued T03/O01 and compact Library evidence, 2026-10-12
 
 Completed source 4939fffe passes exact Linux CI 38247252808 (343 tests/40 strict
