@@ -9,6 +9,8 @@ import 'package:hive/hive.dart';
 import 'package:musify/localization/app_localizations.dart';
 import 'package:musify/main.dart' show audioHandler;
 import 'package:musify/screens/equalizer_page.dart';
+import 'package:musify/screens/artist_page.dart';
+import 'package:musify/screens/playlist_page.dart';
 import 'package:musify/screens/settings_page.dart';
 import 'package:musify/screens/spotify_import_page.dart';
 import 'package:musify/screens/spotify_matching_page.dart';
@@ -22,6 +24,8 @@ import 'package:musify/services/settings_manager.dart';
 import 'package:musify/services/spotify_import_session_service.dart';
 import 'package:musify/utilities/listening_stats_utils.dart';
 import 'package:path_provider/path_provider.dart';
+
+import 'acceptance_search_native.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -90,6 +94,7 @@ Future<void> main() async {
   // home/search provider loader. Only this scratch preference is configured.
   await Hive.box('settings').put('offlineMode', false);
   offlineMode.value = false;
+  await prepareOwnedSearchFixtures();
   audioHandler = await AudioService.init(
     builder: MusifyAudioHandler.new,
     config: const AudioServiceConfig(
@@ -111,6 +116,31 @@ Future<void> main() async {
         path: '/matching',
         builder: (_, _) => const SpotifyMatchingPage(),
       ),
+      GoRoute(path: '/search', builder: (_, _) => ownedSearchPage()),
+      GoRoute(
+        path: '/search/artist/:artistId',
+        builder: (_, state) => ArtistPage(
+          artistId: state.pathParameters['artistId']!,
+          artistData: state.extra as Map?,
+        ),
+      ),
+      GoRoute(
+        path: '/home/playlist/:playlistId',
+        builder: (_, state) =>
+            PlaylistPage(playlistId: state.pathParameters['playlistId']),
+      ),
+      for (final status in ['complete', 'failed'])
+        GoRoute(
+          path: '/artist-$status',
+          builder: (_, _) => PlaylistPage(
+            isArtist: true,
+            playlistData: {
+              ...ownedArtist,
+              'catalogStatus': status,
+              'list': <dynamic>[],
+            },
+          ),
+        ),
       GoRoute(
         path: '/import-failure',
         builder: (_, _) => SpotifyImportPage(
@@ -164,6 +194,19 @@ class OwnedGapHome extends StatelessWidget {
           onPressed: () => context.push('/import-failure'),
           child: const Text('Owned failed replacement'),
         ),
+        FilledButton(
+          onPressed: () => context.push('/search'),
+          child: const Text('Owned search routes'),
+        ),
+        FilledButton(
+          onPressed: () => context.push('/search/artist/null'),
+          child: const Text('Owned missing artist'),
+        ),
+        for (final status in ['complete', 'failed'])
+          FilledButton(
+            onPressed: () => context.push('/artist-$status'),
+            child: Text('Owned $status artist catalog'),
+          ),
       ],
     ),
   );
