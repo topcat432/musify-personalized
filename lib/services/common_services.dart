@@ -58,6 +58,16 @@ final _latestSongLikeUpdateTokens = <String, int>{};
 
 final lyrics = ValueNotifier<String?>(null);
 String? lastFetchedLyrics;
+typedef SongLyricsLoader =
+    Future<String?> Function(String artist, String title);
+int _lyricsRequestGeneration = 0;
+_LyricsRequest? _pendingLyrics;
+
+class _LyricsRequest {
+  _LyricsRequest(this.key);
+  final String key;
+  late final Future<String?> future;
+}
 
 void reloadSongLibraryStateFromStorage() {
   final userBox = Hive.box('user');
@@ -639,24 +649,43 @@ Future<Map<String, dynamic>> getSongDetails(
   }
 }
 
-Future<String?> getSongLyrics(String? artist, String title) async {
-  if (artist == null) return null;
-  if (lastFetchedLyrics != '$artist - $title') {
-    lyrics.value = null;
-    var _lyrics = await LyricsManager().fetchLyrics(artist, title);
-    if (_lyrics != null) {
-      _lyrics = _lyrics.replaceAll(RegExp(r'\n{4}'), '\n\n');
-      _lyrics = _lyrics.replaceAll(RegExp(r'\n{2}'), '\n');
-      lyrics.value = _lyrics;
-    } else {
-      return null;
-    }
-
-    lastFetchedLyrics = '$artist - $title';
-    return _lyrics;
+Future<String?> getSongLyrics(
+  String? artist,
+  String title, {
+  String? recordingId,
+  SongLyricsLoader? loader,
+}) {
+  if (artist == null) return Future.value();
+  final key = jsonEncode([recordingId ?? '', artist, title]);
+  if (lastFetchedLyrics == key && lyrics.value != null) {
+    return Future.value(lyrics.value);
   }
+  final pending = _pendingLyrics;
+  if (pending != null && pending.key == key) return pending.future;
 
-  return lyrics.value;
+  final generation = ++_lyricsRequestGeneration;
+  lyrics.value = null;
+  lastFetchedLyrics = null;
+  final request = _LyricsRequest(key);
+  _pendingLyrics = request;
+  request.future =
+      Future<String?>.sync(
+            () => (loader ?? LyricsManager().fetchLyrics)(artist, title),
+          )
+          .then((value) {
+            final text = value
+                ?.replaceAll(RegExp(r'\n{4}'), '\n\n')
+                .replaceAll(RegExp(r'\n{2}'), '\n');
+            if (generation == _lyricsRequestGeneration) {
+              lyrics.value = text;
+              lastFetchedLyrics = text == null ? null : key;
+            }
+            return text;
+          })
+          .whenComplete(() {
+            if (identical(_pendingLyrics, request)) _pendingLyrics = null;
+          });
+  return request.future;
 }
 
 Future<bool> makeSongOffline(dynamic song) async {

@@ -26,6 +26,7 @@ import 'package:musify/utilities/listening_stats_utils.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'acceptance_search_native.dart';
+import 'acceptance_audio_native.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -107,6 +108,14 @@ Future<void> main() async {
   final router = GoRouter(
     routes: [
       GoRoute(path: '/', builder: (_, _) => const OwnedGapHome()),
+      GoRoute(
+        path: '/owned-lyrics',
+        builder: (_, _) => const OwnedLyricsRehearsal(),
+      ),
+      GoRoute(
+        path: '/owned-equalizer',
+        builder: (_, _) => const OwnedEqualizerRehearsal(),
+      ),
       GoRoute(path: '/settings', builder: (_, _) => const SettingsPage()),
       GoRoute(
         path: '/settings/equalizer',
@@ -182,6 +191,14 @@ class OwnedGapHome extends StatelessWidget {
       children: [
         const Text('Scratch storage only. No provider media.'),
         const Text(String.fromEnvironment('GIT_SHA')),
+        FilledButton(
+          onPressed: () => context.push('/owned-lyrics'),
+          child: const Text('Owned recording lyrics'),
+        ),
+        FilledButton(
+          onPressed: () => context.push('/owned-equalizer'),
+          child: const Text('Owned equalizer controls'),
+        ),
         FilledButton(
           onPressed: () => context.push('/settings'),
           child: const Text('Owned settings'),
