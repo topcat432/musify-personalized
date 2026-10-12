@@ -7,6 +7,66 @@ import 'package:musify/services/review_sprint_audio_player.dart';
 import 'package:musify/services/spotify_review_workflow_service.dart';
 
 void main() {
+  testWidgets(
+    'later then accept acts on the visible recording after keyed transition',
+    (tester) async {
+      final source = _FakeReviewDataSource([
+        _item(row: 1, title: 'First row', songId: 'first'),
+        _item(row: 2, title: 'Second row', songId: 'second'),
+      ]);
+      final player = _FakeAudioPlayer();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SpotifyReviewSprintPage(
+            dataSource: source,
+            audioPlayer: player,
+            streamResolver: (id) async => 'owned-$id',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('review-postpone-button')));
+      await tester.pumpAndSettle();
+      expect(find.text('Second row'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('review-accept-button')));
+      await tester.pumpAndSettle();
+      expect(source.decisions.single.row, '2');
+      expect(find.text('First row'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await player.dispose();
+    },
+  );
+  testWidgets(
+    'a failed decision stays visible through preview restart and retries',
+    (tester) async {
+      final source = _FakeReviewDataSource([
+        _item(row: 1, title: 'Owned row', songId: 'owned-row'),
+      ])..failure = StateError('Owned persistence failure');
+      final player = _FakeAudioPlayer();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SpotifyReviewSprintPage(
+            dataSource: source,
+            audioPlayer: player,
+            streamResolver: (_) async => 'owned-preview',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('review-accept-button')));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Decision was not saved'), findsOneWidget);
+      expect(find.textContaining('Owned persistence failure'), findsOneWidget);
+      expect(source.decisions, isEmpty);
+      source.failure = null;
+      await tester.tap(find.byKey(const ValueKey('review-accept-button')));
+      await tester.pumpAndSettle();
+      expect(find.text('Review queue cleared'), findsOneWidget);
+      expect(source.decisions, hasLength(1));
+      await tester.pumpWidget(const SizedBox.shrink());
+      await player.dispose();
+    },
+  );
   testWidgets('a rejected card leaves the queue and the next preview plays', (
     tester,
   ) async {
@@ -206,6 +266,7 @@ class _FakeReviewDataSource implements SpotifyReviewSprintDataSource {
   final List<Map<String, dynamic>> _items;
   final List<_Decision> decisions = <_Decision>[];
   final List<String> excludedRows = <String>[];
+  Object? failure;
 
   @override
   Future<List<Map<String, dynamic>>> loadUnresolvedItems() async {
@@ -218,6 +279,7 @@ class _FakeReviewDataSource implements SpotifyReviewSprintDataSource {
     required bool accept,
     Map<String, dynamic>? selectedAlternative,
   }) async {
+    if (failure != null) throw failure!;
     final row = item['sourceRow'].toString();
     decisions.add(_Decision(row: row, accept: accept));
     _items.removeWhere((candidate) => candidate['sourceRow'].toString() == row);

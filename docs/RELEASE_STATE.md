@@ -1,5 +1,26 @@
 # Musify Personalized current state
 
+## Owned review continuation, 2026-10-12
+
+Exact documentation tip 164ec7dbcbe6bea33b65ef9941b18d4d6f415c2c passes
+Linux CI 38313767077 (389 tests, 40 strict visuals and Android boundaries).
+Native v1 owned review loads local previews and upward Later rotates to row 2
+without resolving row 1. Subsequent right swipes/Accept leave row 2 unchanged.
+Those observations remain FAIL/pending; a real-service diagnostic succeeds on
+an independently copied snapshot, so the native cause is not yet established.
+
+A widget regression independently reproduces a failed decision's error disappearing
+when its preview restarts. Workflow and preview errors now have separate ephemeral
+state, retaining the failed-save message and allowing retry. Keeping the message
+visible exposed short-card overflow; a compact source/suggestion/preview layout
+retains controls when available height is below 270. Failure/retry and keyed
+Later-to-Accept regressions pass. Local 391 tests and clean analysis pass; both
+unchanged Windows strict suites remain FAIL (16 + 24), with reference PNGs unchanged.
+No data schema changes. V2 review uses a fresh owned namespace and scoped native
+player/service event traces; no provider requests, normal-data reset or v1 deletion.
+Native v2 acceptance and normal restoration remain required before a checkpoint.
+The approved provider batch remains paused pending the owner's scoped approval.
+
 ## Playback attribution and download integration, 2026-10-12
 
 Exact cdf9ba660ec964cb6920e9460bd5af59d5b0a4f8 Linux CI 38306925264
