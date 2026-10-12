@@ -19,9 +19,10 @@ accessibility, and dynamic-accent/pure-black/predictive-back persistence across
 restart with independently restored settings pass. Earlier normal stats/next-song
 preference checks are retained. This supersedes those bounded T01/V01/V02 unrun
 clauses; it does not close all gesture, preference, physical output or phone cases.
-Corrected album classification still needs its own native retest.
+Corrected album classification passes its native retest at fee672a1: owned Search
+album opens as Album with the expected recording and Back returns to results.
 
-Normal 67496cfa lib/main.dart is restored and stopped, with unchanged debug signer,
+Normal fee672a1 lib/main.dart is restored and stopped, with unchanged debug signer,
 byte-exact installation and exact independent post-startup stored inventories
 (zero new timestamp changes). Display defaults restored; evidence outside Git.
 Provider completion/recording provenance, physical phone/focus/accessories,

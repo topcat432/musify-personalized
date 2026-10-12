@@ -30,19 +30,22 @@ Dynamic accent, pure-black and predictive-back switches survive actual process
 restart, and independent settings reopen confirms all original values restored.
 Earlier two normal preference restart/restore checks remain pinned to d35b4b4e.
 Neither these fixtures nor waveform playback establish physical acoustic/focus/
-accessory acceptance. Corrected album-classification native retest and remaining
-unlisted preference combinations are still open; no blanket row-level PASS.
+accessory acceptance. The corrected album-classification native retest at
+fee672a1 passes: the owned Search album opens with Album classification and its
+recording, then Back returns to results. Remaining unlisted preference combinations
+are still open; no blanket row-level PASS.
 
-Normal lib/main.dart 67496cfa is restored in place and stopped after Home/Library.
+Normal lib/main.dart fee672a1 is restored in place and stopped after Home/Library.
 This emulator-only android-x64 debug APK is SHA-256
-0dc5877f188875236cfadf63047cf37953f2f79e988512373716a8340f411144,
+b81317c546deafaa311c65322d0927bdee2edf1b68f1cc628294d2dc43106c1c,
 with the retained debug signer. Four normal files are byte-exact through install;
 independent post-startup comparison confirms every stored value exact and zero
 new cache timestamp changes relative to the pre-install checkpoint. The earlier
 one derived timestamp refresh during normal preference testing remains separately
 recorded. Display overrides are reset. All evidence remains outside Git in
 continuing-acceptance-20261012, including matching-lookup-native-proof.json and
-normal-674-final-proof.json.
+normal-fee-observed-final-proof.json. Documentation source fee672a1 also passes
+[exact Linux CI 38268270524](https://github.com/topcat432/musify-personalized/actions/runs/38268270524).
 
 Host disk-full compiler failures were recorded as failures. Space recovery removed
 only hash-verified duplicate task build outputs and regeneratable task-local native
