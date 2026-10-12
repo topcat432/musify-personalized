@@ -1,5 +1,49 @@
 # Musify Personalized current state
 
+## Owned review closure, 2026-10-12
+
+Exact cadc2b6d9a301d1e5040266d2c9309898a2b56bd passes Linux CI 38317502932:
+clean analysis, 391 tests, all 40 strict visuals and Android boundaries. Local
+391 tests/analysis pass; Windows strict suites remain FAIL (16 + 24), unchanged.
+The v1 review fixture replaced Musify's root, whose dispose closes Hive; it was
+not valid evidence of a production gesture/persistence failure. V2 was rejected
+by the owned-namespace guard before setup. Both failed receipts remain retained.
+V3 mounts review once after owned setup, preserving production shutdown behavior.
+
+Native V3 passes upward Later, right Accept and left No match. Independent stopped
+Hive reopen preserves the selected accepted recording, source row order, unresolved
+row and reopenable manual-unmatched state, with no permanent exclusion or implicit
+routing. Restart excludes the accepted row from the unresolved queue; repeated
+No match preserves the accepted/deferred rows and changes only its own review
+audit timestamp. Existing likes/settings/cache/offline memberships stay exact
+across those snapshots; deliberate owned queue starts can update recency/statistics.
+The owned 70-second preview stops at 12.003 seconds through the real native player.
+This is local preview/decision proof, not provider preview or physical-audio proof.
+Evidence: review-cadc-independent-proof.json and
+review-cadc-native-preview-cutoff-proof.json outside Git.
+
+The earlier 32 preference snapshots now independently pass exact expected settings,
+offline registry/payload and unrelated user-value checks. The recency exception is
+explicit and narrow: same recording identity/order/all other metadata, monotonically
+increased listeningCount/lastPlayed from deliberate queue starts; statistics remain
+separately excluded. The earlier failed whole-user audit remains retained.
+Evidence: preferences-switches-recency-audited-proof.json (source 980323bb).
+
+Normal lib/main.dart cadc2b6d is restored in place and stopped after Home/Library
+inspection. APK SHA-256 f53f313b714be7ebe8fc35eeb900a0a2bed6007d721f77c5c86bb9528df125b1
+matches installed hash/retained debug signer. Install preserves four files byte-exact;
+independent post-startup reopen preserves user/settings/offline values with zero
+cache timestamp changes. Evidence: normal-cadc-observed-final-proof.json.
+
+Remaining native work: preview pause/resume/auto-preview toggle; rapid mini gestures,
+queue dismissal/stop restart; shuffle/repeat persistence; source-details attribution;
+Blue/Sky accent and Spanish/English selection cycles/restart. Richer approved import
+formats/multiple memberships/repeat sync/share intake and full release/phone gates
+remain open. The three-recording provider batch remains paused for explicit owner
+approval. Only one provider recording has completed; original audio-only HTTP403
+remains unresolved. Spotify free exact-track playback is not established; no
+nonfunctional Spotify-only/both controls or silent substitutions are introduced.
+
 ## Owned review continuation, 2026-10-12
 
 Exact documentation tip 164ec7dbcbe6bea33b65ef9941b18d4d6f415c2c passes
