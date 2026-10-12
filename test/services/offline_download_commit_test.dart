@@ -469,6 +469,55 @@ void main() {
     },
   );
 
+  testWidgets('typed playlist rows without artwork remain complete on repeat', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      priorityReviewApp(child: const Scaffold(), brightness: Brightness.light),
+    );
+    final context = tester.element(find.byType(Scaffold));
+    await tester.pumpWidget(const SizedBox.shrink());
+    var loads = 0;
+    final playlist = {
+      'ytid': 'owned-typed-playlist',
+      'title': 'Owned typed playlist',
+      'list': [
+        <String, String>{'ytid': 'keep-owned', 'title': 'Keep existing'},
+        <String, String>{'ytid': 'owned-typed-new', 'title': 'Owned new'},
+      ],
+    };
+    await tester.runAsync(() async {
+      for (var repeat = 0; repeat < 2; repeat++) {
+        await offlinePlaylistService.downloadPlaylist(
+          context,
+          playlist,
+          audioLoader: (_) async {
+            loads++;
+            return body([1, 2, 3, 4]);
+          },
+        );
+        expect(
+          offlinePlaylistService.isPlaylistDownloaded('owned-typed-playlist'),
+          true,
+        );
+      }
+      expect(loads, 1);
+      final copies = offlinePlaylistService.offlinePlaylists.value
+          .where((p) => p['ytid'] == 'owned-typed-playlist')
+          .toList();
+      expect(copies, hasLength(1));
+      expect((copies.single['list'] as List).map((r) => r['ytid']), [
+        'keep-owned',
+        'owned-typed-new',
+      ]);
+      expect(await File(FilePaths.getAudioPath('keep-owned')).readAsBytes(), [
+        7,
+        8,
+        9,
+      ]);
+    });
+  });
+
   testWidgets('partial playlist never claims complete offline availability', (
     tester,
   ) async {

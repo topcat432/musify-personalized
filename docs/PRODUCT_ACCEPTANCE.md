@@ -41,6 +41,22 @@ code pushes and owned disposable-native acceptance continue independently.
 The original audio-only later-range HTTP403 and physical/signed release gates
 remain open. No provider batch delivery/preview/download success is claimed.
 
+The typed-row follow-up reproduces a real repeat-download failure when an older
+registered offline song has no artwork and the playlist row is Map<String,String>:
+assigning null to artworkPath throws and prevents completion. The narrow fix
+removes a missing optional artwork path instead. Its regression fails before and
+passes after, preserving source order, keeper payload and one playlist on repeat.
+Local aggregate now passes 389 tests with clean analysis; both unchanged Windows
+strict suites remain FAIL (16 + 24). Exact e75df0f671589a607483dd0e2ebabced7e6657ff
+Linux CI 38310733410 passes 388 tests/all 40 strict visuals and Android boundaries.
+
+The first owned native playlist driver failed on ADB's missing-file output; retain
+that failed receipt. Its corrected attempt exposed the typed-row failure plus a
+fixture missing the normal audio handler for toasts. The fixture now initializes
+that handler and uses a slower cancellation body in a fresh v2 namespace, retaining
+all v1 data/evidence. Whole-playlist native acceptance remains pending this rerun.
+Normal four files remained byte-exact at stopped v1 captures; no provider requests.
+
 ## Playback compatibility continuation, 2026-10-12
 
 Source 7242644a7dc5d67b4c9d044b57de013c0f6cc2a0 passes exact Linux CI

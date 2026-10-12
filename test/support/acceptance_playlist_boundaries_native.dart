@@ -2,10 +2,13 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:hive/hive.dart';
 import 'package:musify/localization/app_localizations.dart';
+import 'package:musify/main.dart' show audioHandler;
+import 'package:musify/services/audio_service.dart';
 import 'package:musify/services/common_services.dart';
 import 'package:musify/services/io_service.dart';
 import 'package:musify/services/playlist_download_service.dart';
@@ -17,7 +20,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   if (!Platform.isAndroid) throw StateError('Owned Android target only');
   final normal = await getApplicationDocumentsDirectory();
-  final root = Directory('${normal.path}/acceptance_playlist_boundaries_v1');
+  final root = Directory('${normal.path}/acceptance_playlist_boundaries_v2');
   await root.create(recursive: true);
   Hive.init(root.path);
   for (final box in ['settings', 'user', 'userNoBackup', 'cache']) {
@@ -61,6 +64,15 @@ Future<void> main() async {
   userOfflineSongs.value = List<dynamic>.from(
     Hive.box('userNoBackup').get('offlineSongs'),
   );
+  audioHandler = await AudioService.init(
+    builder: MusifyAudioHandler.new,
+    config: const AudioServiceConfig(
+      androidNotificationChannelId: 'com.gokadzev.musify',
+      androidNotificationChannelName: 'Musify',
+      androidNotificationIcon: 'drawable/ic_launcher_foreground',
+    ),
+  );
+  await audioHandler.audioPlayer.setVolume(0);
   runApp(
     MaterialApp(
       locale: const Locale('en'),
@@ -134,7 +146,7 @@ class _OwnedPlaylistBoundaryPageState extends State<OwnedPlaylistBoundaryPage> {
 
   Stream<List<int>> slowBody() async* {
     for (var start = 0; start < ownedPlaylistBody.length; start += 256) {
-      await Future<void>.delayed(const Duration(milliseconds: 25));
+      await Future<void>.delayed(const Duration(milliseconds: 500));
       yield ownedPlaylistBody.sublist(start, start + 256);
     }
   }

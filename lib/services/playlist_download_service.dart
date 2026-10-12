@@ -479,7 +479,13 @@ class OfflinePlaylistService {
           if (offlineSong.isNotEmpty) {
             // Update the song in the playlist with the correct offline properties
             song['audioPath'] = offlineSong['audioPath'];
-            song['artworkPath'] = offlineSong['artworkPath'];
+            final artworkPath = offlineSong['artworkPath'];
+            if (artworkPath is String) {
+              song['artworkPath'] = artworkPath;
+            } else {
+              // Typed string rows and older offline records may have no art.
+              song.remove('artworkPath');
+            }
           }
           // Update progress
           progressNotifier.value.completed++;
