@@ -103,12 +103,15 @@ class NowPlayingArtwork extends StatelessWidget {
           ],
         ),
         child: AsyncLoader<String?>(
-          future: getSongLyrics(
-            metadata.artist,
-            metadata.title,
-            recordingId: metadata.extras?['ytid']?.toString() ?? metadata.id,
-            loader: lyricsLoader,
-          ),
+          future: offlineMode.value
+              ? Future<String?>.value()
+              : getSongLyrics(
+                  metadata.artist,
+                  metadata.title,
+                  recordingId:
+                      metadata.extras?['ytid']?.toString() ?? metadata.id,
+                  loader: lyricsLoader,
+                ),
           emptyWidget: Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
