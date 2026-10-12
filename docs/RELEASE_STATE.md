@@ -16,8 +16,14 @@ runs exposed a first-N widget's fixed-delay I/O race and background shuffle-fixt
 preloads reopening a deleted cache. The tests now wait for a durable routing audit
 and isolate queue-state assertions from unrelated preloading; product assertions
 and production audio code are unchanged. Failed and passing logs are retained.
-Both strict Windows suites fail all 40 comparisons; exact Linux
-visual/CI/native acceptance remains required. No comparator is changed.
+Both strict Windows suites fail all 40 comparisons. Exact source e705fb2b passed
+319 tests and all 24 priority visuals in
+[Linux run 38215906252](https://github.com/topcat432/musify-personalized/actions/runs/38215906252).
+Only the three deliberate hub-copy screenshots failed. Their reference
+before/after/diffs were individually reviewed and only import_hub_light,
+foundation_import_hub_light and foundation_import_hub_dark were adopted from
+that exact run. Strict rerun and native acceptance remain required; the comparator
+is unchanged.
 
 I11 reference source 07508cbd4eda8b33640d00195b3f52a75ebb2f8d passed exact
 [Linux CI 38212793878](https://github.com/topcat432/musify-personalized/actions/runs/38212793878).
