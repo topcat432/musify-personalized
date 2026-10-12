@@ -26,10 +26,12 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/widgets.dart';
 import 'package:hive/hive.dart';
+import 'package:http/http.dart' as http;
 import 'package:musify/main.dart' show logger;
 import 'package:musify/services/data_manager.dart';
 import 'package:musify/services/io_service.dart';
 import 'package:musify/services/lyrics_manager.dart';
+import 'package:musify/services/online_audio_source.dart';
 import 'package:musify/services/playlists_manager.dart';
 import 'package:musify/services/proxy_manager.dart';
 import 'package:musify/services/settings_manager.dart';
@@ -85,12 +87,26 @@ const Duration _manifestTimeout = Duration(seconds: 30);
 const Duration _cacheValidationDuration = Duration(hours: 1);
 
 /// Fetches a stream manifest for a song, honoring proxy settings.
-Future<StreamManifest?> _fetchStreamManifest(String songId) async {
+Future<StreamManifest?> _fetchStreamManifest(
+  String songId, {
+  bool preferMuxed = true,
+}) async {
   if (useProxy.value) {
     return ProxyManager().getSongManifest(songId).timeout(_manifestTimeout);
   }
 
-  return ytClient.videos.streams.getManifest(songId).timeout(_manifestTimeout);
+  return ytClient.videos.streams
+      .getManifest(
+        songId,
+        ytClients: [YoutubeApiClient.androidSdkless],
+        requireWatchPage: false,
+        streamForValidation: (streams) => selectPlaybackStreamForQuality(
+          StreamManifest(streams),
+          songId,
+          preferMuxed: preferMuxed,
+        ),
+      )
+      .timeout(_manifestTimeout);
 }
 
 /// Returns a cached song URL if present and still valid.
@@ -536,7 +552,7 @@ Future<AudioOnlyStreamInfo?> fetchBestAudioStream(String? songId) async {
       return null;
     }
 
-    final manifest = await _fetchStreamManifest(songId);
+    final manifest = await _fetchStreamManifest(songId, preferMuxed: false);
     final audioStream = manifest?.audioOnly;
     if (audioStream == null || audioStream.isEmpty) {
       logger.log('fetchBestAudioStream: no audio streams for $songId');
@@ -593,7 +609,9 @@ Future<String?> fetchSongStreamUrl(
     }
 
     // Get fresh URL
-    final manifest = await (manifestLoader ?? _fetchStreamManifest)(songId);
+    final manifest =
+        await (manifestLoader?.call(songId) ??
+            _fetchStreamManifest(songId, preferMuxed: preferMuxed));
     final selectedStream = manifest == null
         ? null
         : selectPlaybackStreamForQuality(
@@ -882,13 +900,47 @@ Stream<List<int>> _checkedOfflineStream(
   return controller.stream.timeout(const Duration(seconds: 30));
 }
 
-Future<OfflineAudioDownload?> _loadOfflineAudio(String id) async {
-  final manifest = await fetchBestAudioStream(id);
-  if (manifest == null) return null;
+/// Downloads the selected recording using the same compatibility policy as
+/// playback. Availability probing is not download success; the writer still
+/// requires the complete declared body before publishing an offline entry.
+Future<OfflineAudioDownload?> fetchCompatibleOfflineAudio(
+  String id, {
+  Future<StreamManifest?> Function(String)? manifestLoader,
+  http.Client Function()? clientFactory,
+}) async {
+  final manifest = await (manifestLoader?.call(id) ?? _fetchStreamManifest(id));
+  final stream = manifest == null
+      ? null
+      : selectPlaybackStreamForQuality(manifest, id, preferMuxed: true);
+  if (stream == null) return null;
+  final headers =
+      ytClient.videos.streams.requestHeadersFor(stream) ??
+      const <String, String>{};
+  if (GoogleVideoByteSource.accepts(stream.url, stream.size.totalBytes)) {
+    final source = GoogleVideoByteSource(
+      stream.url,
+      sourceLength: stream.size.totalBytes,
+      requestHeaders: headers,
+      clientFactory: clientFactory,
+    );
+    return OfflineAudioDownload(
+      _completeOfflineSource(source),
+      expectedBytes: stream.size.totalBytes,
+    );
+  }
   return OfflineAudioDownload(
-    ytClient.videos.streamsClient.get(manifest),
-    expectedBytes: manifest.size.totalBytes,
+    ytClient.videos.streamsClient.get(stream),
+    expectedBytes: stream.size.totalBytes,
   );
+}
+
+Stream<List<int>> _completeOfflineSource(GoogleVideoByteSource source) async* {
+  try {
+    final response = await source.request();
+    yield* response.stream;
+  } finally {
+    await source.cancelRequests();
+  }
 }
 
 Future<bool> makeSongOffline(
@@ -986,7 +1038,7 @@ Future<bool> _makeSongOffline(
 
     IOSink? fileStream;
     try {
-      final audio = await (audioLoader ?? _loadOfflineAudio)(ytid);
+      final audio = await (audioLoader ?? fetchCompatibleOfflineAudio)(ytid);
       if (audio == null ||
           audio.expectedBytes == null ||
           audio.expectedBytes! <= 0 ||

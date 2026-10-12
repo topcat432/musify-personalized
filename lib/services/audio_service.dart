@@ -28,6 +28,7 @@ import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:hive/hive.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:musify/main.dart';
+import 'package:musify/models/playback_source_info.dart';
 import 'package:musify/models/position_data.dart';
 import 'package:musify/services/common_services.dart';
 import 'package:musify/services/data_manager.dart';
@@ -74,6 +75,7 @@ class MusifyAudioHandler extends BaseAudioHandler {
     _initialize();
   }
 
+  final activeSource = BehaviorSubject<PlaybackSourceInfo?>.seeded(null);
   late final AndroidEqualizer _androidEqualizer;
   late final AudioPlayer audioPlayer;
   final OnlineSourceFactory _onlineSourceFactory;
@@ -1346,6 +1348,7 @@ class MusifyAudioHandler extends BaseAudioHandler {
     bool includeMediaItem = false,
     String? mediaId,
   }) {
+    activeSource.add(null);
     try {
       if (includeMediaItem && song != null) {
         var immediateMediaItem = mapToMediaItem(song);
@@ -1808,6 +1811,7 @@ class MusifyAudioHandler extends BaseAudioHandler {
 
   @override
   Future<void> stop() async {
+    activeSource.add(null);
     // Invalidate queued retries and loads so an explicit stop stays stopped.
     _songTransitionCounter++;
     final stoppedTransition = _songTransitionCounter;
@@ -2119,6 +2123,10 @@ class MusifyAudioHandler extends BaseAudioHandler {
       if (audioPlayer.duration != null) {
         _updateCurrentMediaItemWithDuration(audioPlayer.duration!);
       }
+
+      activeSource.add(
+        PlaybackSourceInfo.loaded(songUrl, isOffline: isOffline),
+      );
 
       // Finish the old session and start the new one as one atomic pair, only
       // after every abort path above is cleared. Finishing before the staleness

@@ -1,5 +1,46 @@
 # Musify Personalized current state
 
+## Playback attribution and download integration, 2026-10-12
+
+Exact cdf9ba660ec964cb6920e9460bd5af59d5b0a4f8 Linux CI 38306925264
+passes analysis, 377 tests, all 40 strict visuals and required Android boundaries.
+Normal cdf9ba66 lib/main.dart is installed on emulator-5556 and stopped after
+inspected Home/Library. APK SHA-256 is
+82ed05a63b6c424bab6b524b1a4fd7a0019f8737d7493e5179cf6aeab983dd18;
+installed hash/debug signer match. Install preserves four files byte-exact;
+independent copied-Hive reopen preserves user/settings/offline values with zero
+cache timestamp changes. Evidence: normal-cdf-observed-final-proof.json outside Git.
+
+The continuation shows ephemeral attribution only after a source loads, clearing
+it during transition/stop. YouTube delivered MP4/WebM MIME distinguishes audio
+from audio plus video; unknown formats and local files acquire no codec/bitrate/
+lossless claims. English/Spanish details explain video data cost and capabilities:
+YouTube or local files; Spotify imports are metadata, with playback unavailable.
+No nonfunctional Spotify mode is introduced.
+
+Manifest validation probes the format selected before playback rather than blindly
+probing the first offered format. Ordinary extraction stays on the existing
+ANDROID client, without watch-page prefetch or automatic identity fallback.
+Selected-format HTTP403 remains terminal. Downloads select the same compatible
+recording/format and use finite production HTTPS ranges, retaining complete-body,
+partial-file and registry checks and the existing transaction protocol. There is
+no library schema migration or new account/service/proxy/credential configuration.
+
+Local 388 tests and clean analysis pass. Selected-format denial and complete/
+truncated/denied/repeat downloads use synthetic regressions. English/Spanish source
+details pass narrow-width/large-text checks. Both unchanged Windows strict suites
+remain FAIL (16 + 24), with references unchanged. The prior native 312-second
+provider success remains one recording, not catalog-wide recovery.
+
+Three additional existing recording choices were selected outside Git, excluding
+the prior success and synthetic rows. Automatic approval review rejected the
+combined command before execution because sending video identities derived from
+private Hive data to YouTube lacked explicit approval for that payload/destination.
+No batch provider requests were made. That scoped approval is pending; approved
+code pushes and owned disposable-native acceptance continue independently.
+The original audio-only later-range HTTP403 and physical/signed release gates
+remain open. No provider batch delivery/preview/download success is claimed.
+
 ## Playback compatibility continuation, 2026-10-12
 
 Source 7242644a7dc5d67b4c9d044b57de013c0f6cc2a0 passes exact Linux CI

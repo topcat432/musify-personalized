@@ -83,7 +83,8 @@ class StreamClient {
           'Use the ytClient parameter instead passing the proper [YoutubeApiClient]s')
       bool fullManifest = false,
       List<YoutubeApiClient>? ytClients,
-      bool requireWatchPage = true}) async {
+      bool requireWatchPage = true,
+      StreamInfo? Function(List<StreamInfo>)? streamForValidation}) async {
     assert(ytClients == null || ytClients.isNotEmpty,
         'ytClients cannot be an empty list');
 
@@ -128,19 +129,27 @@ class StreamClient {
             );
           }
 
+          // Validate the format the caller intends to use before playback.
+          // This is selection before any media request, never a denial retry.
+          final probe = streamForValidation == null
+              ? streams.first
+              : streamForValidation(List.unmodifiable(streams));
+          if (probe == null || !streams.any((s) => identical(s, probe))) {
+            throw VideoUnavailableException('No eligible stream to validate.');
+          }
           // Some media servers reject HEAD while accepting playback GETs.
           // Probe one byte with the same signed URI, then cancel the body even
           // when the server ignores Range. Availability is not full playback.
           final response = await _httpClient.send(
-            http.Request('GET', streams.first.url)
+            http.Request('GET', probe.url)
               ..followRedirects = false
-              ..headers.addAll(requestHeadersFor(streams.first) ?? const {})
+              ..headers.addAll(requestHeadersFor(probe) ?? const {})
               ..headers['Range'] = 'bytes=0-0',
           );
           await response.stream.listen(null).cancel();
           if (response.statusCode == 403) {
             throw FatalFailureException(
-              'Video $videoId returned 403 (stream: ${streams.first.tag})',
+              'Video $videoId returned 403 (stream: ${probe.tag})',
               403,
             );
           }
@@ -166,7 +175,8 @@ class StreamClient {
 
     // If the user has not provided any client retry with the tv which work also in some restricted videos.
     if (uniqueStreams.isEmpty && ytClients == null) {
-      return getManifest(videoId, ytClients: [YoutubeApiClient.tv]);
+      return getManifest(videoId, ytClients: [YoutubeApiClient.tv],
+          streamForValidation: streamForValidation);
     }
     if (uniqueStreams.isEmpty) {
       if (lastException is Error && lastException.stackTrace != null) {

@@ -30,6 +30,7 @@ import 'package:musify/widgets/now_playing/bottom_actions_row.dart';
 import 'package:musify/widgets/now_playing/now_playing_artwork.dart';
 import 'package:musify/widgets/now_playing/now_playing_controls.dart';
 import 'package:musify/widgets/playback_source_error.dart';
+import 'package:musify/widgets/playback_source_status.dart';
 import 'package:musify/widgets/queue_list_view.dart';
 
 class NowPlayingPage extends StatefulWidget {
@@ -118,6 +119,9 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
               ),
             ),
             onPressed: () => Navigator.pop(context),
+          ),
+          Expanded(
+            child: PlaybackSourceStatus(stream: audioHandler.activeSource),
           ),
         ],
       ),

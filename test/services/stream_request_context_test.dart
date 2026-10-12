@@ -44,6 +44,7 @@ class _RefreshedStreamClient extends StreamClient {
     bool fullManifest = false,
     List<YoutubeApiClient>? ytClients,
     bool requireWatchPage = true,
+    StreamInfo? Function(List<StreamInfo>)? streamForValidation,
   }) async {
     refreshes++;
     return StreamManifest([stream]);
