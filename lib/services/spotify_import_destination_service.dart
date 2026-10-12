@@ -11,7 +11,13 @@ import 'package:hive/hive.dart';
 import 'package:musify/services/common_services.dart';
 import 'package:musify/services/data_manager.dart';
 import 'package:musify/services/playlists_manager.dart';
+import 'package:musify/services/spotify_import_routing_state.dart';
 import 'package:musify/utilities/playlist_utils.dart';
+
+enum SpotifyImportSelectionKind { all, firstCount, individual, newlyResolved }
+
+typedef SpotifyRoutingMetadataWriter =
+    Future<void> Function(Box<dynamic> box, Map<String, dynamic> metadata);
 
 enum SpotifyImportDestinationKind { likedSongs, newPlaylist, existingPlaylist }
 
@@ -23,6 +29,12 @@ class SpotifyImportDestinationSnapshot {
     required this.resolvedResultCount,
     required this.unresolvedCount,
     required this.customPlaylists,
+    this.resolvedRecordings = const [],
+    this.recordingIdentitiesReliable = false,
+    this.sourceRowsReliable = false,
+    this.newlyResolvedBaselineKnown = false,
+    this.newlyResolvedRecordingIds = const {},
+    this.resolutionFingerprint,
   });
 
   final String importSessionId;
@@ -31,6 +43,12 @@ class SpotifyImportDestinationSnapshot {
   final int resolvedResultCount;
   final int unresolvedCount;
   final List<Map<String, dynamic>> customPlaylists;
+  final List<Map<String, String>> resolvedRecordings;
+  final bool recordingIdentitiesReliable;
+  final bool sourceRowsReliable;
+  final bool newlyResolvedBaselineKnown;
+  final Set<String> newlyResolvedRecordingIds;
+  final String? resolutionFingerprint;
 
   int get duplicateMatchCount => resolvedResultCount - resolvedSongs.length;
 }
@@ -41,8 +59,10 @@ class SpotifyImportRoutePreview {
     required this.newCount,
     required this.alreadyPresentCount,
     required this.unresolvedCount,
+    this.selectedSongs = const [],
   });
 
+  final List<Map<String, dynamic>> selectedSongs;
   final int selectedCount;
   final int newCount;
   final int alreadyPresentCount;
@@ -55,8 +75,10 @@ class SpotifyImportRouteResult {
     required this.selectedCount,
     required this.addedCount,
     required this.alreadyPresentCount,
+    this.trackingRecorded = true,
   });
 
+  final bool trackingRecorded;
   final String destinationTitle;
   final int selectedCount;
   final int addedCount;
@@ -64,24 +86,43 @@ class SpotifyImportRouteResult {
 }
 
 class SpotifyImportDestinationService {
-  const SpotifyImportDestinationService();
+  const SpotifyImportDestinationService({this.metadataWriter});
+  final SpotifyRoutingMetadataWriter? metadataWriter;
+  static bool _routingActive = false;
 
   Future<SpotifyImportDestinationSnapshot> loadSnapshot() async {
     final box = Hive.box('user');
-    final results = _readMaps(box.get('spotifyMatchResults'))
-      ..sort((left, right) => _sourceRow(left).compareTo(_sourceRow(right)));
+    final results = _readMaps(box.get('spotifyMatchResults'));
+    final storedIdentities = resolvedImportRecordings(results);
+    // Preserve stored order when historical source-row positions are incomplete.
+    if (storedIdentities.reliable) {
+      results.sort(
+        (left, right) => _sourceRow(left).compareTo(_sourceRow(right)),
+      );
+    }
     final tracks = _readMaps(box.get('spotifyImportTracks'));
     final metadata = _readMap(box.get('spotifyImportMetadata'));
     final resolved = results.where(_isResolved).toList(growable: false);
     final songs = _uniqueSongs(resolved);
-    final customPlaylists = getUserCustomPlaylists()
-        .map(Map<String, dynamic>.from)
-        .toList(growable: false)
-      ..sort(
-        (left, right) => (left['title']?.toString() ?? '').toLowerCase().compareTo(
-          (right['title']?.toString() ?? '').toLowerCase(),
-        ),
-      );
+    final identities = resolvedImportRecordings(results);
+    final identityReliable =
+        identities.reliable && hasStableImportSessionIdentity(metadata);
+    final baseline = readImportRoutingBaseline(metadata, _sessionId(metadata));
+    final newlyResolved = baseline != null && identityReliable
+        ? identities.rows
+              .where((row) => !baseline.contains(importRecordingIdentity(row)))
+              .map((row) => row['recordingId']!)
+              .toSet()
+        : <String>{};
+    final customPlaylists =
+        getUserCustomPlaylists()
+            .map(Map<String, dynamic>.from)
+            .toList(growable: false)
+          ..sort(
+            (left, right) => (left['title']?.toString() ?? '')
+                .toLowerCase()
+                .compareTo((right['title']?.toString() ?? '').toLowerCase()),
+          );
     final unresolvedCount = countUnresolvedTracks(tracks, results);
 
     return SpotifyImportDestinationSnapshot(
@@ -91,6 +132,12 @@ class SpotifyImportDestinationService {
       resolvedResultCount: resolved.length,
       unresolvedCount: unresolvedCount,
       customPlaylists: List.unmodifiable(customPlaylists),
+      resolvedRecordings: identities.rows,
+      recordingIdentitiesReliable: identityReliable,
+      sourceRowsReliable: identities.reliable,
+      newlyResolvedBaselineKnown: baseline != null && identityReliable,
+      newlyResolvedRecordingIds: Set.unmodifiable(newlyResolved),
+      resolutionFingerprint: identities.fingerprint,
     );
   }
 
@@ -100,8 +147,16 @@ class SpotifyImportDestinationService {
     required SpotifyImportDestinationKind destinationKind,
     String? newPlaylistName,
     String? existingPlaylistId,
+    SpotifyImportSelectionKind selectionKind =
+        SpotifyImportSelectionKind.firstCount,
+    Set<String> selectedRecordingIds = const {},
   }) {
-    final selected = selectSongs(snapshot, requestedCount);
+    final selected = selectSongs(
+      snapshot,
+      requestedCount,
+      selectionKind: selectionKind,
+      selectedRecordingIds: selectedRecordingIds,
+    );
     final existingIds = _destinationSongIds(
       destinationKind,
       snapshot: snapshot,
@@ -116,18 +171,49 @@ class SpotifyImportDestinationService {
       newCount: selected.length - alreadyPresent,
       alreadyPresentCount: alreadyPresent,
       unresolvedCount: snapshot.unresolvedCount,
+      selectedSongs: List.unmodifiable(selected),
     );
   }
 
   List<Map<String, dynamic>> selectSongs(
     SpotifyImportDestinationSnapshot snapshot,
-    int requestedCount,
-  ) {
-    final count = requestedCount.clamp(0, snapshot.resolvedSongs.length);
-    return snapshot.resolvedSongs
-        .take(count)
-        .map(Map<String, dynamic>.from)
-        .toList(growable: false);
+    int requestedCount, {
+    SpotifyImportSelectionKind selectionKind =
+        SpotifyImportSelectionKind.firstCount,
+    Set<String> selectedRecordingIds = const {},
+  }) {
+    Iterable<Map<String, dynamic>> selected;
+    switch (selectionKind) {
+      case SpotifyImportSelectionKind.all:
+        selected = snapshot.resolvedSongs;
+      case SpotifyImportSelectionKind.firstCount:
+        selected = snapshot.resolvedSongs.take(
+          requestedCount.clamp(0, snapshot.resolvedSongs.length),
+        );
+      case SpotifyImportSelectionKind.individual:
+        final available = _songIds(snapshot.resolvedSongs);
+        if (selectedRecordingIds.difference(available).isNotEmpty) {
+          throw StateError(
+            'The selected recordings changed. Reload the import before transferring.',
+          );
+        }
+        selected = snapshot.resolvedSongs.where(
+          (song) =>
+              selectedRecordingIds.contains(song['ytid']?.toString().trim()),
+        );
+      case SpotifyImportSelectionKind.newlyResolved:
+        if (!snapshot.newlyResolvedBaselineKnown) {
+          throw StateError(
+            'Newly resolved tracking is unavailable for this import. Choose songs explicitly.',
+          );
+        }
+        selected = snapshot.resolvedSongs.where(
+          (song) => snapshot.newlyResolvedRecordingIds.contains(
+            song['ytid']?.toString().trim(),
+          ),
+        );
+    }
+    return selected.map(Map<String, dynamic>.from).toList(growable: false);
   }
 
   static int countUnresolvedTracks(
@@ -151,10 +237,7 @@ class SpotifyImportDestinationService {
   }
 
   static String _sessionId(Map<String, dynamic> metadata) =>
-      metadata['importSessionId']?.toString() ??
-      metadata['importedAt']?.toString() ??
-      metadata['fileName']?.toString() ??
-      '';
+      importSessionIdentity(metadata);
 
   Future<SpotifyImportRouteResult> route({
     required SpotifyImportDestinationSnapshot snapshot,
@@ -162,20 +245,143 @@ class SpotifyImportDestinationService {
     required SpotifyImportDestinationKind destinationKind,
     String? newPlaylistName,
     String? existingPlaylistId,
+    SpotifyImportSelectionKind selectionKind =
+        SpotifyImportSelectionKind.firstCount,
+    Set<String> selectedRecordingIds = const {},
+  }) async {
+    if (_routingActive)
+      throw StateError(
+        'Another transfer is already running. Wait for it to finish.',
+      );
+    _routingActive = true;
+    try {
+      return await _routeLocked(
+        snapshot: snapshot,
+        requestedCount: requestedCount,
+        destinationKind: destinationKind,
+        newPlaylistName: newPlaylistName,
+        existingPlaylistId: existingPlaylistId,
+        selectionKind: selectionKind,
+        selectedRecordingIds: Set.unmodifiable(selectedRecordingIds),
+      );
+    } finally {
+      _routingActive = false;
+    }
+  }
+
+  Future<SpotifyImportRouteResult> _routeLocked({
+    required SpotifyImportDestinationSnapshot snapshot,
+    required int requestedCount,
+    required SpotifyImportDestinationKind destinationKind,
+    String? newPlaylistName,
+    String? existingPlaylistId,
+    SpotifyImportSelectionKind selectionKind =
+        SpotifyImportSelectionKind.firstCount,
+    Set<String> selectedRecordingIds = const {},
   }) async {
     _validateCurrentSnapshot(snapshot);
-    final selected = selectSongs(snapshot, requestedCount);
+    final confirmedSnapshot = await loadSnapshot();
+    if (confirmedSnapshot.importSessionId != snapshot.importSessionId ||
+        snapshot.resolvedSongs
+                .map((song) => song['ytid']?.toString().trim())
+                .join('\u0000') !=
+            confirmedSnapshot.resolvedSongs
+                .map((song) => song['ytid']?.toString().trim())
+                .join('\u0000')) {
+      throw StateError(
+        'The resolved recordings changed. Reload the import before transferring.',
+      );
+    }
+    _validateCurrentSnapshot(confirmedSnapshot);
+    if (selectionKind == SpotifyImportSelectionKind.newlyResolved &&
+        (!snapshot.newlyResolvedBaselineKnown ||
+            !confirmedSnapshot.newlyResolvedBaselineKnown ||
+            snapshot.newlyResolvedRecordingIds
+                .difference(confirmedSnapshot.newlyResolvedRecordingIds)
+                .isNotEmpty ||
+            confirmedSnapshot.newlyResolvedRecordingIds
+                .difference(snapshot.newlyResolvedRecordingIds)
+                .isNotEmpty)) {
+      throw StateError(
+        'Newly resolved tracking changed. Reload and review the transfer again.',
+      );
+    }
+    final selected = selectSongs(
+      confirmedSnapshot,
+      requestedCount,
+      selectionKind: selectionKind,
+      selectedRecordingIds: Set.unmodifiable(selectedRecordingIds),
+    );
     if (selected.isEmpty) {
       throw StateError('Choose at least one resolved song.');
     }
 
+    if (destinationKind == SpotifyImportDestinationKind.existingPlaylist) {
+      final id = existingPlaylistId?.trim() ?? '';
+      if (id.isEmpty ||
+          !getUserCustomPlaylists().any(
+            (playlist) => playlist['ytid']?.toString() == id,
+          )) {
+        throw StateError('The selected playlist no longer exists.');
+      }
+    }
+    final operationId = DateTime.now().microsecondsSinceEpoch.toString();
+    final box = Hive.box('user');
+    final pending = <String, dynamic>{
+      'version': importRoutingStateVersion,
+      'operationId': operationId,
+      'importSessionId': snapshot.importSessionId,
+      'selectionKind': selectionKind.name,
+      'selectedRecordingIds': selected
+          .map((song) => song['ytid']?.toString().trim())
+          .toList(),
+      'confirmedResolvedRecordings': confirmedSnapshot.resolvedRecordings
+          .map(Map<String, String>.from)
+          .toList(),
+      'confirmedAt': DateTime.now().toUtc().toIso8601String(),
+    };
+    final metadata = _readMap(box.get('spotifyImportMetadata'));
+    if (metadata.containsKey(importRoutingPendingKey)) {
+      final prior = copyImportRoutingValue(metadata[importRoutingPendingKey]);
+      final unknown = _readMaps(metadata[importRoutingUnverifiedHistoryKey]);
+      final priorId = prior is Map ? prior['operationId'] : null;
+      if (priorId == null ||
+          !unknown.any(
+            (entry) =>
+                entry['attempt'] is Map &&
+                (entry['attempt'] as Map)['operationId'] == priorId,
+          )) {
+        unknown.add({
+          'status': 'unverified',
+          'attempt': prior,
+          'observedAt': DateTime.now().toUtc().toIso8601String(),
+        });
+      }
+      metadata[importRoutingUnverifiedHistoryKey] = unknown;
+    }
+    metadata[importRoutingPendingKey] = pending;
+    // Durable uncertainty marker precedes any destination write. If final audit
+    // fails or the process stops, legacy/newly-resolved state is never guessed.
+    await _writeRoutingMetadata(box, metadata);
+    try {
+      _validateCurrentSnapshot(confirmedSnapshot);
+    } catch (_) {
+      final current = _readMap(box.get('spotifyImportMetadata'));
+      if (_sessionId(current) == snapshot.importSessionId &&
+          (current[importRoutingPendingKey] as Map?)?['operationId'] ==
+              operationId) {
+        current.remove(importRoutingPendingKey);
+        await _writeRoutingMetadata(box, current);
+      }
+      rethrow;
+    }
     final result = switch (destinationKind) {
       SpotifyImportDestinationKind.likedSongs => await _routeToLiked(selected),
       SpotifyImportDestinationKind.newPlaylist => await _routeToNewPlaylist(
-          selected,
-          name: newPlaylistName,
-          fallbackName: snapshot.sourceName,
-        ),
+        selected,
+        name: newPlaylistName,
+        fallbackName: snapshot.sourceName,
+      ),
       SpotifyImportDestinationKind.existingPlaylist =>
         await _routeToExistingPlaylist(
           selected,
@@ -183,14 +389,51 @@ class SpotifyImportDestinationService {
         ),
     };
     try {
-      await _recordRouting(snapshot.sourceName, destinationKind, result);
+      await _recordRouting(
+        confirmedSnapshot,
+        destinationKind,
+        result,
+        selectionKind,
+        selected,
+        operationId,
+      );
     } catch (_) {
-      // The library mutation is already durable. Routing history is helpful
-      // audit metadata, but its failure must not turn a completed transfer
-      // into a reported failure or invite a duplicate retry.
+      // The destination is already durable. Retain/restore the uncertainty
+      // marker rather than reporting failure and inviting a duplicate retry.
+      final current = _readMap(box.get('spotifyImportMetadata'));
+      if (_sessionId(current) == snapshot.importSessionId) {
+        current[importRoutingPendingKey] = pending;
+        try {
+          await _writeRoutingMetadata(box, current);
+        } catch (_) {}
+      }
+      return SpotifyImportRouteResult(
+        destinationTitle: result.destinationTitle,
+        selectedCount: result.selectedCount,
+        addedCount: result.addedCount,
+        alreadyPresentCount: result.alreadyPresentCount,
+        trackingRecorded: false,
+      );
+    }
+    if (!confirmedSnapshot.recordingIdentitiesReliable) {
+      return SpotifyImportRouteResult(
+        destinationTitle: result.destinationTitle,
+        selectedCount: result.selectedCount,
+        addedCount: result.addedCount,
+        alreadyPresentCount: result.alreadyPresentCount,
+        trackingRecorded: false,
+      );
     }
     return result;
   }
+
+  Future<void> _writeRoutingMetadata(
+    Box<dynamic> box,
+    Map<String, dynamic> metadata,
+  ) =>
+      (metadataWriter ??
+      (target, values) =>
+          target.put('spotifyImportMetadata', values))(box, metadata);
 
   void _validateCurrentSnapshot(SpotifyImportDestinationSnapshot snapshot) {
     final currentSessionId = _sessionId(
@@ -200,6 +443,15 @@ class SpotifyImportDestinationService {
         snapshot.importSessionId != currentSessionId) {
       throw StateError(
         'This destination view belongs to an older import. Reload it before transferring songs.',
+      );
+    }
+    if (snapshot.resolutionFingerprint != null &&
+        snapshot.resolutionFingerprint !=
+            resolvedImportRecordings(
+              _readMaps(Hive.box('user').get('spotifyMatchResults')),
+            ).fingerprint) {
+      throw StateError(
+        'The resolved recordings changed. Reload the import before transferring.',
       );
     }
   }
@@ -358,28 +610,50 @@ class SpotifyImportDestinationService {
   }
 
   Future<void> _recordRouting(
-    String sourceName,
+    SpotifyImportDestinationSnapshot snapshot,
     SpotifyImportDestinationKind kind,
     SpotifyImportRouteResult result,
+    SpotifyImportSelectionKind selectionKind,
+    List<Map<String, dynamic>> selected,
+    String operationId,
   ) async {
     final box = Hive.box('user');
     final metadata = _readMap(box.get('spotifyImportMetadata'));
+    final pending = metadata[importRoutingPendingKey];
+    if (_sessionId(metadata) != snapshot.importSessionId ||
+        pending is! Map ||
+        pending['operationId'] != operationId) {
+      throw StateError('The transfer tracking checkpoint changed.');
+    }
+    final at = DateTime.now().toUtc().toIso8601String();
     final history = _readMaps(metadata['routingHistory'])
       ..add({
-        'sourceName': sourceName,
+        'sourceName': snapshot.sourceName,
         'destinationKind': kind.name,
         'destinationTitle': result.destinationTitle,
         'selectedCount': result.selectedCount,
         'addedCount': result.addedCount,
         'alreadyPresentCount': result.alreadyPresentCount,
-        'routedAt': DateTime.now().toUtc().toIso8601String(),
+        'routedAt': at,
+        'selectionKind': selectionKind.name,
+        'selectedRecordingIds': selected
+            .map((song) => song['ytid']?.toString().trim())
+            .toList(),
+        'resolvedRecordings': snapshot.resolvedRecordings
+            .map(Map<String, String>.from)
+            .toList(),
+        'resolutionSnapshotVersion': importRoutingStateVersion,
       });
     metadata['routingHistory'] = history;
-    await addOrUpdateData<Map<String, dynamic>>(
-      'user',
-      'spotifyImportMetadata',
-      metadata,
+    metadata[importRoutingBaselineKey] = importRoutingBaseline(
+      sessionId: snapshot.importSessionId,
+      rows: snapshot.resolvedRecordings,
+      recordedAt: pending['confirmedAt']?.toString() ?? at,
+      reliable: snapshot.recordingIdentitiesReliable,
+      reason: 'confirmed_transfer',
     );
+    metadata.remove(importRoutingPendingKey);
+    await _writeRoutingMetadata(box, metadata);
   }
 
   static List<Map<String, dynamic>> _uniqueSongs(
@@ -429,9 +703,8 @@ class SpotifyImportDestinationService {
     return value.replaceFirst(RegExp(r'\.[^.]+$'), '').trim();
   }
 
-  static Map<String, dynamic> _readMap(dynamic value) => value is Map
-      ? Map<String, dynamic>.from(value)
-      : <String, dynamic>{};
+  static Map<String, dynamic> _readMap(dynamic value) =>
+      value is Map ? Map<String, dynamic>.from(value) : <String, dynamic>{};
 
   static List<Map<String, dynamic>> _readMaps(dynamic value) {
     if (value is! List) return <Map<String, dynamic>>[];

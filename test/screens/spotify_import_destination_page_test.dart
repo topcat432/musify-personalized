@@ -6,6 +6,7 @@ import 'package:hive/hive.dart';
 import 'package:musify/screens/spotify_import_destination_page.dart';
 import 'package:musify/services/spotify_import_destination_service.dart';
 import 'package:musify/services/common_services.dart';
+import 'package:musify/services/spotify_import_routing_state.dart';
 
 import '../../tool/visual_review_harness.dart';
 
@@ -54,6 +55,185 @@ void main() {
     await root.delete(recursive: true);
   });
 
+  Future<void> openPage(WidgetTester tester) async {
+    await tester.runAsync(() async {
+      snapshot = await const SpotifyImportDestinationService().loadSnapshot();
+    });
+    await tester.pumpWidget(
+      priorityReviewApp(
+        child: SpotifyImportDestinationPage(initialSnapshot: snapshot),
+        brightness: Brightness.light,
+      ),
+    );
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> choose(WidgetTester tester, String label) async {
+    await tester.scrollUntilVisible(
+      find.text(label),
+      250,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await Scrollable.ensureVisible(
+      tester.element(find.text(label)),
+      alignment: 0.35,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(label));
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> review(WidgetTester tester) async {
+    await tester.runAsync(() async {
+      await tester.tap(find.text('Review'));
+    });
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> transfer(WidgetTester tester) async {
+    await tester.runAsync(() async {
+      await tester.tap(find.text('Transfer songs'));
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      await Hive.box('user').flush();
+    });
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets(
+    'individual selection previews source order, cancels and repeats safely',
+    (tester) async {
+      final rows = List<Map>.from(Hive.box('user').get('spotifyMatchResults'));
+      rows[1] = Map.from(rows[1])
+        ..['bestCandidate'] = {
+          'ytid': 'chosen-alternative',
+          'title': 'Selected alternative',
+          'artist': 'Fixture artist',
+        };
+      await tester.runAsync(() async {
+        await Hive.box(
+          'user',
+        ).put('spotifyMatchResults', [rows[2], rows[0], rows[1]]);
+      });
+      await openPage(tester);
+      await choose(tester, 'Choose individual songs');
+      for (final id in ['fixture-3', 'chosen-alternative']) {
+        final tile = find.byKey(ValueKey('import-recording-$id'));
+        await Scrollable.ensureVisible(tester.element(tile), alignment: 0.5);
+        await tester.pumpAndSettle();
+        await tester.tap(tile);
+        await tester.pumpAndSettle();
+      }
+      await review(tester);
+      final dialog = tester.widget<SpotifyImportConfirmationDialog>(
+        find.byType(SpotifyImportConfirmationDialog),
+      );
+      expect(dialog.preview.selectedSongs.map((song) => song['ytid']), [
+        'chosen-alternative',
+        'fixture-3',
+      ]);
+      await tester.tap(find.text('Not yet'));
+      await tester.pumpAndSettle();
+      expect(userLikedSongsList.value, isEmpty);
+      expect(
+        Hive.box('user').get('spotifyImportMetadata')['routingHistory'],
+        isNull,
+      );
+      await review(tester);
+      await transfer(tester);
+      expect(userLikedSongsList.value.map((song) => song['ytid']), [
+        'chosen-alternative',
+        'fixture-3',
+      ]);
+      await review(tester);
+      final repeated = tester.widget<SpotifyImportConfirmationDialog>(
+        find.byType(SpotifyImportConfirmationDialog),
+      );
+      expect(repeated.preview.alreadyPresentCount, 2);
+      expect(repeated.preview.newCount, 0);
+      await transfer(tester);
+      expect(userLikedSongsList.value, hasLength(2));
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+
+  testWidgets('legacy newly resolved is disabled and leaves all mode usable', (
+    tester,
+  ) async {
+    await openPage(tester);
+    await choose(tester, 'Only newly resolved songs');
+    expect(find.text('Previous tracking is unknown'), findsOneWidget);
+    await review(tester);
+    expect(
+      tester
+          .widget<SpotifyImportConfirmationDialog>(
+            find.byType(SpotifyImportConfirmationDialog),
+          )
+          .preview
+          .selectedCount,
+      3,
+    );
+    await tester.tap(find.text('Not yet'));
+    await tester.pumpAndSettle();
+    expect(
+      Hive.box('user').get('spotifyImportMetadata')[importRoutingBaselineKey],
+      isNull,
+    );
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets(
+    'newly resolved includes changed unselected row and becomes empty after transfer',
+    (tester) async {
+      await tester.runAsync(() async {
+        await const SpotifyImportDestinationService().route(
+          snapshot: await const SpotifyImportDestinationService()
+              .loadSnapshot(),
+          requestedCount: 1,
+          destinationKind: SpotifyImportDestinationKind.likedSongs,
+        );
+        final rows = List<Map>.from(
+          Hive.box('user').get('spotifyMatchResults'),
+        );
+        rows[1] = Map.from(rows[1])
+          ..['bestCandidate'] = {
+            'ytid': 'new-alternative',
+            'title': 'New alternative',
+          };
+        await Hive.box('user').put('spotifyMatchResults', rows);
+      });
+      await openPage(tester);
+      await choose(tester, 'Only newly resolved songs');
+      await review(tester);
+      expect(
+        tester
+            .widget<SpotifyImportConfirmationDialog>(
+              find.byType(SpotifyImportConfirmationDialog),
+            )
+            .preview
+            .selectedSongs
+            .single['ytid'],
+        'new-alternative',
+      );
+      await transfer(tester);
+      expect(userLikedSongsList.value.map((song) => song['ytid']), [
+        'new-alternative',
+        'fixture-1',
+      ]);
+      await review(tester);
+      expect(find.byType(SpotifyImportConfirmationDialog), findsNothing);
+      await tester.scrollUntilVisible(
+        find.text('Choose at least one resolved song.'),
+        -300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(find.text('Choose at least one resolved song.'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+
   testWidgets(
     'first-N stays selected after transfer and a repeat remains idempotent',
     (tester) async {
@@ -76,7 +256,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.runAsync(() async {
         await tester.tap(find.text('Transfer songs'));
-        await Future<void>.delayed(const Duration(milliseconds: 20));
+        await Future<void>.delayed(const Duration(milliseconds: 300));
         await Hive.box('user').flush();
       });
       await tester.pumpAndSettle();
@@ -99,7 +279,7 @@ void main() {
       expect(dialog.preview.alreadyPresentCount, 1);
       await tester.runAsync(() async {
         await tester.tap(find.text('Transfer songs'));
-        await Future<void>.delayed(const Duration(milliseconds: 20));
+        await Future<void>.delayed(const Duration(milliseconds: 300));
         await Hive.box('user').flush();
       });
       await tester.pumpAndSettle();

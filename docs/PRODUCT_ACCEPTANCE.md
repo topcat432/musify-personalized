@@ -1,5 +1,23 @@
 # Product acceptance ledger
 
+## Owner-approved subset selectors, 2026-10-12
+
+I11 is approved for the current version, superseding the historical delivery-scope
+hold. Individual and newly resolved modes now preserve selected alternatives,
+source order and all/first-N modes. The last successful transfer records the
+identities of all resolved rows, separately from selected/routed IDs; changed
+alternatives on previously unselected rows therefore enter the next delta.
+Unchanged previously resolved rows do not. Legacy count-only history remains
+unknown, and an interrupted transfer cannot masquerade as a verified snapshot.
+
+Four actual selector widget checks and 14 Hive feature checks pass, including
+legacy/partial state, repeats, cancellation, stale snapshots, overlapping writes,
+audit failure, restart and verified backup round trip. Full analysis is clean;
+311 aggregate tests pass. Both strict Windows visual suites fail, with intentional
+destination changes reviewed in before/after/diff images. Goldens/comparator are
+unchanged. Exact-source Linux visual/CI and native checks remain required; this
+is not phone, provider playback, merge or delivery acceptance.
+
 ## Normal Search categories and owned background checkpoint, 2026-10-12
 
 Normal Search now displays provider-typed songs under Songs / YouTube Music
@@ -371,7 +389,7 @@ No current live-phone or production-signer rehearsal is represented by these APK
 | I08 | Exclude → exact confirmation → repeated review/restart | Preserve source row/audit; drain all review/rescue/totals/destinations; retain existing likes | A PASS explicit exclusion/source/audit/backup/reopen; E PASS all four source rows and excluded outcome survive reboot; D/R HOLD | spotify_import_persistence_test; review/backup tests; closure-after-reboot-inventory.json |
 | I09 | Choose Destination all/first-N → liked/existing/new → preview/confirm | Correct counts/source order/dedupe; success after durable write; partial unresolved stays staged | A PASS all/first-N to liked/new/existing with source order; E PASS a3 first-one amount retained after confirm/refresh; earlier 5da expansion FAIL repaired; D/R HOLD | spotify_import_destination_page_test; spotify_import_persistence_test; private-ui/closure-a3-first-confirmed and closure-a3-first-repeat-review |
 | I10 | Retry routing / stale session / empty selection / restart | Idempotent; no uncontrolled duplicates/deletion; reject stale/empty safely; destination history retained | A PASS empty/stale target rejection and reopened idempotence; E PASS a3 repeat still 0 new/1 existing and no duplicate library change; D/R HOLD | spotify_import_persistence_test; private-ui/closure-a3-first-repeat-review; closure inventory proof |
-| I11 | Individually selected/newly resolved subsets | Determine whether current delivery promise or later roadmap; do not invent completion | CODE absent; A/E BLOCKED owner delivery-scope decision, not a shipped subset-selection feature; D/R HOLD | import roadmap §4; current selectSongs(first-N) |
+| I11 | Individually selected/newly resolved subsets | Current version approved; preserve chosen recordings/order and honestly unknown legacy tracking | CODE implemented; 18 targeted checks PASS; full exact-source/native verification pending; D/R HOLD | import roadmap §4; spotify_import_selection_test.dart; spotify_import_destination_page_test.dart |
 | L01 | Library → favorites / playlists / folders / pinned / artists | Membership/counts/order/filter persist; no silently missing real content | A PASS folder filtering/liked models; E PASS generated folder/member/pin plus original membership across full reboot; D/R HOLD | library_page; playlists_manager |
 | L02 | New/edit/rename/delete playlist/folder, cancel, repeat | Changes only disposable data; cancellation safe; duplicate/empty validation; restart persists | A PASS nested-navigation Cancel/Delete and child retention/reopen; E PASS create/rename/move/pin/unpin/validation/delete Cancel; E PASS repaired folder Delete returns to Library on exact 58f1edbb APK; D/R HOLD | playlist_folder_page_test; closure-folder-navigation-before/after.log; private-ui/closure CRUD captures |
 | L03 | Playlist unavailable/empty/loading → Back | Readable error/empty state, no RenderBox/Sliver exception or stranded navigation | A PASS unavailable/empty widget regressions; E PASS generated empty-folder entry/Back; provider unavailable state represented by local source-error fixture; D/R HOLD | playlist_page; EmptyPlaylistState |

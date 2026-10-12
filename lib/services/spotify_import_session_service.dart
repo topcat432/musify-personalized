@@ -9,11 +9,10 @@
 
 import 'package:hive/hive.dart';
 import 'package:musify/services/spotify_csv_importer.dart';
+import 'package:musify/services/spotify_import_routing_state.dart';
 
-typedef SpotifyImportSessionWriter = Future<void> Function(
-  Box<dynamic> box,
-  Map<String, dynamic> values,
-);
+typedef SpotifyImportSessionWriter =
+    Future<void> Function(Box<dynamic> box, Map<String, dynamic> values);
 
 class SpotifyImportSessionService {
   const SpotifyImportSessionService({this.sessionWriter});
@@ -50,6 +49,13 @@ class SpotifyImportSessionService {
         'totalDataRows': preview.totalDataRows,
         'importedAt': savedAt.toIso8601String(),
         'importSessionId': savedAt.microsecondsSinceEpoch.toString(),
+        importRoutingBaselineKey: importRoutingBaseline(
+          sessionId: savedAt.microsecondsSinceEpoch.toString(),
+          rows: const [],
+          recordedAt: savedAt.toIso8601String(),
+          reliable: true,
+          reason: 'import_start',
+        ),
         'matchingStatus': 'not_started',
         'nextTrackIndex': 0,
       },

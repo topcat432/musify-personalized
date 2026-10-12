@@ -11,6 +11,7 @@ import 'dart:async';
 
 import 'package:hive/hive.dart';
 import 'package:musify/services/common_services.dart';
+import 'package:musify/services/spotify_import_routing_state.dart';
 import 'package:musify/services/spotify_match_scoring.dart';
 import 'package:youtube_music_explode_dart/youtube_music_explode_dart.dart';
 
@@ -680,6 +681,10 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
             expectedSessionId) {
       return false;
     }
+    preserveCurrentImportRoutingState(
+      metadata,
+      _readMap(box.get('spotifyImportMetadata')),
+    );
     metadata
       ..['matchedCount'] = results.where(_isMatched).length
       ..['reviewCount'] = results.where((item) => item['status'] == 'needs_review').length

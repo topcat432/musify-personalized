@@ -1,5 +1,32 @@
 # Musify Personalized current state
 
+## Import subset routing verification, 2026-10-12
+
+The owner approved I11 individual and newly resolved selectors for the current
+version. The candidate preserves all/first-N modes, chosen alternate recordings,
+source order, existing destination contents and staged import decisions. Newly
+resolved compares source-row/recording identities against every resolved row at
+the last successful confirmed transfer, including rows not selected then.
+Legacy count-only audits and interrupted/unverified writes remain unknown;
+explicit selection is available to establish a real baseline.
+
+The additive versioned metadata is confined to existing import metadata maps;
+there is no Hive adapter/schema migration or live-data operation. A pending
+marker precedes destination writes, final tracking failure reports saved music
+with unknown tracking, and matching/review checkpoints preserve newer routing
+state. All 14 Hive-backed feature tests and four actual destination-page tests
+pass; full analysis is clean and all 311 aggregate tests pass. Both unchanged
+strict Windows visual suites fail. Deliberate destination changes were inspected
+in before/after/diff images; reference Linux visual verification and exact-source
+CI/native acceptance remain required. No golden or comparator was changed.
+
+The takeover preserved all seven inherited dirty files at 251f5c43. The ignored
+D05 native scratch source was preserved outside Git in the existing private
+acceptance evidence directory so full analysis does not scan that rehearsal.
+Protected master remains a7863235 and PR #23 remains draft. Provider completion,
+physical acceptance and signed delivery remain held; no new provider request,
+phone action, merge, signing or publication is authorized by these checks.
+
 ## Normal Search categories and owned background checkpoint, 2026-10-12
 
 Normal Search now displays provider-typed songs under Songs / YouTube Music
