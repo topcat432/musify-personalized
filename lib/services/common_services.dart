@@ -556,6 +556,12 @@ Future<AudioOnlyStreamInfo?> fetchBestAudioStream(String? songId) async {
   }
 }
 
+/// Keeps playback cache publication and invalidation in the resolver's mode.
+String songStreamUrlCacheKey(String songId, {bool preferMuxed = true}) =>
+    preferMuxed
+    ? 'song_${songId}_muxed_${audioQualitySetting.value}_url'
+    : 'song_${songId}_${audioQualitySetting.value}_url';
+
 /// Resolves a playable stream URL for the selected video.
 /// Prefer a supported muxed format before playback; audio-only remains available
 /// when the manifest has no compatible muxed format. Never switch on a denial.
@@ -578,9 +584,7 @@ Future<String?> fetchSongStreamUrl(
     }
 
     const _cacheDuration = Duration(hours: 3);
-    final cacheKey = preferMuxed
-        ? 'song_${songId}_muxed_${audioQualitySetting.value}_url'
-        : 'song_${songId}_${audioQualitySetting.value}_url';
+    final cacheKey = songStreamUrlCacheKey(songId, preferMuxed: preferMuxed);
 
     // Try to get from cache
     final cachedUrl = await _getCachedSongUrl(cacheKey, _cacheDuration);

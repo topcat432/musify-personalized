@@ -129,20 +129,23 @@ class MusifyAudioHandler extends BaseAudioHandler {
 
   late final Stream<PositionData> _positionDataStream =
       Rx.combineLatest3<Duration, Duration, Duration?, PositionData>(
-        audioPlayer.positionStream,
-        audioPlayer.bufferedPositionStream,
-        audioPlayer.durationStream,
-        (position, bufferedPosition, duration) => PositionData(
-          position,
-          bufferedPosition,
-          duration ?? mediaItem.valueOrNull?.duration ?? Duration.zero,
-        ),
-      ).distinct((prev, curr) {
-        return (prev.position - curr.position).abs() < _positionDataThreshold &&
-            prev.duration == curr.duration &&
-            (prev.bufferedPosition - curr.bufferedPosition).abs() <
-                _positionDataThreshold;
-      }).shareReplay(maxSize: 1);
+            audioPlayer.positionStream,
+            audioPlayer.bufferedPositionStream,
+            audioPlayer.durationStream,
+            (position, bufferedPosition, duration) => PositionData(
+              position,
+              bufferedPosition,
+              duration ?? mediaItem.valueOrNull?.duration ?? Duration.zero,
+            ),
+          )
+          .distinct((prev, curr) {
+            return (prev.position - curr.position).abs() <
+                    _positionDataThreshold &&
+                prev.duration == curr.duration &&
+                (prev.bufferedPosition - curr.bufferedPosition).abs() <
+                    _positionDataThreshold;
+          })
+          .shareReplay(maxSize: 1);
 
   Stream<PositionData> get positionDataStream => _positionDataStream;
 
@@ -764,7 +767,9 @@ class MusifyAudioHandler extends BaseAudioHandler {
       logger.log(
         'Native playback source failed',
         error: {
-          'originator': fromBoundedTransport ? 'boundedTransport' : 'nativePlayer',
+          'originator': fromBoundedTransport
+              ? 'boundedTransport'
+              : 'nativePlayer',
           'nativeCode': fromBoundedTransport ? null : error.code,
           'origin': failedSource is GoogleVideoByteSource
               ? failedSource.failure?.diagnostic
@@ -2141,8 +2146,7 @@ class MusifyAudioHandler extends BaseAudioHandler {
       unawaited(updateRecentlyPlayed(song['ytid'], songFallback: song));
 
       if (!isOffline) {
-        final cacheKey =
-            'song_${song['ytid']}_${audioQualitySetting.value}_url';
+        final cacheKey = songStreamUrlCacheKey(song['ytid'].toString());
         unawaited(addOrUpdateData<String>('cache', cacheKey, songUrl));
       }
 
@@ -2193,7 +2197,7 @@ class MusifyAudioHandler extends BaseAudioHandler {
         }
         final songId = song['ytid']?.toString();
         if (songId != null && songId.isNotEmpty) {
-          final cacheKey = 'song_${songId}_${audioQualitySetting.value}_url';
+          final cacheKey = songStreamUrlCacheKey(songId);
           await deleteData('cache', cacheKey);
 
           final refreshedUrl = await fetchSongStreamUrl(

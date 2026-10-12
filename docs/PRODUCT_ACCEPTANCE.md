@@ -33,7 +33,7 @@ Installation preserved four normal files byte-exact; inspected fresh Home/Librar
 pixels and independent copied-Hive reopen preserve user/settings/offline values
 exactly, with one derived cache timestamp refresh. Core rehearsal used separate acceptance_muxed_transport_v1
 storage on emulator-5556. Normal lib/main.dart 1e5c1fdca5c1c0f0361fe272666618a8c398150d
-is now restored in place and stopped after inspected fresh Home/Library pixels.
+was restored in place and stopped after inspected fresh Home/Library pixels.
 APK SHA-256 377c936b891d3c4a94c80694c142cde53e6266679c0b3e73de5b493c3d2fcda9
 matches the installed package and retained debug signer. Installation preserves
 all four normal files byte-exact; independent post-startup reopen preserves
@@ -63,6 +63,19 @@ Source controls and visible compatibility attribution remain open.
 Evidence: public-muxed-native-preservation-proof.json outside Git.
 Evidence: provider-muxed-eligibility.json/provider-muxed-full-transfer-proof.json.
 The original audio-only later-range HTTP403 remains unresolved for that format.
+
+
+Latest normal entrypoint restored on emulator-5556 is source
+398d8c1b264a9a8ce3ed97e90a1427c7dd5458dc, APK SHA-256
+41ac05e6376ac7b98ccbd10f1ef70aed051e91ff01eb0154681a0567db5e5dfc.
+Retained debug signer and installed APK hash match. Install preserved four files
+byte-exact; inspected Home/Library and independent post-startup Hive reopen
+preserve all user/settings/offline values and record zero derived cache timestamp
+changes. Evidence: normal-398-observed-final-proof.json outside Git.
+The resolver/default regression suite passes 36 targeted and 377 aggregate tests,
+with clean analysis. Both unchanged Windows strict suites remain FAIL (16 + 24).
+Playback cache publication and transient-error invalidation now share the resolver's
+mode key, preserving separation from the explicit audio-only cache.
 
 Current justacalico fork 292778ec includes muxed filtering/page parsing, but also
 inherits a visionOS default. PR390 explicitly describes PoToken bypass; it is not
