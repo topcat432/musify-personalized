@@ -190,13 +190,34 @@ class SpotifyTrackMatchingService {
 
     final safeBatchSize = batchSize.clamp(1, maximumPilotBatchSize);
     final stopIndex = (nextIndex + safeBatchSize).clamp(0, tracks.length);
+    var savedIndex = nextIndex;
+    var savedResultsFingerprint = _resultsFingerprint(results);
+    final savedExclusions = jsonEncode(excludedRows.toList()..sort());
+    bool ownsSnapshot() {
+      final currentMetadata = _readMap(box.get('spotifyImportMetadata'));
+      final currentResults = _readMaps(box.get('spotifyMatchResults'));
+      return _sameImport(tracks, metadata) &&
+          (_asInt(currentMetadata['nextTrackIndex']) ??
+                  currentResults.length) ==
+              savedIndex &&
+          _resultsFingerprint(currentResults) == savedResultsFingerprint &&
+          jsonEncode(_readExcludedRows(box).toList()..sort()) ==
+              savedExclusions;
+    }
+
+    Future<void> checkpoint() async {
+      await _checkpoint(results, metadata, nextIndex, tracks.length);
+      savedIndex = nextIndex;
+      savedResultsFingerprint = _resultsFingerprint(results);
+    }
+
     metadata['matchingStatus'] = 'running';
-    await _checkpoint(results, metadata, nextIndex, tracks.length);
+    await checkpoint();
 
     var sinceCheckpoint = 0;
     var stopped = false;
     while (nextIndex < stopIndex) {
-      if (!_sameImport(tracks, metadata)) {
+      if (!ownsSnapshot()) {
         stopped = true;
         break;
       }
@@ -211,15 +232,17 @@ class SpotifyTrackMatchingService {
 
       final source = tracks[nextIndex];
       Map<String, dynamic> result;
-      if (excludedRows.contains(source['sourceRow']?.toString())) {
+      if (excludedRows.contains(
+        importRecordingRow(source['sourceRow']) ??
+            source['sourceRow']?.toString(),
+      )) {
         result = _excludedResult(source);
       } else {
         try {
           result = await _matchOne(
             source,
             shouldCancel: () =>
-                (shouldCancel?.call() ?? false) ||
-                !_sameImport(tracks, metadata),
+                (shouldCancel?.call() ?? false) || !ownsSnapshot(),
           );
         } catch (error) {
           result = {
@@ -239,7 +262,7 @@ class SpotifyTrackMatchingService {
       // A network lookup can finish after the matching page has been
       // disposed. Cancellation discards it; a user pause still keeps the
       // completed track before returning control.
-      if ((shouldCancel?.call() ?? false) || !_sameImport(tracks, metadata)) {
+      if ((shouldCancel?.call() ?? false) || !ownsSnapshot()) {
         stopped = true;
         break;
       }
@@ -253,7 +276,7 @@ class SpotifyTrackMatchingService {
         metadata['matchingStatus'] = nextIndex >= tracks.length
             ? 'complete'
             : 'paused';
-        await _checkpoint(results, metadata, nextIndex, tracks.length);
+        await checkpoint();
         sinceCheckpoint = 0;
       }
 
@@ -268,11 +291,11 @@ class SpotifyTrackMatchingService {
     }
 
     if (stopped) {
-      if (_sameImport(tracks, metadata)) {
+      if (ownsSnapshot()) {
         metadata['matchingStatus'] = nextIndex >= tracks.length
             ? 'complete'
             : 'paused';
-        await _checkpoint(results, metadata, nextIndex, tracks.length);
+        await checkpoint();
       }
       return loadSnapshot();
     }
@@ -280,10 +303,17 @@ class SpotifyTrackMatchingService {
     metadata['matchingStatus'] = nextIndex >= tracks.length
         ? 'complete'
         : 'paused';
-    await _checkpoint(results, metadata, nextIndex, tracks.length);
+    await checkpoint();
     return _snapshot(tracks, results, metadata);
   }
 
+  static String _resultsFingerprint(List<Map<String, dynamic>> results) =>
+      jsonEncode(
+        results,
+        toEncodable: (value) => value is DateTime
+            ? {'valueType': 'DateTime', 'value': value.toIso8601String()}
+            : value.toString(),
+      );
   bool _sameImport(
     List<Map<String, dynamic>> tracks,
     Map<String, dynamic> metadata,
@@ -612,7 +642,7 @@ class SpotifyTrackMatchingService {
 
   static Set<String> _readExcludedRows(Box box) {
     return (box.get('spotifyExcludedImportRows') as List? ?? const [])
-        .map((value) => value.toString())
+        .map((value) => importRecordingRow(value) ?? value.toString())
         .toSet();
   }
 

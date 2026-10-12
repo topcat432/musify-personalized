@@ -206,4 +206,149 @@ void main() {
       );
     },
   );
+  test(
+    'review acceptance during cancelled lookup is never overwritten by stale pause checkpoint',
+    () async {
+      final b = Hive.box('user');
+      await b.put('spotifyMatchResults', [
+        {
+          'sourceRow': 1,
+          'status': 'needs_review',
+          'bestCandidate': {'ytid': 'owned-old-choice'},
+        },
+      ]);
+      final entered = Completer<void>();
+      final response = Completer<List<Map<String, dynamic>>>();
+      var cancelled = false;
+      final s = SpotifyTrackMatchingService(
+        musicLookup: (_) {
+          entered.complete();
+          return response.future;
+        },
+        videoLookup: (_) async => [],
+      );
+      final pending = s.matchNextBatch(
+        batchSize: 1,
+        shouldCancel: () => cancelled,
+      );
+      await entered.future;
+      cancelled = true;
+      await s.resolveReviewItem(
+        sourceRow: 1,
+        accept: true,
+        selectedAlternative: {
+          'candidate': {'ytid': 'owned-new-choice'},
+          'score': 1.0,
+          'evidence': <String, dynamic>{},
+        },
+      );
+      response.complete([]);
+      final snapshot = await pending;
+      expect(snapshot.nextTrackIndex, 1);
+      expect(snapshot.matchedCount, 1);
+      expect(snapshot.reviewCount, 0);
+      expect(
+        (b.get('spotifyMatchResults') as List).single['bestCandidate']['ytid'],
+        'owned-new-choice',
+      );
+    },
+  );
+  test(
+    'older overlapping run cannot overwrite the newer completed recording',
+    () async {
+      final entered = Completer<void>();
+      final response = Completer<List<Map<String, dynamic>>>();
+      var staleFallbacks = 0;
+      final old = SpotifyTrackMatchingService(
+        musicLookup: (_) {
+          entered.complete();
+          return response.future;
+        },
+        videoLookup: (_) async {
+          staleFallbacks++;
+          return [];
+        },
+      );
+      final pending = old.matchNextBatch(batchSize: 1);
+      await entered.future;
+      final winner = SpotifyTrackMatchingService(
+        musicLookup: (_) async => [
+          {
+            'ytid': 'owned-winning-recording',
+            'title': 'Pending owned recording',
+            'artist': 'Synthetic',
+            'videoAuthor': 'Synthetic - Topic',
+            'sourceType': 'youtube_music_song',
+          },
+        ],
+        videoLookup: (_) async => [],
+      );
+      await winner.matchNextBatch(batchSize: 1);
+      response.complete([]);
+      final snapshot = await pending;
+      expect(snapshot.nextTrackIndex, 2);
+      expect(staleFallbacks, 0);
+      expect(
+        (Hive.box('user').get('spotifyMatchResults') as List)
+            .last['bestCandidate']['ytid'],
+        'owned-winning-recording',
+      );
+    },
+  );
+  test(
+    'fresh permanent exclusion during lookup prevents fallbacks and remains excluded on resume',
+    () async {
+      final entered = Completer<void>();
+      final response = Completer<List<Map<String, dynamic>>>();
+      var fallbackCalls = 0;
+      final s = SpotifyTrackMatchingService(
+        musicLookup: (_) {
+          entered.complete();
+          return response.future;
+        },
+        videoLookup: (_) async {
+          fallbackCalls++;
+          return [];
+        },
+      );
+      final pending = s.matchNextBatch(batchSize: 1);
+      await entered.future;
+      await Hive.box('user').put('spotifyExcludedImportRows', ['2']);
+      response.complete([]);
+      final interrupted = await pending;
+      expect(interrupted.nextTrackIndex, 1);
+      expect(fallbackCalls, 0);
+      final resumed = await const SpotifyTrackMatchingService().matchNextBatch(
+        batchSize: 1,
+      );
+      expect(resumed.nextTrackIndex, 2);
+      expect(resumed.excludedCount, 1);
+    },
+  );
+  test(
+    'numeric legacy source rows retain permanent exclusions without lookup',
+    () async {
+      final b = Hive.box('user');
+      await b.put('spotifyImportTracks', [
+        {'sourceRow': 1.0, 'title': 'Owned retained row'},
+        {'sourceRow': 2.0, 'title': 'Owned numeric excluded row'},
+      ]);
+      await b.put('spotifyExcludedImportRows', ['2']);
+      var calls = 0;
+      final s = SpotifyTrackMatchingService(
+        musicLookup: (_) async {
+          calls++;
+          return [];
+        },
+        videoLookup: (_) async {
+          calls++;
+          return [];
+        },
+      );
+      final result = await s.matchNextBatch(batchSize: 1);
+      expect(calls, 0);
+      expect(result.excludedCount, 1);
+      expect(result.nextTrackIndex, 2);
+    },
+  );
 }
