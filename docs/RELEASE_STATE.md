@@ -1,5 +1,49 @@
 # Musify Personalized current state
 
+## Native acceptance gaps and Search repair, 2026-10-12
+
+Source 13218daa3cf2a4b598575d1451cc84cdb8a7aeee passes exact
+[Linux CI 38235074425](https://github.com/topcat432/musify-personalized/actions/runs/38235074425):
+analysis, 326 tests, all 40 strict visuals, debug/F-Droid boundaries and unsigned
+release assembly. Local analysis and 16 targeted Search/lifecycle checks pass;
+both strict Windows suites retain their font-reference failures. No references
+or comparisons changed. Three new regressions failed before the repair.
+
+Controlled native metadata failures exposed silent history fallback and loss of
+healthy categories when an artist/album request threw. Search now isolates all
+categories, preserves healthy recordings/videos/playlists, distinguishes empty
+from unavailable sources and offers Retry. Native emulator-5556 verifies failure
+messaging, retry, healthy category retention without duplicates and empty feedback.
+These are synthetic metadata responses, not provider listening/catalog proof.
+
+Earlier native ff9c5e3f checks use separate acceptance_gap_v1 storage: malformed
+and unsupported CSV rejection, valid replacement-preview cancellation, partial
+write failure/rollback, four destructive-dialog cancellations, confirmed scoped
+history/recents/stats/download/cache clearing and matching pause at 10/50,
+process interruption at durable 20/50, then resume/completion at 50/50. Independent
+Hive inspection preserves source rows, selected alternate, likes, unrelated
+preferences and clear scope. Matching rows after the retained first result are
+excluded synthetic rows; in-flight network lookup interruption is still unrun.
+Cached native artist/album-fixture/playlist navigation and missing/empty/failed
+artist states are pinned to 7b0565bc. Album classification was corrected in the
+fixture at 13218daa and still needs its own native retest.
+
+Explicit normal lib/main.dart source 13218daa is restored and stopped after
+Home/Library checks. Installed APK SHA-256:
+c12b60f55a37c2f0739fc1b738ee814f8294d17901ead0467858ac2eb0a7b003.
+The retained debug signer is unchanged. All four normal files remained byte-exact
+through scratch rehearsals and in-place return; every normal typed value remains
+exact after startup, with zero derived timestamp changes. Scratch imports,
+preferences and synthetic files are separate and retained.
+Private proof: search-repair-native-proof.json, normal-13218daa-proof.json,
+normal-13218daa-resume-preservation-proof.json, gap-* copied inventories/UI records.
+
+Remaining safe native work is explicit in PRODUCT_ACCEPTANCE.md: recording-aware
+lyrics/equalizer controls, controlled download commit/interruption, other preference
+persistence, compact Library/mini-player combinations and network lookup interruption.
+No absence of a known repair is treated as full native acceptance. Complete
+provider media, physical audio/focus/accessories and signed delivery remain held.
+
 ## Legacy stale-transfer guard repair, 2026-10-12
 
 Final partial-state review reproduced two unsafe completions: a legacy resolved

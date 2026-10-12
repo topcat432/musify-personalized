@@ -1,5 +1,30 @@
 # Product acceptance ledger
 
+## Clause-level native audit and Search correction, 2026-10-12
+
+Exact source 13218daa passes Linux CI 38235074425, 326 aggregate tests, clean
+analysis and all 40 strict visuals. Native controlled Search failure/partial/empty
+checks pass; native normal startup and all stored values are preserved after the
+explicit normal return. Windows strict results remain FAIL. The following matrix
+separates native evidence from safe unrun clauses; automated coverage alone does
+not close a native clause.
+
+| Clause | Actual native evidence | Safe native work still unrun | Separate dependency |
+| --- | --- | --- | --- |
+| I01 | ff9c5e3f malformed/unsupported CSV rejection, validated replacement preview Cancel and injected partial-write rollback; independent inventories exact | No new completion claimed for other replacement failure mechanisms | Actual disk-full/device failure is not simulated by the injected exception |
+| I02 | ff9c5e3f actual matching screen: 10/50 Pause, process stop at durable 20/50, reopen/resume to 50/50; unique rows/alternate exact | In-flight controlled HTTP lookup cancellation/interruption and fallback error | These checkpoint passes use excluded synthetic rows, not provider searches |
+| S01 | 7b0565bc cached artist/album-fixture/playlist navigation, missing artist and empty/failed artist rendering; 13218daa actual Search incomplete/Retry, partial healthy categories and distinct empty feedback | Corrected album classification retest; provider catalog/recording provenance remains distinct | Complete playable provider result remains blocked |
+| T01 | Earlier quality Low/Medium/High; a0e252d6 Light survives process restart, Dark restored, full normal values exact | Other reversible preference persistence | Provider/proxy/security changes remain excluded |
+| T02 | ff9c5e3f all four Cancel paths exact; confirmed history/recents/stats/download/cache clear scope and disposable file removal, unrelated imports/likes/preferences exact across reopen | No blanket pass for other destructive/data-management operations | Operations ran only on separate synthetic storage |
+| T03 | Retained equalizer entry/Back, unavailable lyrics and Time Machine entry evidence | Selected-recording lyrics/cache behavior and equalizer band/preset persistence | Acoustic/audibility proof requires physical outputs; title/artist lookup does not establish recording provenance |
+| O01 | Retained controlled local playback and ff9c5e3f disposable download deletion/registry scope | Controlled successful download commit, cancellation, interruption and restart | Complete provider download/play remains blocked |
+| V01/V02 | a0e252d6 compact 320-dp Settings/Search, 1.6 text scaling and search field above keyboard; keyboard Back captured | Compact Library capture previously failed fresh-hierarchy acquisition; mini-player/text/inset combinations remain unrun | No phone/accessory acceptance inferred |
+
+Native evidence is private in continuing-acceptance-20261012. The normal app is
+restored at 13218daa and stopped; all four normal files and semantic values are
+preserved. Scratch source changes and deliberately added search fixture/history
+values remain separate from the preserved normal data.
+
 ## Current-version selector and deferred-scope acceptance, 2026-10-12
 
 I11 and the approved preserved Home/shell token/accessibility delta are implemented
@@ -502,9 +527,9 @@ This deliberate fixture registration proves local offline navigation/playback;
 it is not a successful provider download. No original/library/import data was
 cleared and no physical phone or unrelated device was modified.
 
-The current matrix has no pending safe-local native repair listed. Remaining
-online/provider, physical and signed-release subgates are explicit
-prerequisites; named partial passes do not imply complete product acceptance.
+The current clause-level matrix above lists safe native work still unrun.
+Online/provider, physical and signed-release subgates are separate prerequisites;
+named partial passes do not imply complete product acceptance.
 
 Remaining prerequisites: allowed complete media for online listening/download
 and previews (stopped after denial); reconnect the selected Samsung's existing
