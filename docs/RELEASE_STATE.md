@@ -1,5 +1,63 @@
 # Musify Personalized current state
 
+## Native controls and scope reconciliation, 2026-10-12
+
+Exact e1498a180bf3a500e458d520712ce9719f848e2b passes Linux CI
+[38318503873](https://github.com/topcat432/musify-personalized/actions/runs/38318503873):
+391 tests, clean analysis, all 40 strict Linux visuals and Android boundaries.
+Windows strict visuals remain FAIL (16 + 24); references are unchanged.
+
+On owned emulator-5556, manual preview play/pause/resume/pause retains one source
+load, and auto-preview off prevents the next deferred row loading until enabled.
+Rapid mini taps/swipe open one player, one Back returns to Library, and queue
+dismissal returns to the player with the same two owned recordings. The actual
+local source dialog identifies local playback and honestly leaves codec/quality
+unverified. Native repeat cycles through all/one/off; repeat-one remains selected
+after restart. Shuffle toggles on/off. The fixture deliberately rebuilds its queue
+on each launch and resets shuffle when replacing it: this does not prove production
+queue/shuffle restoration. Notification Stop produces an inactive session, state
+NONE and position zero; production stop/restart persistence remains unverified.
+
+Two Blue/Sky and Spanish/English cycles save and reopen successfully. Independent
+stopped Hive audit passes ten expected preference states, exact owned payloads,
+offline registry and unrelated user values; deliberate queue starts affect only
+monotonic recency counts/timestamps plus separately excluded statistics. The failed
+English-label driver in a Spanish picker is retained and excluded; corrected
+Inglés retry passes. Preview and player receipts remain outside Git:
+preview-e149-controls-proof.json and player-e149-preferences-independent-proof.json.
+
+Normal lib/main.dart source e1498a18 is restored in place on emulator-5556,
+inspected at Home/Library and stopped. APK SHA-256
+84d5560cf288371f9b3e9b7c29a4980d9304684cece5f8f6de7fe9519b4afa98
+matches the installed APK with the retained debug signer. Four normal Hive files
+are byte-exact through installation; independent post-startup reopen preserves
+user/settings/offline values, with zero cache timestamp changes.
+Evidence: normal-scratch-e1498a18-install-proof.json and
+normal-e149-observed-final-proof.json outside Git. No schema changes or phone work.
+
+Current-version implementation includes the four routing selectors, retained
+alternate recording/order/successful identity snapshots, resumable review and
+explicit routing, CSV intake, backup/recovery, offline/download surfaces, and
+bounded preserved #22 Home/shell/accessibility. Their detailed proofs and remaining
+release limits are recorded below; this is not a claim that all product gates pass.
+
+Scope correction: the previous entry's “richer approved import” wording did not
+establish a current-version cutoff. PRODUCT_ACCEPTANCE's Owner intent and scope,
+CONTRIBUTING and D-016 retain playlist-aware ZIP/JSON/TSV, multi-membership repeat
+synchronization/share intake and the wider canonical-library phases as future
+work. They require a bounded design/current-version decision before architectural
+implementation; roadmap approval alone is not a claim that they are shipped.
+
+Remaining current acceptance: broader provider stream/download/preview coverage
+(the three-recording private-payload batch is held for explicit owner approval),
+production stop/restart and queue/shuffle restoration, unresolved original
+audio-only HTTP403, Windows strict visual failures, and physical-phone acceptance.
+One complete provider muxed recording is proven, not general catalog reliability.
+Free Spotify exact-track playback is unproven; source controls cannot imply a
+working Spotify-only/both mode. Signing/publication, exact default-tip integration,
+monotonic update/signature checks and live-phone data/audio acceptance stay gated.
+Master remains a786323556275a0de745ffca4d3affc088ac2055; sole draft PR23 is source-only.
+
 ## Owned review closure, 2026-10-12
 
 Exact cadc2b6d9a301d1e5040266d2c9309898a2b56bd passes Linux CI 38317502932:
