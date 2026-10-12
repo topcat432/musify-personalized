@@ -20,6 +20,7 @@ Future<void> runOwnedShellRehearsal({
   String namespace = 'acceptance_mini_v1',
   Map<String, dynamic> initialPreferences = const {},
   bool mountApp = true,
+  bool bootstrapQueue = true,
 }) async {
   WidgetsFlutterBinding.ensureInitialized();
   if (!Platform.isAndroid) throw StateError('Owned Android rehearsal only');
@@ -126,20 +127,22 @@ Future<void> runOwnedShellRehearsal({
       androidNotificationIcon: 'drawable/ic_launcher_foreground',
     ),
   );
-  final queueLoad = audioHandler.addPlaylistToQueue(
-    records,
-    replace: true,
-    startIndex: 0,
-  );
-  final deadline = DateTime.now().add(const Duration(seconds: 10));
-  while (!audioHandler.audioPlayer.playing &&
-      DateTime.now().isBefore(deadline)) {
-    await Future<void>.delayed(const Duration(milliseconds: 50));
+  if (bootstrapQueue) {
+    final queueLoad = audioHandler.addPlaylistToQueue(
+      records,
+      replace: true,
+      startIndex: 0,
+    );
+    final deadline = DateTime.now().add(const Duration(seconds: 10));
+    while (!audioHandler.audioPlayer.playing &&
+        DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    }
+    if (!audioHandler.audioPlayer.playing)
+      throw StateError('Owned local queue did not load');
+    await audioHandler.pause();
+    await queueLoad;
   }
-  if (!audioHandler.audioPlayer.playing)
-    throw StateError('Owned local queue did not load');
-  await audioHandler.pause();
-  await queueLoad;
   await File('${scratch.path}/mini-native-proof.json').writeAsString(
     jsonEncode({
       'sourceSha': const String.fromEnvironment('GIT_SHA'),
