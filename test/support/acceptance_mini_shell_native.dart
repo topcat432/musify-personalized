@@ -96,6 +96,9 @@ Future<void> main() async {
       'shouldWeCheckUpdates': true,
       'themeIndex': 2,
       'useSystemColor': false,
+      'usePureBlackColor': false,
+      'predictiveBack': true,
+      'languageCode': 'en',
       'playNextSongAutomatically': false,
     });
     await user.putAll({'miniSeeded': true, 'likedSongs': records});

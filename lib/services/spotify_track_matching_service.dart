@@ -592,7 +592,7 @@ class SpotifyTrackMatchingService {
         .toIso8601String();
 
     await Hive.box('user').putAll({
-      'spotifyMatchResults': results,
+      'spotifyMatchResults': List<Map<String, dynamic>>.from(results),
       'spotifyImportMetadata': metadata,
     });
   }

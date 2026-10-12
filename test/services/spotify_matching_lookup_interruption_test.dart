@@ -351,4 +351,33 @@ void main() {
       expect(result.nextTrackIndex, 2);
     },
   );
+  test(
+    'multi-track batch reaches every checkpoint without exposing unsaved cache mutations',
+    () async {
+      final b = Hive.box('user');
+      await b.put('spotifyImportTracks', [
+        for (var row = 1; row <= 7; row++)
+          {'sourceRow': row, 'title': 'Owned row $row', 'artist': 'Synthetic'},
+      ]);
+      final s = SpotifyTrackMatchingService(
+        musicLookup: (_) async => [],
+        videoLookup: (_) async => [],
+      );
+      final result = await s.matchNextBatch(
+        batchSize: 6,
+        onProgress: (snapshot) {
+          if (snapshot.nextTrackIndex < 6) {
+            expect((b.get('spotifyMatchResults') as List).length, 1);
+            expect(
+              (b.get('spotifyImportMetadata') as Map)['nextTrackIndex'],
+              1,
+            );
+          }
+        },
+      );
+      expect(result.nextTrackIndex, 7);
+      expect(result.isComplete, isTrue);
+      expect(b.get('spotifyMatchResults'), hasLength(7));
+    },
+  );
 }
