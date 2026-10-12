@@ -109,7 +109,9 @@ void main() {
               as List? ??
           [];
       if (history.length == oldHistory + 1 &&
-          find.text('Saving.').evaluate().isEmpty) {
+          find.byType(CircularProgressIndicator).evaluate().isEmpty &&
+          find.text('Review').evaluate().length == 1 &&
+          find.byType(SpotifyImportConfirmationDialog).evaluate().isEmpty) {
         completed = true;
         break;
       }
