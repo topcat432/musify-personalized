@@ -42,8 +42,23 @@ import 'package:musify/widgets/playlist_bar.dart';
 import 'package:musify/widgets/section_title.dart';
 import 'package:musify/widgets/song_bar.dart';
 
+typedef SearchLoader = Future<List<dynamic>> Function(String query);
+typedef PlaylistSearchLoader =
+    Future<List<dynamic>> Function(String query, String type);
+
 class SearchPage extends StatefulWidget {
-  const SearchPage({super.key});
+  const SearchPage({
+    super.key,
+    this.songSearch,
+    this.artistSearch,
+    this.playlistSearch,
+    this.suggestionSearch,
+  });
+
+  final SearchLoader? songSearch;
+  final SearchLoader? artistSearch;
+  final PlaylistSearchLoader? playlistSearch;
+  final SearchLoader? suggestionSearch;
 
   @override
   _SearchPageState createState() => _SearchPageState();
@@ -78,6 +93,17 @@ class _SearchPageState extends State<SearchPage> {
   List<String> _suggestionsList = [];
   Timer? _debounce;
   int _latestSuggestionRequest = 0;
+  int _latestSearchRequest = 0;
+
+  bool _isCurrentSearch(int requestId, String query) =>
+      mounted && requestId == _latestSearchRequest && _searchBar.text == query;
+
+  void _clearSearchResults() {
+    _songsSearchResult = [];
+    _artistsSearchResult = [];
+    _albumsSearchResult = [];
+    _playlistsSearchResult = [];
+  }
 
   Future<void> _submitSearch([String? query]) async {
     if (query != null) {
@@ -92,12 +118,13 @@ class _SearchPageState extends State<SearchPage> {
     _suggestionsList = [];
     if (mounted) setState(() {});
 
-    await search();
     _inputNode.unfocus();
+    await search();
   }
 
   @override
   void dispose() {
+    _latestSearchRequest++;
     _searchBar.dispose();
     _inputNode.dispose();
     _fetchingSongs.dispose();
@@ -106,18 +133,19 @@ class _SearchPageState extends State<SearchPage> {
   }
 
   Future<void> search() async {
+    if (!mounted) return;
+    final requestId = ++_latestSearchRequest;
     final query = _searchBar.text;
 
     if (query.isEmpty) {
-      _songsSearchResult = [];
-      _artistsSearchResult = [];
-      _albumsSearchResult = [];
-      _playlistsSearchResult = [];
+      _clearSearchResults();
       _suggestionsList = [];
-      if (mounted) setState(() {});
+      _fetchingSongs.value = false;
+      setState(() {});
       return;
     }
     _fetchingSongs.value = true;
+    setState(_clearSearchResults);
 
     if (!searchHistory.contains(query)) {
       final updatedHistory = List.from(searchHistory)..insert(0, query);
@@ -127,36 +155,49 @@ class _SearchPageState extends State<SearchPage> {
 
     try {
       final results = await Future.wait<List<dynamic>>([
-        fetchSongsList(query),
-        searchArtists(query),
-        getPlaylists(query: query, type: 'album'),
-        getPlaylists(query: query, type: 'playlist'),
+        (widget.songSearch ?? fetchSongsList)(query),
+        (widget.artistSearch ?? searchArtists)(query),
+        widget.playlistSearch?.call(query, 'album') ??
+            getPlaylists(query: query, type: 'album'),
+        widget.playlistSearch?.call(query, 'playlist') ??
+            getPlaylists(query: query, type: 'playlist'),
       ]);
 
-      _songsSearchResult = results[0];
-      _artistsSearchResult = results[1]
+      if (!_isCurrentSearch(requestId, query)) return;
+      var songs = results[0];
+      final artists = results[1]
           .whereType<Map>()
           .map(Map<String, dynamic>.from)
           .toList();
-      if (_songsSearchResult.isEmpty && _artistsSearchResult.isNotEmpty) {
-        _songsSearchResult = await _fetchSongsForResolvedArtist(query);
+      if (songs.isEmpty && artists.isNotEmpty) {
+        songs = await _fetchSongsForResolvedArtist(query, artists, requestId);
       }
+      if (!_isCurrentSearch(requestId, query)) return;
+      _songsSearchResult = songs;
+      _artistsSearchResult = artists;
       _albumsSearchResult = results[2];
       _playlistsSearchResult = results[3];
     } catch (e, stackTrace) {
+      if (!_isCurrentSearch(requestId, query)) return;
       logger.log(
         'Error while searching online songs',
         error: e,
         stackTrace: stackTrace,
       );
     } finally {
-      _fetchingSongs.value = false;
-      if (mounted) setState(() {});
+      if (_isCurrentSearch(requestId, query)) {
+        _fetchingSongs.value = false;
+        setState(() {});
+      }
     }
   }
 
-  Future<List<dynamic>> _fetchSongsForResolvedArtist(String query) async {
-    final artistName = _artistsSearchResult.first['title']?.toString().trim();
+  Future<List<dynamic>> _fetchSongsForResolvedArtist(
+    String query,
+    List<Map<String, dynamic>> artists,
+    int requestId,
+  ) async {
+    final artistName = artists.first['title']?.toString().trim();
     if (artistName == null || artistName.isEmpty) return [];
 
     final fallbackQueries = <String>{
@@ -166,7 +207,9 @@ class _SearchPageState extends State<SearchPage> {
     };
 
     for (final fallbackQuery in fallbackQueries) {
-      final songs = await fetchSongsList(fallbackQuery);
+      if (!_isCurrentSearch(requestId, query)) return [];
+      final songs = await (widget.songSearch ?? fetchSongsList)(fallbackQuery);
+      if (!_isCurrentSearch(requestId, query)) return [];
       if (songs.isNotEmpty) return songs;
     }
 
@@ -195,6 +238,8 @@ class _SearchPageState extends State<SearchPage> {
                     focusNode: _inputNode,
                     labelText: '${context.l10n!.search}...',
                     onChanged: (value) {
+                      _latestSearchRequest++;
+                      _fetchingSongs.value = false;
                       // debounce suggestions to avoid rapid API calls
                       _debounce?.cancel();
                       final query = value;
@@ -202,6 +247,7 @@ class _SearchPageState extends State<SearchPage> {
 
                       // Clear suggestions immediately if input is empty
                       if (query.isEmpty) {
+                        _clearSearchResults();
                         _suggestionsList = [];
                         if (mounted) setState(() {});
                         return;
@@ -210,9 +256,9 @@ class _SearchPageState extends State<SearchPage> {
                       _debounce = Timer(
                         const Duration(milliseconds: 300),
                         () async {
-                          final searchSuggestions = await getSearchSuggestions(
-                            query,
-                          );
+                          final searchSuggestions =
+                              await (widget.suggestionSearch ??
+                                  getSearchSuggestions)(query);
 
                           if (!mounted ||
                               requestId != _latestSuggestionRequest ||

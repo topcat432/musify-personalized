@@ -1,5 +1,28 @@
 # Musify Personalized current state
 
+## Search lifecycle repair and native metadata verification, 2026-10-12
+
+Search now rejects obsolete completions after a newer submission, input change,
+clear or disposal. Old requests cannot replace current results, clear the current
+loading indicator, touch disposed notifiers or continue obsolete artist fallback.
+A new search clears the previous results so a failure cannot present old songs
+under the new query. Existing metadata services remain the production defaults;
+optional loaders keep the actual-widget lifecycle fixtures offline.
+
+Four original lifecycle failures and the stale-results-on-failure case were
+reproduced before repair. All seven lifecycle/fallback checks, clean analysis and
+288 aggregate tests pass. Both strict Windows suites still fail; every one of
+35 actual images is byte-exact to the retained control. No golden/comparator,
+media transport, client identity, credentials or user-data schema changed.
+
+Normal-entrypoint source 663f22dbf0d593f1496f6d89fbc1ba375404f8da was separately
+rehearsed on owned emulator-5556: Search displayed real artists and songs without
+a captured parser/search error. All four Hive files were byte-exact across the
+in-place debug update; after metadata browsing, user/settings/offline registries
+remain byte-exact and the only cache-value difference is one derived timestamp.
+No song/preview/download was activated. This verifies metadata/UI, not provider
+playback. Exact repaired-source CI and native lifecycle rehearsal remain required.
+
 ## Owner clarification and attribution correction, 2026-10-12
 
 The owner is implementation-flexible, with avoidance of approaches risking a
