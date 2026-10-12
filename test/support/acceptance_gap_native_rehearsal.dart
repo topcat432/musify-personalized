@@ -18,6 +18,7 @@ import 'package:musify/services/io_service.dart';
 import 'package:musify/services/listening_stats_service.dart';
 import 'package:musify/services/playlists_manager.dart';
 import 'package:musify/services/router_service.dart';
+import 'package:musify/services/settings_manager.dart';
 import 'package:musify/services/spotify_import_session_service.dart';
 import 'package:musify/utilities/listening_stats_utils.dart';
 import 'package:path_provider/path_provider.dart';
@@ -85,6 +86,10 @@ Future<void> main() async {
   }
   reloadSongLibraryStateFromStorage();
   reloadPlaylistLibraryStateFromStorage();
+  // Tools are grouped under online settings; this isolated surface has no
+  // home/search provider loader. Only this scratch preference is configured.
+  await Hive.box('settings').put('offlineMode', false);
+  offlineMode.value = false;
   audioHandler = await AudioService.init(
     builder: MusifyAudioHandler.new,
     config: const AudioServiceConfig(
@@ -122,7 +127,6 @@ Future<void> main() async {
       ),
     ],
   );
-  NavigationManager.router = router;
   runApp(
     MaterialApp.router(
       routerConfig: router,
