@@ -57,6 +57,40 @@ void main() {
       );
 
   test(
+    'owned probes observe complete body then durable registration before return',
+    () async {
+      final seen = <OfflineCommitBoundary>[];
+      final id = 'owned-probe';
+      expect(
+        await makeSongOffline(
+          song(id),
+          audioLoader: (_) async => body([1, 2, 3, 4]),
+          commitProbe: (boundary) async {
+            seen.add(boundary);
+            final registered =
+                (Hive.box('userNoBackup').get('offlineSongs') as List)
+                    .whereType<Map>()
+                    .any((row) => row['ytid'] == id);
+            if (boundary.index < OfflineCommitBoundary.registryWritten.index)
+              expect(registered, isFalse);
+            if (boundary.index >= OfflineCommitBoundary.registryWritten.index)
+              expect(registered, isTrue);
+            if (boundary.index >= OfflineCommitBoundary.afterRename.index)
+              expect(await File(FilePaths.getAudioPath(id)).readAsBytes(), [
+                1,
+                2,
+                3,
+                4,
+              ]);
+          },
+        ),
+        isTrue,
+      );
+      expect(seen, OfflineCommitBoundary.values);
+    },
+  );
+
+  test(
     'malformed durable registry is preserved despite a cached valid entry',
     () async {
       await Hive.box(

@@ -697,6 +697,19 @@ class OfflineAudioDownload {
 typedef OfflineAudioLoader = Future<OfflineAudioDownload?> Function(String id);
 typedef OfflineRegistryWriter =
     Future<void> Function(Box<dynamic> box, List<dynamic> songs);
+
+/// Optional owned acceptance probe; normal downloads supply no callback.
+enum OfflineCommitBoundary {
+  bodyFlushed,
+  beforeRename,
+  afterRename,
+  registryWritten,
+  registryFlushed,
+  beforeReturn,
+}
+
+typedef OfflineCommitProbe =
+    Future<void> Function(OfflineCommitBoundary boundary);
 final Map<String, Future<bool>> _offlineDownloads = {};
 Future<void> _offlineRegistryTail = Future.value();
 int _offlineCancellationGeneration = 0;
@@ -788,6 +801,7 @@ Future<bool> makeSongOffline(
   dynamic song, {
   OfflineAudioLoader? audioLoader,
   OfflineRegistryWriter? registryWriter,
+  OfflineCommitProbe? commitProbe,
   bool Function()? shouldCancel,
 }) async {
   if (song is! Map || song['ytid'] is! String) return false;
@@ -804,6 +818,7 @@ Future<bool> makeSongOffline(
     Map<String, dynamic>.from(song),
     audioLoader: audioLoader,
     registryWriter: registryWriter,
+    commitProbe: commitProbe,
     cancelled: () =>
         generation != _offlineCancellationGeneration ||
         (shouldCancel?.call() ?? false),
@@ -823,6 +838,7 @@ Future<bool> _makeSongOffline(
   required bool Function() cancelled,
   OfflineAudioLoader? audioLoader,
   OfflineRegistryWriter? registryWriter,
+  OfflineCommitProbe? commitProbe,
 }) async {
   File? partial;
   File? committed;
@@ -885,6 +901,8 @@ Future<bool> _makeSongOffline(
       await fileStream.flush();
       await fileStream.close();
       fileStream = null;
+      if (commitProbe != null)
+        await commitProbe(OfflineCommitBoundary.bodyFlushed);
     } catch (e, stackTrace) {
       logger.log(
         'Error downloading audio file',
@@ -944,13 +962,21 @@ Future<bool> _makeSongOffline(
         } else {
           updatedOfflineSongs.add(offlineSong);
         }
+        if (commitProbe != null)
+          await commitProbe(OfflineCommitBoundary.beforeRename);
         await partial!.rename(audioFile.path);
         committed = audioFile;
+        if (commitProbe != null)
+          await commitProbe(OfflineCommitBoundary.afterRename);
         try {
           await (registryWriter ??
               (box, values) =>
                   box.put('offlineSongs', values))(box, updatedOfflineSongs);
+          if (commitProbe != null)
+            await commitProbe(OfflineCommitBoundary.registryWritten);
           await box.flush();
+          if (commitProbe != null)
+            await commitProbe(OfflineCommitBoundary.registryFlushed);
         } catch (_) {
           if (hadRegistry) {
             await box.put('offlineSongs', previous);
@@ -974,6 +1000,8 @@ Future<bool> _makeSongOffline(
       return false;
     }
 
+    if (commitProbe != null)
+      await commitProbe(OfflineCommitBoundary.beforeReturn);
     return true;
   } catch (e, stackTrace) {
     logger.log('Error making song offline', error: e, stackTrace: stackTrace);
