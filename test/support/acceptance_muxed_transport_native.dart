@@ -159,6 +159,7 @@ Future<void> runOwnedAcceptance(
         'durationMs': audioHandler.audioPlayer.duration?.inMilliseconds,
         'playing': audioHandler.audioPlayer.playing,
         'processingState': audioHandler.audioPlayer.processingState.name,
+        'loopMode': audioHandler.audioPlayer.loopMode.name,
         'lifecycle': WidgetsBinding.instance.lifecycleState?.name,
         'queueIds': audioHandler.queue.value.map((item) => item.id).toList(),
         'diagnostics': diagnostics,
@@ -266,6 +267,7 @@ Future<void> runOwnedAcceptance(
       'originalRecordingMaps': songs,
     });
   } catch (error, stack) {
+    await audioHandler.pause();
     await proof('failed', {
       'errorType': error.runtimeType.toString(),
       'error': error.toString(),

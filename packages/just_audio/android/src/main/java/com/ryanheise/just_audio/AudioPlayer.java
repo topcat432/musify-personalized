@@ -796,6 +796,9 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
                 player.getTrackSelectionParameters()
                     .buildUpon()
                     .setAudioOffloadPreferences(audioOffloadPreferences)
+                    // AudioPlayer has no video surface. A selected video track
+                    // in a muxed source can stall at EOS while audio has ended.
+                    .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, true)
                     .build()
             );
             setAudioSessionId(player.getAudioSessionId());
