@@ -1,10 +1,27 @@
 # Musify Personalized current state
 
+## Owner clarification and attribution correction, 2026-10-12
+
+The owner is implementation-flexible, with avoidance of approaches risking a
+YouTube account ban as the stated implementation constraint. The mission is to
+restore the original listening result; engine/provider/routing may change while
+preserving YouTube-primary preference, no subscription dependency, native queue
+and background/screen-off playback, intended recording identity and all library
+data. The boundary against evading verification/access restrictions is an
+assistant execution constraint, not an owner-imposed no-spoofing rule. Unofficial
+software or public protocols are not inherently classified as evasion.
+See [decision D-015](DECISIONS.md#d-015---listening-outcome-and-execution-boundary-attribution).
+
+This is a documentation correction only. Technical/native/CI evidence keeps its
+original source stamp; provider recovery remains unproven. No media, account,
+device, product-code or data action is part of this correction.
+
 ## Upstream remedy review and Search metadata correction, 2026-10-11
 
 The actual PR 390 patch and linked alternatives use Apple/VISIONOS identity
-substitution for their reported streaming remedy. That crosses the explicit
-no-spoofing boundary and was not applied. Separable availability/header corrections
+substitution for their reported streaming remedy. That was not applied under
+the assistant execution boundary against evading verification/access restrictions;
+it was not an owner-imposed no-spoofing preference. Availability/header corrections
 are already present; WEB/HLS hunks do not repair the captured fifth-range refusal.
 Official Musify's related buffering PR 955 was merged then reverted; its current
 cleartext-proxy correction is separate from this provider denial.
@@ -125,7 +142,8 @@ Signed query strings are unchanged; ranges fit their declared sizes; neither URL
 contains an n challenge. A service requirement on the anonymous media-delivery
 path is the leading remaining hypothesis, not a proven account/IP/token cause.
 The upstream PR #390 discussion independently reports a similar initial-buffer /
-later-range failure. Its proposed client spoofing is outside authorized scope.
+later-range failure. Its proposed identity switching to avoid verification
+was excluded by the assistant execution boundary, not an owner preference.
 
 Scoped compatibility changes replace the fresh manifest HEAD preflight with a
 one-byte GET, cancel its response body, and treat genuine 403 as terminal without

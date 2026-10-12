@@ -4,13 +4,23 @@ Recorded 2026-10-11. Preserve the successful 0bcb90f1 checkpoint and its owned
 native PASS / fresh-provider primary 403 as source-pinned evidence. This review
 made no provider playback request and installed no APK.
 
+Attribution corrected 2026-10-12 after the owner's explicit clarification; see
+[decision D-015](DECISIONS.md#d-015---listening-outcome-and-execution-boundary-attribution).
+The mission is recovery of the listening experience, not preservation of a broken
+extractor or a particular engine. No Premium/subscription dependency is approved
+by a proposal, and no account, cookie or credential experiment is authorized.
+
 ## Actual PR 390 mechanism
 
 [PR 390](https://github.com/Hexer10/youtube_explode_dart/pull/390/files) remains
 open/unmerged at edad2760cc7998bcc18013dc9880c052ad32598f, without reviews or added
 tests. Its default changes from androidSdkless to VISIONOS, claiming Apple hardware,
 visionOS and a Safari User-Agent. The stated purpose is avoiding token enforcement.
-Applying that on this Android app crosses the owner's explicit no-spoofing boundary.
+That identity switch was not applied under the assistant execution boundary
+against evading verification or access restrictions. This is not an owner-imposed
+implementation preference; the owner is implementation-flexible while requiring
+avoidance of approaches that risk a YouTube account ban. No unofficial approach
+is certified as having zero account risk.
 
 | Other hunk | Applicability |
 |---|---|
@@ -75,8 +85,9 @@ required and is recorded in the private checkpoint/PR after completion.
 
 No reviewed ordinary correction has been shown to restore the captured Android
 fifth-range request. The public mechanism that reports restoring this signature
-changes platform identity to avoid verification, so it is excluded by the owner's
-instructions. Full provider acceptance stays held. A legitimate supported
+changes platform identity to avoid verification, so it was excluded by the
+assistant execution boundary, not by an owner instruction banning unofficial
+implementations. Full provider acceptance stays held. A legitimate supported
 same-client media/session contract or a provider/maintainer correction implementing
 its genuine requirements remains a technical prerequisite; no paid integration
 is inferred. Private upstream snapshots, diffs, test logs and preserved runtime

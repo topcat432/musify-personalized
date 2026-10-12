@@ -235,6 +235,41 @@ changes.
   bundle, SHA-256 10eb04fe3319d31ac5bc6af08862f8c923ae0eb3524cdd10d9bdf75c325e325a.
 - Evidence: PR #23, RELEASE_STATE.md, CONTRIBUTING.md and actual workflows.
 
+## D-015 - Listening outcome and execution boundary attribution
+
+- Status: accepted owner mission and clarification; assistant execution boundary
+  documented separately and not attributed to the owner.
+- Recorded: 2026-10-12, owner clarification that implementation is flexible
+  except for avoiding approaches that risk a YouTube account ban.
+- Mission: solve the issue and recreate the original end-result listening
+  experience. Internal engine/provider/routing may change; retaining a broken
+  extractor or reproducing its implementation is not the goal. Preserve
+  YouTube-primary preference, no mandatory Premium/subscription dependency
+  (including Spotify Premium), easy native playback/queue and background/screen-off
+  operation, source visibility/optional modes, intended recording/version and
+  existing library/import decisions/data. Paid-provider proposals do not change
+  these requirements or authorize payment.
+- Owner constraint: avoid approaches risking a YouTube account ban. Do not
+  manufacture a zero-account-risk guarantee for an unofficial approach.
+- Assistant execution boundary (separate source): do not evade access controls,
+  fabricate or reuse verification tokens outside their supported scope, or
+  switch identities to evade a denial/verification requirement. This is an
+  assistant constraint, not an owner-imposed ban on unofficial software or
+  public protocols. Ordinary compatibility corrections are assessed separately
+  from evasion; a terms/support limit is not proof of technical impossibility.
+- Current authorization: no account actions or use/export of cookies/credentials
+  are authorized by this task. This scope is separate from owner preferences.
+- Evidence boundary: the captured later-range HTTP 403 establishes refusal,
+  not its account/token/verification cause. Owned native success, passing CI and
+  a metadata fix do not establish catalogue recovery. Keep source-pinned proof
+  and report unsolved gates honestly.
+- Consequence: correct the prior attribution in YOUTUBE_UPSTREAM_REMEDY_REVIEW.md,
+  RELEASE_STATE.md and PRODUCT_ACCEPTANCE.md. This clarification authorizes this
+  documentation correction; it does not approve account grants, new legal terms,
+  payments, migrations, device actions, merge or production release.
+- Evidence: owner clarification in the current task; PRODUCT_VISION.md,
+  YOUTUBE_UPSTREAM_REMEDY_REVIEW.md and preserved native acceptance records.
+
 ## New decision template
 
 ```text

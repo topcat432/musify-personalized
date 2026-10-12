@@ -1,10 +1,27 @@
 # Product acceptance ledger
 
+## Owner clarification and attribution correction, 2026-10-12
+
+The owner is implementation-flexible, with avoidance of approaches risking a
+YouTube account ban as the stated implementation constraint. The mission is to
+restore the original listening result; engine/provider/routing may change while
+preserving YouTube-primary preference, no subscription dependency, native queue
+and background/screen-off playback, intended recording identity and all library
+data. The boundary against evading verification/access restrictions is an
+assistant execution constraint, not an owner-imposed no-spoofing rule. Unofficial
+software or public protocols are not inherently classified as evasion.
+See [decision D-015](DECISIONS.md#d-015---listening-outcome-and-execution-boundary-attribution).
+
+This is a documentation correction only. Technical/native/CI evidence keeps its
+original source stamp; provider recovery remains unproven. No media, account,
+device, product-code or data action is part of this correction.
+
 ## Upstream remedy review and Search metadata correction, 2026-10-11
 
 The actual PR 390 patch and linked alternatives use Apple/VISIONOS identity
-substitution for their reported streaming remedy. That crosses the explicit
-no-spoofing boundary and was not applied. Separable availability/header corrections
+substitution for their reported streaming remedy. That was not applied under
+the assistant execution boundary against evading verification/access restrictions;
+it was not an owner-imposed no-spoofing preference. Availability/header corrections
 are already present; WEB/HLS hunks do not repair the captured fifth-range refusal.
 Official Musify's related buffering PR 955 was merged then reverted; its current
 cleartext-proxy correction is separate from this provider denial.
@@ -120,7 +137,8 @@ Ranked hypotheses and discriminating evidence:
    exact cause: full response headers, provider reason text and native per-chunk
    request timestamps were not captured. Do not call this proven provider-wide,
    account, regional or IP blocking. The proposed upstream patches #388-390 use
-   alternate/spoofed identities and are outside this task's permitted approach.
+   alternate identities to avoid verification and were excluded by the assistant
+   execution boundary, not by an owner-imposed implementation preference.
 2. **HEAD preflight mismatch (demonstrated compatibility defect).** The retained
    same-URL probe has HEAD 403 and bounded GET 206. Fresh manifest resolution
    still used HEAD on the first stream, potentially a video stream rather than
