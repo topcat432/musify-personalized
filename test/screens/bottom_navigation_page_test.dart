@@ -110,6 +110,59 @@ void main() {
     },
   );
 
+  testWidgets(
+    'root preference picker Back and selection preserve nested Settings route',
+    (tester) async {
+      tester.view.physicalSize = const Size(412, 915);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final router = buildPriorityShellNavRouter(initialLocation: '/settings');
+      await tester.pumpWidget(
+        priorityReviewShellAppSized(
+          router: router,
+          brightness: Brightness.light,
+          viewSize: const Size(412, 915),
+        ),
+      );
+      await tester.pumpAndSettle();
+      for (var repeat = 0; repeat < 2; repeat++) {
+        final context = tester.element(
+          find.byType(PriorityShellBranchPlaceholder).first,
+        );
+        showPreferenceBottomSheet(context, const Text('Owned root picker'));
+        await tester.pumpAndSettle();
+        await tester.binding.handlePopRoute();
+        await tester.pumpAndSettle();
+        expect(find.text('Owned root picker'), findsNothing);
+        expect(
+          router.routerDelegate.currentConfiguration.uri.toString(),
+          '/settings',
+        );
+      }
+      final context = tester.element(
+        find.byType(PriorityShellBranchPlaceholder).first,
+      );
+      showPreferenceBottomSheet(
+        context,
+        TextButton(
+          onPressed: () => Navigator.of(context, rootNavigator: true).pop(),
+          child: const Text('Owned select'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Owned select'));
+      await tester.pumpAndSettle();
+      expect(find.text('Owned select'), findsNothing);
+      expect(
+        router.routerDelegate.currentConfiguration.uri.toString(),
+        '/settings',
+      );
+      await tester.pumpWidget(const SizedBox.shrink());
+      router.dispose();
+    },
+  );
+
   testWidgets('double-tapping the active tab resets its branch location', (
     tester,
   ) async {

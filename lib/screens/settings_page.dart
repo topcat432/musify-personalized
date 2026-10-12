@@ -529,7 +529,7 @@ class SettingsPage extends StatelessWidget {
   void _showAccentColorPicker(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    showCustomBottomSheet(
+    showPreferenceBottomSheet(
       context,
       Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -559,7 +559,7 @@ class SettingsPage extends StatelessWidget {
                   useSystemColor: false,
                 );
                 showToast(context, context.l10n!.accentChangeMsg);
-                Navigator.pop(context);
+                Navigator.of(context, rootNavigator: true).pop();
               },
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
@@ -595,7 +595,7 @@ class SettingsPage extends StatelessWidget {
       FluentIcons.weather_moon_24_regular,
     ];
 
-    showCustomBottomSheet(
+    showPreferenceBottomSheet(
       context,
       ListView.builder(
         shrinkWrap: true,
@@ -615,7 +615,7 @@ class SettingsPage extends StatelessWidget {
             () {
               addOrUpdateData<int>('settings', 'themeIndex', mode.index);
               Musify.updateAppState(context, newThemeMode: mode);
-              Navigator.pop(context);
+              Navigator.of(context, rootNavigator: true).pop();
             },
             themeMode == mode,
             icon: modeIcons[mode.index],
@@ -633,7 +633,7 @@ class SettingsPage extends StatelessWidget {
         ? '$activeLanguageCode-$activeScriptCode'
         : activeLanguageCode;
 
-    showCustomBottomSheet(
+    showPreferenceBottomSheet(
       context,
       ListView.builder(
         shrinkWrap: true,
@@ -657,7 +657,7 @@ class SettingsPage extends StatelessWidget {
               );
               Musify.updateAppState(context, newLocale: newLocale);
               showToast(context, context.l10n!.languageMsg);
-              Navigator.pop(context);
+              Navigator.of(context, rootNavigator: true).pop();
             },
             activeLanguageFullCode == newLocaleFullCode,
           );
@@ -679,7 +679,7 @@ class SettingsPage extends StatelessWidget {
       FluentIcons.speaker_2_24_filled,
     ];
 
-    showCustomBottomSheet(
+    showPreferenceBottomSheet(
       context,
       ListView.builder(
         shrinkWrap: true,
@@ -695,7 +695,7 @@ class SettingsPage extends StatelessWidget {
               addOrUpdateData<String>('settings', 'audioQuality', quality);
               audioQualitySetting.value = quality;
               showToast(context, context.l10n!.audioQualityMsg);
-              Navigator.pop(context);
+              Navigator.of(context, rootNavigator: true).pop();
             },
             audioQualitySetting.value == quality,
             icon: qualityIcons[index],
