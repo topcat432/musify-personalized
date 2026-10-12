@@ -1,5 +1,66 @@
 # Musify Personalized current state
 
+## Offline ownership recovery and Android picker continuation, 2026-10-12
+
+Candidate product source 980323bbdce1a6252a5f37e57d15fb3b7119d4c1 passes
+[exact Linux CI 38287176093](https://github.com/topcat432/musify-personalized/actions/runs/38287176093):
+clean analysis, 365 tests, both strict visual suites (16 + 24), and required
+Android build boundaries. Local analysis/365 tests pass; Windows strict visual
+suites remain FAIL (16 + 24 comparisons). No references or comparisons changed.
+Documentation-only fee672a1 and 5d077194 have identical product files to 67496cfa;
+fee CI 38268270524 passed, while superseded 5d CI 38269729856 was cancelled.
+The cancelled run is not acceptance proof.
+
+Offline source f0fac6c339ef3f3961245a966bd3a52760c6dc4f adds a flushed schema-1
+ownership sidecar before rename. Explicit retry can roll back and redownload a
+hash/length/path/identity-verified unregistered owned final. It preserves any
+payload referenced by a current registration, including another identity's alias.
+Unknown/legacy orphan payloads and invalid markers remain untouched and are never
+adopted. No Hive adapter/schema migration or blanket orphan cleanup is included.
+Native emulator-5556 acceptance_offline_boundaries_v1 passes 32 cases: crash,
+reopen, retry and repeat at body flush, ownership flush, before/after rename,
+registry write/flush, ownership removal and before return. Independent copied-Hive
+reopen, exact owned payloads and preserved existing/unrelated inventories support
+these bounded claims. Completion is never reported before return. This supersedes
+the older individual-transfer rename/registry-unrun clause; native whole-playlist
+interruption and hardware power-cut durability remain open.
+
+Source 65d86c5354685992380f7efc81fa88bedfa8b523 fixes slow mini-player upward
+drags by accumulating movement and guarding duplicate player navigation. The
+meaningful before-failing widget test passes after repair; an actual 500-ms slow
+upward swipe opens the local player, and one Android Back returns to Library.
+Animated player hierarchy acquisition failed; fresh inspected pixels and the
+subsequent fresh Library hierarchy provide the bounded native evidence.
+
+Source 387f19d3's persistent-sheet shell regression passed widgets/CI but failed
+actual Android picker Back, exiting the app. Source 980323bb puts the four
+preference pickers on the root modal navigator. Native repeated Back cancellation
+(two per accent/theme/language/quality picker), open-picker process interruption
+and restart pass. Independent reopen of all eight captures confirms exact settings,
+likes, offline registrations and owned WAV/art payloads. All normal four Hive files
+are byte-exact at every stopped capture and fixture install. Selection, switch and
+remaining gesture cases are still in progress; these results are not a blanket
+T01/I04 PASS or physical audio/provider provenance proof.
+
+Current emulator-5556 uses the temporary 980323bb synthetic preferences entrypoint;
+normal entrypoint restoration remains required before ending rehearsal. It is the
+verified musify_rehearsal_api35 AVD, with process-local ANDROID_AVD_HOME at the
+existing musify-source-comparison/emulator-rehearsal/avds directory. Normal data is
+retained; no uninstall/clear, live phone, signing/publication or merge occurred.
+Private evidence stays in continuing-acceptance-20261012, including
+preferences-cancel-reopen-proof.json and offline-boundaries-f0fac6c3-reopen-proof.json.
+Master remains a786323556275a0de745ffca4d3affc088ac2055; PR23 remains draft.
+
+Explicit remaining safe cases: repeated/restarted accent and language selection;
+System/Light/Dark and Low/Medium/High selection (running); repeated/restarted
+switches for dynamic accent, pure black, predictive Back, listening stats, offline
+mode, update checks, SponsorBlock, automatic next and external recommendations;
+shuffle/repeat, rapid mini-player actions, local seek/tail, queue dismissal and
+mini-stop/restart; native review Later/Accept/No-match swipe interruption/repeat;
+native whole-playlist partial/retry/completion. Proxy/security changes stay outside
+scope. Complete allowed provider media, physical phone/output/focus/accessories
+and signed delivery remain distinct release gates.
+
 ## Controlled lookup and production-shell acceptance, 2026-10-12
 
 Product source 67496cfaa074e72c2a2da3d01658d4f8f472d347 passes
