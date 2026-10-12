@@ -13,10 +13,26 @@ Old history and destination contents remain intact. No persisted schema changes.
 
 All 22 targeted selector checks, 323 aggregate tests and clean analysis pass.
 Both strict Windows suites retain their failures; no image/comparator changed.
-Exact Linux and an Android scratch-only stale/pending/reopen check remain required
-for this repair. Prior ef6c0b79/70313ae8 CI and e705fb2b four-mode native evidence
-are retained separately; normal 70313ae8 remains installed and stopped until
-the scoped native guard rehearsal and explicit normal return complete.
+Exact source a0e252d65161e3eaa494812c27ff84be2287fef5 passes
+[Linux CI 38227069783](https://github.com/topcat432/musify-personalized/actions/runs/38227069783):
+analysis, 323 tests, both strict suites (40 images), debug/F-Droid boundaries and
+unsigned release assembly. No references changed for this repair.
+On emulator-5556 / musify_rehearsal_api35, three isolated native cases reject
+legacy exclusion, changed alternate and a stale retry with prior pending state
+before destination writes. Existing likes/history survive Hive reopen; prior
+uncertainty remains unknown. Independent copies confirm all four normal files
+and all four earlier selector scratch files remain byte-exact.
+
+Explicit normal lib/main.dart source a0e252d6 is restored in place and stopped
+after Home/Library navigation. Installed APK SHA-256:
+221e778ef9d7768f7fb98d45dceb7604485cc6e26946759744f65d063ba03b3d.
+The debug signer remains f6569faab3364a5d3c9261d2b3da6939728f49f31405165ccc29da085d33c9a3;
+all four normal Hive files are byte-exact across return installation.
+Independent post-startup inspection also finds every normal user/settings/offline
+and cache value unchanged (zero derived timestamp changes).
+Private evidence: i11-guard-a0e-native-proof.json, normal-a0e252d6-proof.json and
+normal-a0e-resume-preservation-proof.json.
+Earlier four-mode/restart proof remains pinned to e705fb2b, not relabelled as a0e.
 
 ## Selector native completion and normal-entrypoint return, 2026-10-12
 

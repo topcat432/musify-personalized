@@ -3,15 +3,18 @@
 ## Current-version selector and deferred-scope acceptance, 2026-10-12
 
 I11 and the approved preserved Home/shell token/accessibility delta are implemented
-in the sole candidate. Exact 70313ae8 Linux CI 38216623100 passes analysis,
-319 tests, all 40 strict visuals and build boundaries. Native scratch e705fb2b
+in the sole candidate. Exact a0e252d6 Linux CI 38227069783 passes analysis,
+323 tests, all 40 strict visuals and build boundaries. Native scratch e705fb2b
 passes individual/newly-resolved/all/first-N, repeat, source order/alternate,
 six audit inventories and exact restart persistence. The nonempty newly-resolved
 transfer contains only the newly resolved row and omits the pre-existing unselected
 row. Normal app files remain byte-exact throughout that isolated rehearsal.
 
-The explicit normal 70313ae8 entrypoint is restored and stopped after Home/Library
-checks, with exact user/settings/offline values and one explained cache timestamp.
+The a0e252d6 native guard additionally rejects legacy exclusion, changed alternate
+and stale retry while retaining prior interrupted-transfer uncertainty across
+Hive reopen. All four normal and earlier scratch files remain byte-exact.
+The explicit normal a0e252d6 entrypoint is restored and stopped after Home/Library
+checks, with all four files byte-exact across installation.
 The synthetic entrypoint remains under test/support and is not production startup.
 These are source-pinned CI/emulator passes, not phone or provider completion.
 Provider/physical/signed-delivery subgates remain held. See RELEASE_STATE.md for
@@ -413,7 +416,7 @@ No current live-phone or production-signer rehearsal is represented by these APK
 | I08 | Exclude → exact confirmation → repeated review/restart | Preserve source row/audit; drain all review/rescue/totals/destinations; retain existing likes | A PASS explicit exclusion/source/audit/backup/reopen; E PASS all four source rows and excluded outcome survive reboot; D/R HOLD | spotify_import_persistence_test; review/backup tests; closure-after-reboot-inventory.json |
 | I09 | Choose Destination all/first-N → liked/existing/new → preview/confirm | Correct counts/source order/dedupe; success after durable write; partial unresolved stays staged | A PASS all/first-N to liked/new/existing with source order; E PASS a3 first-one amount retained after confirm/refresh; earlier 5da expansion FAIL repaired; D/R HOLD | spotify_import_destination_page_test; spotify_import_persistence_test; private-ui/closure-a3-first-confirmed and closure-a3-first-repeat-review |
 | I10 | Retry routing / stale session / empty selection / restart | Idempotent; no uncontrolled duplicates/deletion; reject stale/empty safely; destination history retained | A PASS empty/stale target rejection and reopened idempotence; E PASS a3 repeat still 0 new/1 existing and no duplicate library change; D/R HOLD | spotify_import_persistence_test; private-ui/closure-a3-first-repeat-review; closure inventory proof |
-| I11 | Individually selected/newly resolved subsets | Current version approved; preserve chosen recordings/order and honestly unknown legacy tracking | A PASS 18 targeted checks, 319 aggregate and exact CI 70313ae8; E PASS e705fb2b four modes, nonempty delta, alternate/order, idempotence, six audit inventories and restart with normal files exact; D/R HOLD | import roadmap §4; selection/widget tests; private i11-scratch-native-proof.json |
+| I11 | Individually selected/newly resolved subsets | Current version approved; preserve chosen recordings/order and honestly unknown legacy tracking | A PASS 22 targeted checks, 323 aggregate and exact CI a0e252d6; E PASS e705fb2b four modes/delta/order/restart, plus a0e252d6 legacy stale/pending rejection and reopen with normal/earlier scratch files exact; D/R HOLD | import roadmap §4; selection/widget tests; private i11-scratch-native-proof.json and i11-guard-a0e-native-proof.json |
 | L01 | Library → favorites / playlists / folders / pinned / artists | Membership/counts/order/filter persist; no silently missing real content | A PASS folder filtering/liked models; E PASS generated folder/member/pin plus original membership across full reboot; D/R HOLD | library_page; playlists_manager |
 | L02 | New/edit/rename/delete playlist/folder, cancel, repeat | Changes only disposable data; cancellation safe; duplicate/empty validation; restart persists | A PASS nested-navigation Cancel/Delete and child retention/reopen; E PASS create/rename/move/pin/unpin/validation/delete Cancel; E PASS repaired folder Delete returns to Library on exact 58f1edbb APK; D/R HOLD | playlist_folder_page_test; closure-folder-navigation-before/after.log; private-ui/closure CRUD captures |
 | L03 | Playlist unavailable/empty/loading → Back | Readable error/empty state, no RenderBox/Sliver exception or stranded navigation | A PASS unavailable/empty widget regressions; E PASS generated empty-folder entry/Back; provider unavailable state represented by local source-error fixture; D/R HOLD | playlist_page; EmptyPlaylistState |
@@ -500,7 +503,7 @@ it is not a successful provider download. No original/library/import data was
 cleared and no physical phone or unrelated device was modified.
 
 The current matrix has no pending safe-local native repair listed. Remaining
-online/provider, physical, delivery-scope and signed-release subgates are explicit
+online/provider, physical and signed-release subgates are explicit
 prerequisites; named partial passes do not imply complete product acceptance.
 
 Remaining prerequisites: allowed complete media for online listening/download
