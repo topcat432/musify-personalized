@@ -1,5 +1,66 @@
 # Product acceptance ledger
 
+## Playback compatibility continuation, 2026-10-12
+
+Source 7242644a7dc5d67b4c9d044b57de013c0f6cc2a0 passes exact Linux CI
+38295877881: clean analysis, 375 tests, all 40 strict visuals and required Android
+boundaries. Local 34 targeted/375 aggregate checks pass; Windows strict suites
+remain FAIL (16 + 24), with references unchanged. Muxed-only manifests can select
+formats of the same chosen video; explicit prefer-muxed resolution uses a separate
+cache. Foreign video identities/unsupported codecs are rejected. MP4/WebM audio
+and video MIME declarations reach the decoder intact. Audio preference remains
+primary; prefer-muxed and provider source modes are not exposed in the UI.
+A later denied range remains terminal, with no alternate-identity/URL retry.
+
+Native source 992be053 decoded the owned 70-second muxed MP4 and served its full
+1,403,799-byte body beyond 1 MiB. Its first background attempt failed because the
+driver missed the start window; the subsequent run advanced in background but
+stalled at end-of-stream. Source d0a31cdf disables video tracks in the audio-only
+Android player; it then advanced to the owned 8-second track and completed it in
+background. That run's harness still failed by checking the decoder's single-source
+index instead of Musify's logical queue index. Corrected harness 707b28d4 passes native continuous
+70-second background playback, automatic next and complete 8-second playback,
+then middle/tail seek and next on replay. Independent served-segment hashes and
+range union verify complete 1,403,799/162,825-byte owned bodies; normal four files
+remain byte-exact. This is controlled muxed decoder/transport proof, not provider
+or physical-audio proof. Exact d0a31cdf Linux CI 38300035170 passes; 707 changes
+only the harness's queue observation. Preserve the earlier failed attempts as
+failed. Evidence: owned-muxed-native-preservation-proof.json outside Git.
+
+Normal lib/main.dart c6f4a2a7 was restored before this rehearsal. APK SHA-256:
+b8814f456903a704b1e31240d1077ec63f6333de0beae0d4b4b656963e1989e4.
+Installation preserved four normal files byte-exact; inspected fresh Home/Library
+pixels and independent copied-Hive reopen preserve user/settings/offline values
+exactly, with one derived cache timestamp refresh. Current core rehearsal temporarily
+uses separate acceptance_muxed_transport_v1 storage on emulator-5556; normal
+restoration remains required afterward. Emulator memory is overridden to 1024 MiB
+for this process only; no physical-device/performance equivalence is claimed.
+
+No new provider metadata/media request executed. A locally computed unchanged
+ANDROID client User-Agent fingerprint matches the captured source. Automatic
+approval review rejected the proposed one accountless YouTube player-metadata
+eligibility request as insufficiently authorized under the earlier provider-request
+constraint. Explicit approval is pending; no indirect request/proxy workaround.
+The captured later-range HTTP403 and full provider playback remain release gates.
+
+Current justacalico fork 292778ec includes muxed filtering/page parsing, but also
+inherits a visionOS default. PR390 explicitly describes PoToken bypass; it is not
+applied. Musify PR972 buffer-file playback is resilience, not a demonstrated 403
+remedy. Invidious is a separate accountless same-video architecture, with operator
+trust/privacy and actual availability unverified. No denied request is routed
+through a proxy. Public-source comparisons and all diagnostics remain outside Git.
+
+The completed preference batch changed/restored dynamic accent, pure black,
+predictive Back, listening stats, update checks, SponsorBlock, automatic next and
+external recommendations twice each, plus Offline mode restoration. Normal four
+files stayed byte-exact at stopped captures. The stricter scratch-user audit found
+fixture recency counts/timestamps changing across deliberate queue starts; that
+whole-user equality audit remains FAIL until precisely scoped and reconciled.
+Existing picker cancellation/selection inventories retain their narrower PASS.
+Whole-playlist and review native harnesses are built but unrun. Remaining gestures,
+accent/language selection, source controls/attribution and richer import roadmap
+remain open. No phone install, merge, production signing or publication occurred.
+
 ## Offline ownership recovery and Android picker continuation, 2026-10-12
 
 Candidate product source 980323bbdce1a6252a5f37e57d15fb3b7119d4c1 passes
