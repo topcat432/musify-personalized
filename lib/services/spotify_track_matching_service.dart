@@ -8,6 +8,7 @@
  */
 
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:hive/hive.dart';
 import 'package:musify/services/common_services.dart';
@@ -42,12 +43,18 @@ class SpotifyMatchingSnapshot {
 
   bool get hasImport => totalTracks > 0;
   bool get isComplete => totalTracks > 0 && nextTrackIndex >= totalTracks;
-  int get remainingCount => (totalTracks - nextTrackIndex).clamp(0, totalTracks);
+  int get remainingCount =>
+      (totalTracks - nextTrackIndex).clamp(0, totalTracks);
   double get progress => totalTracks == 0 ? 0 : nextTrackIndex / totalTracks;
 }
 
+typedef SpotifyCandidateLookup =
+    Future<List<Map<String, dynamic>>> Function(String query);
+
 class SpotifyTrackMatchingService {
-  const SpotifyTrackMatchingService();
+  const SpotifyTrackMatchingService({this.musicLookup, this.videoLookup});
+  final SpotifyCandidateLookup? musicLookup;
+  final SpotifyCandidateLookup? videoLookup;
 
   static const int defaultBatchSize = 25;
   static const int maximumPilotBatchSize = 50;
@@ -78,14 +85,15 @@ class SpotifyTrackMatchingService {
 
   Future<List<Map<String, dynamic>>> loadReviewItems() async {
     final results = _readMaps(Hive.box('user').get('spotifyMatchResults'));
-    final reviewItems = results
-        .where((result) => result['status'] == 'needs_review')
-        .toList(growable: false)
-      ..sort((left, right) {
-        final leftRow = _asInt(left['sourceRow']) ?? 0;
-        final rightRow = _asInt(right['sourceRow']) ?? 0;
-        return leftRow.compareTo(rightRow);
-      });
+    final reviewItems =
+        results
+            .where((result) => result['status'] == 'needs_review')
+            .toList(growable: false)
+          ..sort((left, right) {
+            final leftRow = _asInt(left['sourceRow']) ?? 0;
+            final rightRow = _asInt(right['sourceRow']) ?? 0;
+            return leftRow.compareTo(rightRow);
+          });
     return reviewItems;
   }
 
@@ -104,9 +112,7 @@ class SpotifyTrackMatchingService {
       ..['errorCount'] = 0
       ..['excludedCount'] = excludedRows.length
       ..['pendingResolutionCount'] = 0
-      ..['lastMatchingCheckpointAt'] = DateTime.now()
-          .toUtc()
-          .toIso8601String();
+      ..['lastMatchingCheckpointAt'] = DateTime.now().toUtc().toIso8601String();
     await box.putAll({
       'spotifyMatchResults': <dynamic>[],
       'spotifyImportMetadata': metadata,
@@ -190,6 +196,10 @@ class SpotifyTrackMatchingService {
     var sinceCheckpoint = 0;
     var stopped = false;
     while (nextIndex < stopIndex) {
+      if (!_sameImport(tracks, metadata)) {
+        stopped = true;
+        break;
+      }
       if (shouldCancel?.call() ?? false) {
         stopped = true;
         break;
@@ -205,7 +215,12 @@ class SpotifyTrackMatchingService {
         result = _excludedResult(source);
       } else {
         try {
-          result = await _matchOne(source);
+          result = await _matchOne(
+            source,
+            shouldCancel: () =>
+                (shouldCancel?.call() ?? false) ||
+                !_sameImport(tracks, metadata),
+          );
         } catch (error) {
           result = {
             'sourceRow': source['sourceRow'],
@@ -224,7 +239,7 @@ class SpotifyTrackMatchingService {
       // A network lookup can finish after the matching page has been
       // disposed. Cancellation discards it; a user pause still keeps the
       // completed track before returning control.
-      if (shouldCancel?.call() ?? false) {
+      if ((shouldCancel?.call() ?? false) || !_sameImport(tracks, metadata)) {
         stopped = true;
         break;
       }
@@ -253,8 +268,10 @@ class SpotifyTrackMatchingService {
     }
 
     if (stopped) {
-      if (sinceCheckpoint > 0) {
-        metadata['matchingStatus'] = 'paused';
+      if (_sameImport(tracks, metadata)) {
+        metadata['matchingStatus'] = nextIndex >= tracks.length
+            ? 'complete'
+            : 'paused';
         await _checkpoint(results, metadata, nextIndex, tracks.length);
       }
       return loadSnapshot();
@@ -267,7 +284,42 @@ class SpotifyTrackMatchingService {
     return _snapshot(tracks, results, metadata);
   }
 
-  Future<Map<String, dynamic>> _matchOne(Map<String, dynamic> source) async {
+  bool _sameImport(
+    List<Map<String, dynamic>> tracks,
+    Map<String, dynamic> metadata,
+  ) {
+    final box = Hive.box('user');
+    return importSessionIdentity(metadata) ==
+            importSessionIdentity(_readMap(box.get('spotifyImportMetadata'))) &&
+        _sourceFingerprint(tracks) ==
+            _sourceFingerprint(_readMaps(box.get('spotifyImportTracks')));
+  }
+
+  static String _sourceFingerprint(List<Map<String, dynamic>> tracks) =>
+      jsonEncode([
+        for (final track in tracks)
+          [
+            for (final key in [
+              'sourceRow',
+              'title',
+              'artist',
+              'album',
+              'isrc',
+              'durationMs',
+            ])
+              track[key]?.toString(),
+          ],
+      ]);
+
+  Future<Map<String, dynamic>> _matchOne(
+    Map<String, dynamic> source, {
+    bool Function()? shouldCancel,
+  }) async {
+    void checkCancellation() {
+      if (shouldCancel?.call() ?? false)
+        throw StateError('Matching lookup cancelled or stale');
+    }
+
     final title = source['title']?.toString().trim() ?? '';
     final artist = source['artist']?.toString().trim() ?? '';
     final album = source['album']?.toString().trim() ?? '';
@@ -286,25 +338,27 @@ class SpotifyTrackMatchingService {
     final sourceFailures = <String>[];
 
     try {
-      final musicSongs = await _youtubeMusic.music
-          .searchSongs('$artist $title', limit: 12)
-          .timeout(_musicSearchTimeout);
-      candidates.addAll(musicSongs.map(_musicSongCandidate));
+      final musicSongs = await (musicLookup ?? _searchMusicCandidates)(
+        '$artist $title',
+      ).timeout(_musicSearchTimeout);
+      candidates.addAll(musicSongs);
       searchSources.add('youtube_music_songs');
     } catch (error) {
       sourceFailures.add('YouTube Music search failed: $error');
     }
+    checkCancellation();
 
     var evaluation = _evaluate(input, candidates);
     final firstMusicScore = evaluation.ranked.isEmpty
         ? 0.0
         : evaluation.ranked.first['score'] as double;
-    final firstMusicAutomatic = evaluation.ranked.isNotEmpty &&
+    final firstMusicAutomatic =
+        evaluation.ranked.isNotEmpty &&
         evaluation.ranked.first['automaticEligible'] == true;
 
     if (!firstMusicAutomatic || firstMusicScore < automaticMatchThreshold) {
       try {
-        final officialResults = await fetchSongsList(
+        final officialResults = await (videoLookup ?? _searchVideoCandidates)(
           '$artist $title official audio'.trim(),
         ).timeout(_musicSearchTimeout);
         candidates.addAll(
@@ -315,6 +369,7 @@ class SpotifyTrackMatchingService {
       } catch (error) {
         sourceFailures.add('YouTube official-audio search failed: $error');
       }
+      checkCancellation();
     }
 
     final topScore = evaluation.ranked.isEmpty
@@ -322,7 +377,7 @@ class SpotifyTrackMatchingService {
         : evaluation.ranked.first['score'] as double;
     if (topScore < reviewThreshold) {
       try {
-        final broadResults = await fetchSongsList(
+        final broadResults = await (videoLookup ?? _searchVideoCandidates)(
           '$artist $title'.trim(),
         ).timeout(_musicSearchTimeout);
         candidates.addAll(
@@ -333,13 +388,16 @@ class SpotifyTrackMatchingService {
       } catch (error) {
         sourceFailures.add('YouTube broad fallback failed: $error');
       }
+      checkCancellation();
     }
 
     final best = evaluation.ranked.isEmpty ? null : evaluation.ranked.first;
     final bestScore = best?['score'] as double? ?? 0.0;
     final automaticEligible = best?['automaticEligible'] == true;
     final status = best == null
-        ? 'unmatched'
+        ? sourceFailures.isEmpty
+              ? 'unmatched'
+              : 'error'
         : automaticEligible && bestScore >= automaticMatchThreshold
         ? 'matched'
         : bestScore >= reviewThreshold
@@ -354,6 +412,7 @@ class SpotifyTrackMatchingService {
       'sourceIsrc': isrc,
       'sourceDurationMs': durationMs,
       'status': status,
+      if (status == 'error') 'error': sourceFailures.join('; '),
       'score': bestScore,
       'bestCandidate': best?['candidate'],
       'matchEvidence': best?['evidence'],
@@ -384,7 +443,9 @@ class SpotifyTrackMatchingService {
       'title': song.title,
       'artist': artist,
       'artists': song.artists,
-      'videoAuthor': song.artists.isEmpty ? artist : '${song.artists.first} - Topic',
+      'videoAuthor': song.artists.isEmpty
+          ? artist
+          : '${song.artists.first} - Topic',
       'album': song.album ?? '',
       'duration': song.duration?.inSeconds,
       'image': song.thumbnailUrl,
@@ -393,6 +454,21 @@ class SpotifyTrackMatchingService {
       'isExplicit': song.explicit,
       'sourceType': 'youtube_music_song',
     };
+  }
+
+  static Future<List<Map<String, dynamic>>> _searchMusicCandidates(
+    String query,
+  ) async {
+    final songs = await _youtubeMusic.music.searchSongs(query, limit: 12);
+    return songs.map(_musicSongCandidate).toList();
+  }
+
+  static Future<List<Map<String, dynamic>>> _searchVideoCandidates(
+    String query,
+  ) async {
+    return (await fetchSongsList(
+      query,
+    )).whereType<Map>().map(Map<String, dynamic>.from).toList();
   }
 
   _CandidateEvaluation _evaluate(
@@ -424,9 +500,8 @@ class SpotifyTrackMatchingService {
     }
 
     ranked.sort(
-      (left, right) => (right['score'] as double).compareTo(
-        left['score'] as double,
-      ),
+      (left, right) =>
+          (right['score'] as double).compareTo(left['score'] as double),
     );
     rejected.sort((left, right) {
       final leftEvidence = Map<String, dynamic>.from(left['evidence'] as Map);
@@ -478,7 +553,9 @@ class SpotifyTrackMatchingService {
     metadata['unmatchedCount'] = results.where(_isUnmatched).length;
     metadata['errorCount'] = _count(results, 'error');
     metadata['excludedCount'] = _count(results, 'excluded');
-    metadata['pendingResolutionCount'] = results.where(_isPendingResolution).length;
+    metadata['pendingResolutionCount'] = results
+        .where(_isPendingResolution)
+        .length;
     metadata['validTrackCount'] = totalTracks;
     metadata['lastMatchingCheckpointAt'] = DateTime.now()
         .toUtc()
@@ -572,7 +649,9 @@ class SpotifyTrackMatchingService {
   }
 
   static Map<String, dynamic> _readMap(dynamic value) {
-    return value is Map ? Map<String, dynamic>.from(value) : <String, dynamic>{};
+    return value is Map
+        ? Map<String, dynamic>.from(value)
+        : <String, dynamic>{};
   }
 
   static List<Map<String, dynamic>> _readMaps(dynamic value) {
