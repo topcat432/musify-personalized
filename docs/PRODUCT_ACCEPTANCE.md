@@ -33,7 +33,10 @@ remain FAIL (16 + 24), with references unchanged. The prior native 312-second
 provider success remains one recording, not catalog-wide recovery.
 
 Three additional existing recording choices were selected outside Git, excluding
-the prior success and synthetic rows. Automatic approval review rejected the
+the prior success and named synthetic-media rows. These IDs were read from the
+disposable AVD's public-metadata acceptance fixtures, not a live-phone query.
+The title filter alone did not establish real-user provenance; no permission is
+inferred from this correction. Automatic approval review rejected the
 combined command before execution because sending video identities derived from
 private Hive data to YouTube lacked explicit approval for that payload/destination.
 No batch provider requests were made. That scoped approval is pending; approved
@@ -56,6 +59,29 @@ fixture missing the normal audio handler for toasts. The fixture now initializes
 that handler and uses a slower cancellation body in a fresh v2 namespace, retaining
 all v1 data/evidence. Whole-playlist native acceptance remains pending this rerun.
 Normal four files remained byte-exact at stopped v1 captures; no provider requests.
+
+Native whole-playlist source 2327ee54463d1962a076b1c230f224103a50f9ec now
+passes all seven v2 cases: interruption, reopen, cancellation, truncated body,
+retry, repeat and final reopen. Completion is absent until retry; repeat performs
+zero loader calls and introduces no duplicate playlist or recording. Independent
+copied-Hive reopen verifies preferences/cache, likes/memberships, retained offline
+records, registry order and selected playlist member order; saved owned bodies
+reopen byte-exact. Derived offline path/download timestamp refresh on repeat is
+recorded, not called a complete durable no-op. Normal four files remain byte-exact
+at every stopped capture. The two failed v1 driver/fixture attempts remain retained.
+Evidence: playlist-native-2327ee54-v2/independent-proof.json outside Git.
+
+Normal lib/main.dart 2327ee54 is restored in place and stopped after inspected
+Home/Library. APK SHA-256 ed6c0c1b9b57ba9de87c214bed1e30769fbae873b14e2f1b5b8db5703c0e50d2
+matches installed hash and retained debug signer. Install preserves four files
+byte-exact; independent post-startup reopen preserves user/settings/offline values
+with zero cache timestamp changes. Evidence: normal-2327-observed-final-proof.json.
+Exact Linux CI 38312103902 attempt 1 failed before analysis/tests during pinned
+NDK preparation: Error on ZipFile unknown archive. One unchanged-source rerun is
+completed successfully as attempt 2: clean analysis, 389 tests, both strict Linux
+visual suites (40 images) and required Android boundaries pass. No security,
+license or SDK pin changed. Local 2327ee54 checks pass 389 tests and clean analysis;
+Windows strict FAIL 16 + 24 remains unchanged. Broader provider approval is pending.
 
 ## Playback compatibility continuation, 2026-10-12
 
