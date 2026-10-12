@@ -746,7 +746,13 @@ Future<bool> _rollbackOwnedUnregisteredOffline(
     'userNoBackup',
   ).get('offlineSongs', defaultValue: []);
   if (registry is! List ||
-      registry.whereType<Map>().any((row) => row['ytid'] == id))
+      registry.whereType<Map>().any(
+        (row) =>
+            row['ytid'] == id ||
+            (row['audioPath'] is String &&
+                _offlinePathKey(row['audioPath'] as String) ==
+                    _offlinePathKey(audio.path)),
+      ))
     return false;
   for (final marker
       in audio.parent.listSync(followLinks: false).whereType<File>()) {

@@ -59,6 +59,47 @@ void main() {
       );
 
   test(
+    'owned retry preserves a final payload referenced by another registered identity',
+    () async {
+      final id = 'owned-shared-proof';
+      final audio = File(FilePaths.getAudioPath(id));
+      final partialPath = '${audio.path}.download-126.part';
+      final marker = File('$partialPath.owner.json');
+      await audio.writeAsBytes([1, 2, 3, 4], flush: true);
+      await marker.writeAsString(
+        jsonEncode({
+          'schema': 1,
+          'ytid': id,
+          'audioPath': audio.path,
+          'partialPath': partialPath,
+          'expectedBytes': 4,
+          'sha256': sha256.convert([1, 2, 3, 4]).toString(),
+        }),
+        flush: true,
+      );
+      final registry = List<dynamic>.from(
+        Hive.box('userNoBackup').get('offlineSongs'),
+      )..add({'ytid': 'owned-alias', 'audioPath': audio.path});
+      await Hive.box('userNoBackup').put('offlineSongs', registry);
+      var calls = 0;
+      expect(
+        await makeSongOffline(
+          song(id),
+          audioLoader: (_) async {
+            calls++;
+            return body([9, 10, 11, 12]);
+          },
+        ),
+        isFalse,
+      );
+      expect(calls, 0);
+      expect(await audio.readAsBytes(), [1, 2, 3, 4]);
+      expect(Hive.box('userNoBackup').get('offlineSongs'), registry);
+      expect(await marker.exists(), isTrue);
+    },
+  );
+
+  test(
     'truncated ownership proof preserves payload and does not call loader',
     () async {
       final id = 'owned-truncated-proof';
