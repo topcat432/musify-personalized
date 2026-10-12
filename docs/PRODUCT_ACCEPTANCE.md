@@ -1,5 +1,24 @@
 # Product acceptance ledger
 
+## Continued T03/O01 and compact Library evidence, 2026-10-12
+
+Completed source 4939fffe passes exact Linux CI 38247252808 (343 tests/40 strict
+visuals). Controlled native download completion/cancellation/interruption/reopen/
+retry and independent payload/Hive checks pass on emulator-5556 scratch storage.
+Rename/registry crash windows and complete provider download/play remain open.
+Native lyrics cache identity and equalizer persistence are pinned to 5784c6fc;
+lyrics provider recording provenance and acoustic output remain unverified.
+
+Current d35b4b4e passes seven targeted checks, 345 local aggregate tests and clean
+analysis. Exact Linux CI 38249479399 passes with 345 tests and all 40 strict visuals. The offline lyrics guard has a before-
+failing zero-lookup widget regression; native compact Library heading wrapping
+passes dimension-checked 320-dp/1.6-text before/after inspection. Windows strict
+visuals remain FAIL; comparisons/references are unchanged. These updates supersede
+the T03/O01/compact-Library unrun entries in the older matrix below. Remaining
+preferences beyond the two native restart-tested listening-statistics/automatic-next-song switches, mini-player/insets, corrected album classification and
+in-flight controlled network matching lookup remain independent safe clauses.
+Normal d35b4b4e is restored, display defaults restored, no phone/provider request.
+
 ## Clause-level native audit and Search correction, 2026-10-12
 
 Exact source 13218daa passes Linux CI 38235074425, 326 aggregate tests, clean

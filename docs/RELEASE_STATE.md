@@ -1,5 +1,53 @@
 # Musify Personalized current state
 
+## Lyrics, offline transfer and compact Library continuation, 2026-10-12
+
+Completed source 4939fffed242fb37fedefb2f4b77c8a19c6b7720 passes
+[exact Linux CI 38247252808](https://github.com/topcat432/musify-personalized/actions/runs/38247252808):
+clean analysis, 343 tests, all 40 strict visuals and required Android boundaries.
+The candidate now stages audio bodies, rejects incomplete/oversized/unknown-length
+responses, serializes durable registrations, preserves unknown existing files,
+rolls back injected registry failures and requires every playlist member before
+claiming complete offline availability. Twelve targeted regressions cover overlap,
+cancellation, deletion during transfer, malformed old state, rollback, reopen and
+explicit retry. No registry schema, adapter migration or automatic orphan adoption
+was introduced. Rename/registry crash windows remain unverified.
+
+Native 4939fffe uses emulator-5556, separate acceptance_gap_v1 storage and an owned
+loopback server. Complete transfer, cancellation, process stop during transfer,
+reopen and explicit retry pass. Both complete 8192-byte files independently match
+SHA-256 25df2449b2e5a35fea14e02a7158e283801a1069c9f84631b9a9dacb2f809a7f.
+Copied Hive reopen confirms ordered unique registration, no cancelled/interrupted
+registration, retained imports/likes/preferences and unrelated offline keys.
+The interrupted unregistered staging file is preserved. One synthetic artist-cache
+DateTime refresh is recorded separately; normal four-file hashes remain exact.
+This is controlled transfer evidence, not playable provider download acceptance.
+
+Earlier native 5784c6fc verifies recording-owned lyrics A/B with identical labels,
+refresh without refetch and distinct unavailable lyrics, plus actual Android
+equalizer enable/preset and individual-band persistence through restart. Cache
+identity includes recording ID and late responses cannot replace current lyrics.
+The retained lyrics provider still searches artist/title; recording provenance and
+physical acoustic output remain unverified.
+
+Current product source d35b4b4e84b9b151faebe4b518d57651669d109d adds an offline
+lyrics lookup guard and wrapping enlarged section headings. Seven targeted checks,
+345 aggregate tests and clean local analysis pass; strict Windows suites remain
+FAIL against their font references. No golden/comparator changed. Exact
+[Linux CI 38249479399](https://github.com/topcat432/musify-personalized/actions/runs/38249479399)
+passes with 345 tests, all 40 strict visuals and required Android boundaries. Native normal Library at 320 dp/1.6 text exposed
+heading clipping in 4939fffe; dimension-checked before/after images confirm the
+heading fully wraps beside both actions in d35b4b4e. Mini-player/inset combinations
+and remaining preference/network-lookup clauses are still open. Native listening-statistics and automatic-next-song switches survive restart; both original values are restored. Independent four-box reopen preserves user/settings/offline values; one derived cache DateTime refresh is recorded.
+
+Normal lib/main.dart d35b4b4e is installed in place and stopped after Library and reversible preference checks.
+APK SHA-256 a29fe2633fa0871820359fa5e8640a8d9413ed1c0c931c0b55758472893d9e69;
+retained debug signer unchanged. Four normal Hives remain byte-exact at installation;
+independent post-startup audit confirms every normal stored value exact (zero timestamp changes). Display overrides are
+restored. Evidence stays private outside Git in continuing-acceptance-20261012.
+PR23 remains the sole draft candidate; master, phone, signing/publication and the
+captured provider-denial release blocker are unchanged. No new provider request.
+
 ## Native acceptance gaps and Search repair, 2026-10-12
 
 Source 13218daa3cf2a4b598575d1451cc84cdb8a7aeee passes exact
