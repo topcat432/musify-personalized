@@ -66,7 +66,7 @@ Future<void> main() async {
   sponsorBlockSupport.value = false;
   externalRecommendations.value = false;
   playNextSongAutomatically.value = false;
-  final cache = 'song_${id}_high_url';
+  final cache = 'song_${id}_muxed_high_url';
   await Hive.box('cache').putAll({
     cache: url,
     '${cache}_date': DateTime.now(),

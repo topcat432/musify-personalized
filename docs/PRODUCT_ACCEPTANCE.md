@@ -8,8 +8,8 @@ boundaries. Local 34 targeted/375 aggregate checks pass; Windows strict suites
 remain FAIL (16 + 24), with references unchanged. Muxed-only manifests can select
 formats of the same chosen video; explicit prefer-muxed resolution uses a separate
 cache. Foreign video identities/unsupported codecs are rejected. MP4/WebM audio
-and video MIME declarations reach the decoder intact. Audio preference remains
-primary; prefer-muxed and provider source modes are not exposed in the UI.
+and video MIME declarations reach the decoder intact. At that source, audio preference remained
+primary; provider source modes are not yet exposed in the UI.
 A later denied range remains terminal, with no alternate-identity/URL retry.
 
 Native source 992be053 decoded the owned 70-second muxed MP4 and served its full
@@ -51,8 +51,16 @@ One bounded full transfer through the production byte source received all
 15,818,625 bytes; saved-file SHA-256 is independently recorded outside Git.
 No cookies, credentials, token modification, proxy, changed identity or alternate
 source retry was used. The original denied audio-only URL was not replayed.
-This proves full delivery of the offered muxed format; actual native provider
-background playback is pending. Source controls/prefer-muxed UI remain open.
+Native source 6cb01ba12d3beda82c190f68023e3afb7339e693 then completed
+312,291 ms of that provider track in background on emulator-5556, with one
+source attempt, no fallback/retry and no transport errors. Four normal Hive
+files remained byte-exact. This is decoder/background proof with muted output;
+physical audio and phone acceptance remain open. The normal resolver now prefers
+a compatible same-video muxed stream before playback, using its separate cache.
+Audio-only remains eligible when none exists; a denial stays terminal.
+Muxed streams carry video bytes and do not promise the selected audio bitrate.
+Source controls and visible compatibility attribution remain open.
+Evidence: public-muxed-native-preservation-proof.json outside Git.
 Evidence: provider-muxed-eligibility.json/provider-muxed-full-transfer-proof.json.
 The original audio-only later-range HTTP403 remains unresolved for that format.
 

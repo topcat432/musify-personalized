@@ -28,7 +28,11 @@ MuxedStreamInfo muxed(
 );
 Future<void> waitForCache(String key, String value) async {
   for (var attempt = 0; attempt < 100; attempt++) {
-    if (Hive.box('cache').get(key) == value) return;
+    final box = Hive.box('cache');
+    if (box.get(key) == value && box.get('${key}_date') is DateTime) {
+      await box.flush();
+      return;
+    }
     await Future<void>.delayed(const Duration(milliseconds: 10));
   }
   expect(Hive.box('cache').get(key), value);
@@ -63,7 +67,10 @@ void main() {
         },
       );
       expect(url, stream.url.toString());
-      await waitForCache('song_owned-muxed_high_url', stream.url.toString());
+      await waitForCache(
+        'song_owned-muxed_muxed_high_url',
+        stream.url.toString(),
+      );
       expect(calls, 1);
     },
   );
@@ -148,6 +155,62 @@ void main() {
       );
       expect(calls, 1);
       expect(Hive.box('cache').get(key), 'https://media.invalid/older-audio');
+    },
+  );
+  test(
+    'normal URL resolution defaults to same-video compatibility format',
+    () async {
+      final video = muxed('own-normal1');
+      final audio = AudioOnlyStreamInfo(
+        VideoId('own-normal1'),
+        140,
+        Uri.parse('https://media.invalid/audio-normal'),
+        StreamContainer.mp4,
+        const FileSize(100),
+        const Bitrate(128000),
+        'mp4a.40.2',
+        'medium',
+        const [],
+        MediaType('audio', 'mp4'),
+        null,
+      );
+      final url = await fetchSongStreamUrl(
+        'own-normal1',
+        false,
+        manifestLoader: (_) async => StreamManifest([audio, video]),
+      );
+      expect(url, video.url.toString());
+      await waitForCache(
+        'song_own-normal1_muxed_high_url',
+        video.url.toString(),
+      );
+    },
+  );
+  test(
+    'explicit audio resolution preserves the original audio-quality mode',
+    () async {
+      final video = muxed('owned-audio');
+      final audio = AudioOnlyStreamInfo(
+        VideoId('owned-audio'),
+        140,
+        Uri.parse('https://media.invalid/audio-explicit'),
+        StreamContainer.mp4,
+        const FileSize(100),
+        const Bitrate(128000),
+        'mp4a.40.2',
+        'medium',
+        const [],
+        MediaType('audio', 'mp4'),
+        null,
+      );
+      final url = await fetchSongStreamUrl(
+        'owned-audio',
+        false,
+        preferMuxed: false,
+        manifestLoader: (_) async => StreamManifest([video, audio]),
+      );
+      expect(url, audio.url.toString());
+      await waitForCache('song_owned-audio_high_url', audio.url.toString());
     },
   );
 }

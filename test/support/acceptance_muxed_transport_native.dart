@@ -94,7 +94,7 @@ Future<void> main() async {
       'clen': '$bytes',
       'mime': 'video/mp4',
     }).toString();
-    final key = 'song_${id}_high_url';
+    final key = 'song_${id}_muxed_high_url';
     await Hive.box('cache').putAll({
       key: url,
       '${key}_date': DateTime.now(),

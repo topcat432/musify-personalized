@@ -556,11 +556,14 @@ Future<AudioOnlyStreamInfo?> fetchBestAudioStream(String? songId) async {
   }
 }
 
-/// Resolves a playable stream URL for a song (cached when possible).
+/// Resolves a playable stream URL for the selected video.
+/// Prefer a supported muxed format before playback; audio-only remains available
+/// when the manifest has no compatible muxed format. Never switch on a denial.
+/// Compatibility streams may carry video bytes, so audio bitrate is not promised.
 Future<String?> fetchSongStreamUrl(
   String songId,
   bool isLive, {
-  bool preferMuxed = false,
+  bool preferMuxed = true,
   Future<StreamManifest?> Function(String)? manifestLoader,
 }) async {
   try {
