@@ -30,6 +30,7 @@ import 'package:musify/extensions/l10n.dart';
 import 'package:musify/main.dart';
 import 'package:musify/services/common_services.dart';
 import 'package:musify/services/data_manager.dart';
+import 'package:musify/services/music_search_service.dart';
 import 'package:musify/services/playlists_manager.dart';
 import 'package:musify/services/router_service.dart';
 import 'package:musify/utilities/app_utils.dart';
@@ -50,12 +51,14 @@ class SearchPage extends StatefulWidget {
   const SearchPage({
     super.key,
     this.songSearch,
+    this.videoSearch,
     this.artistSearch,
     this.playlistSearch,
     this.suggestionSearch,
   });
 
   final SearchLoader? songSearch;
+  final SearchLoader? videoSearch;
   final SearchLoader? artistSearch;
   final PlaylistSearchLoader? playlistSearch;
   final SearchLoader? suggestionSearch;
@@ -87,6 +90,7 @@ class _SearchPageState extends State<SearchPage> {
   final ValueNotifier<bool> _fetchingSongs = ValueNotifier(false);
   int maxSongsInList = 15;
   List<dynamic> _songsSearchResult = [];
+  List<dynamic> _videosSearchResult = [];
   List<Map<String, dynamic>> _artistsSearchResult = [];
   List<dynamic> _albumsSearchResult = [];
   List<dynamic> _playlistsSearchResult = [];
@@ -100,6 +104,7 @@ class _SearchPageState extends State<SearchPage> {
 
   void _clearSearchResults() {
     _songsSearchResult = [];
+    _videosSearchResult = [];
     _artistsSearchResult = [];
     _albumsSearchResult = [];
     _playlistsSearchResult = [];
@@ -155,12 +160,13 @@ class _SearchPageState extends State<SearchPage> {
 
     try {
       final results = await Future.wait<List<dynamic>>([
-        (widget.songSearch ?? fetchSongsList)(query),
+        _loadSearchCategory(widget.songSearch ?? searchMusicSongs, query),
         (widget.artistSearch ?? searchArtists)(query),
         widget.playlistSearch?.call(query, 'album') ??
             getPlaylists(query: query, type: 'album'),
         widget.playlistSearch?.call(query, 'playlist') ??
             getPlaylists(query: query, type: 'playlist'),
+        _loadSearchCategory(widget.videoSearch ?? fetchSongsList, query),
       ]);
 
       if (!_isCurrentSearch(requestId, query)) return;
@@ -169,11 +175,20 @@ class _SearchPageState extends State<SearchPage> {
           .whereType<Map>()
           .map(Map<String, dynamic>.from)
           .toList();
-      if (songs.isEmpty && artists.isNotEmpty) {
+      if (songs.isEmpty && artists.isNotEmpty && results[4].isEmpty) {
         songs = await _fetchSongsForResolvedArtist(query, artists, requestId);
       }
       if (!_isCurrentSearch(requestId, query)) return;
       _songsSearchResult = songs;
+      final songIds = songs
+          .whereType<Map>()
+          .map((song) => song['ytid'])
+          .whereType<String>()
+          .where((id) => id.isNotEmpty)
+          .toSet();
+      _videosSearchResult = results[4]
+          .where((video) => video is! Map || !songIds.contains(video['ytid']))
+          .toList();
       _artistsSearchResult = artists;
       _albumsSearchResult = results[2];
       _playlistsSearchResult = results[3];
@@ -189,6 +204,22 @@ class _SearchPageState extends State<SearchPage> {
         _fetchingSongs.value = false;
         setState(() {});
       }
+    }
+  }
+
+  Future<List<dynamic>> _loadSearchCategory(
+    SearchLoader loader,
+    String query,
+  ) async {
+    try {
+      return await loader(query);
+    } catch (error, stackTrace) {
+      logger.log(
+        'Search category unavailable',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return [];
     }
   }
 
@@ -208,7 +239,10 @@ class _SearchPageState extends State<SearchPage> {
 
     for (final fallbackQuery in fallbackQueries) {
       if (!_isCurrentSearch(requestId, query)) return [];
-      final songs = await (widget.songSearch ?? fetchSongsList)(fallbackQuery);
+      final songs = await _loadSearchCategory(
+        widget.songSearch ?? searchMusicSongs,
+        fallbackQuery,
+      );
       if (!_isCurrentSearch(requestId, query)) return [];
       if (songs.isNotEmpty) return songs;
     }
@@ -294,6 +328,7 @@ class _SearchPageState extends State<SearchPage> {
               child:
                   (_suggestionsList.isNotEmpty ||
                       (_songsSearchResult.isEmpty &&
+                          _videosSearchResult.isEmpty &&
                           _artistsSearchResult.isEmpty &&
                           _albumsSearchResult.isEmpty &&
                           _playlistsSearchResult.isEmpty))
@@ -404,7 +439,7 @@ class _SearchPageState extends State<SearchPage> {
     if (_songsSearchResult.isNotEmpty) {
       widgets.add(
         SectionTitle(
-          context.l10n!.songs,
+          '${context.l10n!.songs} · YouTube Music',
           primaryColor,
           icon: FluentIcons.music_note_1_24_filled,
         ),
@@ -424,6 +459,30 @@ class _SearchPageState extends State<SearchPage> {
             key: listItemKey('search_song', index, song),
             showMusicDuration: true,
             borderRadius: borderRadius,
+          ),
+        );
+      }
+    }
+
+    // Generic results remain discoverable without claiming they are songs.
+    if (_videosSearchResult.isNotEmpty) {
+      widgets.add(
+        SectionTitle(
+          'YouTube videos',
+          primaryColor,
+          icon: FluentIcons.video_24_regular,
+        ),
+      );
+      final videos = _videosSearchResult.take(maxSongsInList).toList();
+      for (var index = 0; index < videos.length; index++) {
+        final video = videos[index];
+        widgets.add(
+          SongBar(
+            video,
+            true,
+            key: listItemKey('search_video', index, video),
+            showMusicDuration: true,
+            borderRadius: getItemBorderRadius(index, videos.length),
           ),
         );
       }
@@ -498,7 +557,7 @@ class _SearchPageState extends State<SearchPage> {
 
     return Column(
       key: ValueKey(
-        'results-${_songsSearchResult.length}-${_artistsSearchResult.length}-${_albumsSearchResult.length}-${_playlistsSearchResult.length}',
+        'results-${_videosSearchResult.length}-${_songsSearchResult.length}-${_artistsSearchResult.length}-${_albumsSearchResult.length}-${_playlistsSearchResult.length}',
       ),
       children: widgets,
     );

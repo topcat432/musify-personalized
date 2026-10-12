@@ -51,6 +51,7 @@ void main() {
         child: SearchPage(
           songSearch: (query) =>
               (pending[query] ??= Completer<List<dynamic>>()).future,
+          videoSearch: (_) async => [],
           artistSearch: artistSearch ?? (_) async => [],
           playlistSearch: (_, _) async => [],
           suggestionSearch: (_) async => [],

@@ -1,5 +1,35 @@
 # Product acceptance ledger
 
+## Normal Search categories and owned background checkpoint, 2026-10-12
+
+Normal Search now displays provider-typed songs under Songs / YouTube Music
+and retains generic results under YouTube videos. A generic video is no longer
+implicitly labelled a song. Only exact IDs already in the song category are
+removed from the video category; unknown and long results remain discoverable.
+There is no duration cutoff. Metadata, result order and explicit recording
+choices remain intact. Generic lookup and unrestricted manual matching are
+unchanged. A failed category does not discard the other category, and available
+videos avoid repeated failed artist-song lookups. Existing lifecycle guards
+cover both categories; no media transport, account or data schema changed.
+
+All 13 actual-Search category/lifecycle checks, clean analysis and 294 aggregate
+tests pass. The initial Windows aggregate run passed the 294 test assertions but
+failed at shuffle-test Hive teardown with an OS file lock; the unchanged isolated
+suite and aggregate rerun pass. Both strict Windows suites remain FAIL, with all
+35 actual images byte-exact to the retained control. No goldens/comparator changed.
+Exact Linux CI and native metadata runs are stamped separately to their source/APK;
+these checks cannot establish provider listening or physical playback.
+
+Retained normal-entrypoint source 5721bb181a9674e2a7ca16e4a0f062f734cfc1f0 passed
+owned-file Home/background/screen-off queue advance and natural final pause on
+emulator-5556. Native media-session dispatch paused at 26,501 ms, held position,
+resumed the same item and paused at 29,975 ms while Android reported Asleep.
+Input-key attempts were inconclusive and are not product-failure evidence.
+Offline mode was restored to false, the app stopped and all three owned WAV
+hashes retained. Only fixture recents/listening stats changed; all other keyed
+values, original recents/order and non-fixture stats remain exact. Audibility,
+focus, output accessories and complete provider playback remain unverified.
+
 ## Search lifecycle repair and native metadata verification, 2026-10-12
 
 Search now rejects obsolete completions after a newer submission, input change,
@@ -21,7 +51,12 @@ a captured parser/search error. All four Hive files were byte-exact across the
 in-place debug update; after metadata browsing, user/settings/offline registries
 remain byte-exact and the only cache-value difference is one derived timestamp.
 No song/preview/download was activated. This verifies metadata/UI, not provider
-playback. Exact repaired-source CI and native lifecycle rehearsal remain required.
+playback. Exact repaired source 5721bb181a9674e2a7ca16e4a0f062f734cfc1f0 passed
+[Linux CI 38195882671](https://github.com/topcat432/musify-personalized/actions/runs/38195882671)
+and normal-entrypoint native loaded results, clear and Library return. All four
+Hive files remained byte-exact through that Search/navigation phase. Controlled
+widget fixtures establish obsolete/disposed completion safety; native browsing
+alone does not force those races. Later fixture-play changes are recorded above.
 
 ## Owner clarification and attribution correction, 2026-10-12
 
@@ -325,7 +360,7 @@ No current live-phone or production-signer rehearsal is represented by these APK
 | P03 | Now Playing / mini-player seek, pause, previous, next | State/position synchronized; rapid input bounded; long titles don't overflow | A PASS error ownership, zero/duration, paused snapshot, rapid-input fixtures; E PASS 49d controls, bc error, 5da paused duration; D/R HOLD | now_playing; mini_player; audio_service |
 | P04 | Queue / Shuffle on then off | Natural order restored; current track retained; Play Next survives | A PASS manual-entry shuffle/restoration; E PASS 9f92 current retained, natural order restored and Play Next insertion/replacement; D/R HOLD | audio_service / shuffle state tests |
 | P05 | Track completion / failed stream / retries / repeat off-one-all | Advance once; no replay of failed tail; repeat modes intentional; healthy playback not hung | A PASS stop/stale/three-failure/repeat; E PASS 49d healthy Replay and repeat one/all, natural tail pause; provider terminal callback remains BLOCKED; D/R HOLD | audio_service playback retry / queue_retry_utils tests |
-| P06 | Background/screen off/audio focus/output reconnect | Resume/control correctly, avoid duplicate playback; record attached speaker/wired/BT coverage | D BLOCKED selected phone/output accessories unavailable; E headless output cannot prove audibility/focus/accessory behavior; R HOLD | audio_service; Android audio session |
+| P06 | Background/screen off/audio focus/output reconnect | Resume/control correctly, avoid duplicate playback; record attached speaker/wired/BT coverage | E PASS owned 5721 screen-off queue completion and native media pause/hold/resume; audibility/focus/accessories unverified; D BLOCKED selected phone/output accessories unavailable; R HOLD | audio_service; Android audio session |
 | I01 | Library → Import CSV → pick/inspect/cancel/replace | Valid rows/provenance retained; no implicit likes changes; failed replacement retains old session | A PASS parser/provenance/session replacement; E PASS native CSV picker Cancel at 5da; no replacement or matching rerun; D/R HOLD | spotify_csv_importer; import_session tests |
 | I02 | Matching start/pause/resume/reopen/error | Checkpoint progress; don't redo resolved tracks; fallback failure retains structured candidates | A PASS checkpoint/cancel/resume/error; E PASS completed 4/4 checkpoint and current restart retention; D/R HOLD | track_matching / scoring tests |
 | I03 | Matching summary → No match / Review / Errors | Permanent reopen without restarting 2,643 rows; unresolved remains after routing | A PASS reopenable No match/errors after routing in durable fixture; E PASS completed/empty review access without restart matching; D/R HOLD | matching_page; review_workflow tests |

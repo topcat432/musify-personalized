@@ -1,5 +1,35 @@
 # Musify Personalized current state
 
+## Normal Search categories and owned background checkpoint, 2026-10-12
+
+Normal Search now displays provider-typed songs under Songs / YouTube Music
+and retains generic results under YouTube videos. A generic video is no longer
+implicitly labelled a song. Only exact IDs already in the song category are
+removed from the video category; unknown and long results remain discoverable.
+There is no duration cutoff. Metadata, result order and explicit recording
+choices remain intact. Generic lookup and unrestricted manual matching are
+unchanged. A failed category does not discard the other category, and available
+videos avoid repeated failed artist-song lookups. Existing lifecycle guards
+cover both categories; no media transport, account or data schema changed.
+
+All 13 actual-Search category/lifecycle checks, clean analysis and 294 aggregate
+tests pass. The initial Windows aggregate run passed the 294 test assertions but
+failed at shuffle-test Hive teardown with an OS file lock; the unchanged isolated
+suite and aggregate rerun pass. Both strict Windows suites remain FAIL, with all
+35 actual images byte-exact to the retained control. No goldens/comparator changed.
+Exact Linux CI and native metadata runs are stamped separately to their source/APK;
+these checks cannot establish provider listening or physical playback.
+
+Retained normal-entrypoint source 5721bb181a9674e2a7ca16e4a0f062f734cfc1f0 passed
+owned-file Home/background/screen-off queue advance and natural final pause on
+emulator-5556. Native media-session dispatch paused at 26,501 ms, held position,
+resumed the same item and paused at 29,975 ms while Android reported Asleep.
+Input-key attempts were inconclusive and are not product-failure evidence.
+Offline mode was restored to false, the app stopped and all three owned WAV
+hashes retained. Only fixture recents/listening stats changed; all other keyed
+values, original recents/order and non-fixture stats remain exact. Audibility,
+focus, output accessories and complete provider playback remain unverified.
+
 ## Search lifecycle repair and native metadata verification, 2026-10-12
 
 Search now rejects obsolete completions after a newer submission, input change,
@@ -21,7 +51,12 @@ a captured parser/search error. All four Hive files were byte-exact across the
 in-place debug update; after metadata browsing, user/settings/offline registries
 remain byte-exact and the only cache-value difference is one derived timestamp.
 No song/preview/download was activated. This verifies metadata/UI, not provider
-playback. Exact repaired-source CI and native lifecycle rehearsal remain required.
+playback. Exact repaired source 5721bb181a9674e2a7ca16e4a0f062f734cfc1f0 passed
+[Linux CI 38195882671](https://github.com/topcat432/musify-personalized/actions/runs/38195882671)
+and normal-entrypoint native loaded results, clear and Library return. All four
+Hive files remained byte-exact through that Search/navigation phase. Controlled
+widget fixtures establish obsolete/disposed completion safety; native browsing
+alone does not force those races. Later fixture-play changes are recorded above.
 
 ## Owner clarification and attribution correction, 2026-10-12
 
