@@ -31,17 +31,30 @@ Normal lib/main.dart c6f4a2a7 was restored before this rehearsal. APK SHA-256:
 b8814f456903a704b1e31240d1077ec63f6333de0beae0d4b4b656963e1989e4.
 Installation preserved four normal files byte-exact; inspected fresh Home/Library
 pixels and independent copied-Hive reopen preserve user/settings/offline values
-exactly, with one derived cache timestamp refresh. Current core rehearsal temporarily
-uses separate acceptance_muxed_transport_v1 storage on emulator-5556; normal
-restoration remains required afterward. Emulator memory is overridden to 1024 MiB
+exactly, with one derived cache timestamp refresh. Core rehearsal used separate acceptance_muxed_transport_v1
+storage on emulator-5556. Normal lib/main.dart 1e5c1fdca5c1c0f0361fe272666618a8c398150d
+is now restored in place and stopped after inspected fresh Home/Library pixels.
+APK SHA-256 377c936b891d3c4a94c80694c142cde53e6266679c0b3e73de5b493c3d2fcda9
+matches the installed package and retained debug signer. Installation preserves
+all four normal files byte-exact; independent post-startup reopen preserves
+user/settings/offline values exactly with zero additional cache timestamp changes.
+Evidence: normal-1e5-observed-final-proof.json outside Git. The earlier C6 timestamp
+refresh remains separately recorded. The task loopback server is stopped and its
+single ADB reverse mapping removed. Emulator memory is overridden to 1024 MiB
 for this process only; no physical-device/performance equivalence is claimed.
 
-No new provider metadata/media request executed. A locally computed unchanged
-ANDROID client User-Agent fingerprint matches the captured source. Automatic
-approval review rejected the proposed one accountless YouTube player-metadata
-eligibility request as insufficiently authorized under the earlier provider-request
-constraint. Explicit approval is pending; no indirect request/proxy workaround.
-The captured later-range HTTP403 and full provider playback remain release gates.
+The earlier metadata eligibility tool call was rejected before execution. After
+explicit owner authorization clarified that normal compatibility tests were
+approved, the exact retry succeeded: anonymous unchanged-ANDROID metadata reports
+the same video playable, no live/preview substitution, and a 312-second muxed MP4.
+One bounded full transfer through the production byte source received all
+15,818,625 bytes; saved-file SHA-256 is independently recorded outside Git.
+No cookies, credentials, token modification, proxy, changed identity or alternate
+source retry was used. The original denied audio-only URL was not replayed.
+This proves full delivery of the offered muxed format; actual native provider
+background playback is pending. Source controls/prefer-muxed UI remain open.
+Evidence: provider-muxed-eligibility.json/provider-muxed-full-transfer-proof.json.
+The original audio-only later-range HTTP403 remains unresolved for that format.
 
 Current justacalico fork 292778ec includes muxed filtering/page parsing, but also
 inherits a visionOS default. PR390 explicitly describes PoToken bypass; it is not
