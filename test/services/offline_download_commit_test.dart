@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:convert';
+import 'package:crypto/crypto.dart';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
@@ -55,6 +57,150 @@ void main() {
         Stream.value(bytes),
         expectedBytes: expected ?? bytes.length,
       );
+
+  test(
+    'truncated ownership proof preserves payload and does not call loader',
+    () async {
+      final id = 'owned-truncated-proof';
+      final audio = File(FilePaths.getAudioPath(id));
+      final marker = File('${audio.path}.download-125.part.owner.json');
+      await audio.writeAsBytes([4, 3, 2, 1], flush: true);
+      await marker.writeAsString('{"schema":1,', flush: true);
+      var calls = 0;
+      expect(
+        await makeSongOffline(
+          song(id),
+          audioLoader: (_) async {
+            calls++;
+            return body([1, 2, 3]);
+          },
+        ),
+        isFalse,
+      );
+      expect(calls, 0);
+      expect(await audio.readAsBytes(), [4, 3, 2, 1]);
+      expect(await marker.readAsString(), '{"schema":1,');
+    },
+  );
+
+  test('unknown ownership-marker collision survives rejected commit', () async {
+    final id = 'owned-proof-collision';
+    File? collision;
+    expect(
+      await makeSongOffline(
+        song(id),
+        audioLoader: (_) async => body([1, 2, 3, 4]),
+        commitProbe: (boundary) async {
+          if (boundary == OfflineCommitBoundary.bodyFlushed) {
+            final part = Directory(FilePaths.getAudioPath(id)).parent
+                .listSync()
+                .whereType<File>()
+                .singleWhere(
+                  (file) =>
+                      file.path.contains(id) && file.path.endsWith('.part'),
+                );
+            collision = File('${part.path}.owner.json');
+            await collision!.writeAsString(
+              'owned unknown collision',
+              flush: true,
+            );
+          }
+        },
+      ),
+      isFalse,
+    );
+    expect(await collision!.readAsString(), 'owned unknown collision');
+    expect(await File(FilePaths.getAudioPath(id)).exists(), isFalse);
+    expect((Hive.box('userNoBackup').get('offlineSongs') as List).length, 1);
+  });
+
+  test(
+    'explicit retry rolls back only a hash-proven owned unregistered commit after reopen',
+    () async {
+      final id = 'owned-crash-journal';
+      final audio = File(FilePaths.getAudioPath(id));
+      final partialPath = '${audio.path}.download-123.part';
+      final marker = File('$partialPath.owner.json');
+      await audio.writeAsBytes([1, 2, 3, 4], flush: true);
+      await marker.writeAsString(
+        jsonEncode({
+          'schema': 1,
+          'ytid': id,
+          'audioPath': audio.path,
+          'partialPath': partialPath,
+          'expectedBytes': 4,
+          'sha256': sha256.convert([1, 2, 3, 4]).toString(),
+        }),
+        flush: true,
+      );
+      await Hive.close();
+      Hive.init('${root.path}/hive');
+      for (final name in ['settings', 'user', 'userNoBackup', 'cache']) {
+        await Hive.openBox(name);
+      }
+      var calls = 0;
+      expect(
+        await makeSongOffline(
+          song(id),
+          audioLoader: (_) async {
+            calls++;
+            return body([9, 10, 11, 12]);
+          },
+        ),
+        isTrue,
+      );
+      expect(calls, 1); // Redownload; do not adopt even the proven owned body.
+      expect(await audio.readAsBytes(), [9, 10, 11, 12]);
+      expect(await marker.exists(), isFalse);
+      final ids = (Hive.box('userNoBackup').get('offlineSongs') as List)
+          .map((row) => row['ytid'])
+          .toList();
+      expect(ids, ['keep-owned', id]);
+      expect(await File(FilePaths.getAudioPath('keep-owned')).readAsBytes(), [
+        7,
+        8,
+        9,
+      ]);
+      expect(Hive.box('user').get('likedSongs'), [
+        {'ytid': 'keep-liked'},
+      ]);
+    },
+  );
+
+  test(
+    'mismatched ownership proof preserves unknown file and marker without registration',
+    () async {
+      final id = 'owned-tampered-journal';
+      final audio = File(FilePaths.getAudioPath(id));
+      final partialPath = '${audio.path}.download-124.part';
+      final marker = File('$partialPath.owner.json');
+      await audio.writeAsBytes([4, 3, 2, 1], flush: true);
+      final text = jsonEncode({
+        'schema': 1,
+        'ytid': id,
+        'audioPath': audio.path,
+        'partialPath': partialPath,
+        'expectedBytes': 4,
+        'sha256': sha256.convert([1, 2, 3, 4]).toString(),
+      });
+      await marker.writeAsString(text, flush: true);
+      var calls = 0;
+      expect(
+        await makeSongOffline(
+          song(id),
+          audioLoader: (_) async {
+            calls++;
+            return body([9, 10]);
+          },
+        ),
+        isFalse,
+      );
+      expect(calls, 0);
+      expect(await audio.readAsBytes(), [4, 3, 2, 1]);
+      expect(await marker.readAsString(), text);
+      expect((Hive.box('userNoBackup').get('offlineSongs') as List).length, 1);
+    },
+  );
 
   test(
     'owned probes observe complete body then durable registration before return',

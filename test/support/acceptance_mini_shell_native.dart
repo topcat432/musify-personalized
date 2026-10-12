@@ -14,11 +14,18 @@ import 'package:musify/services/playlists_manager.dart';
 import 'package:musify/services/router_service.dart';
 import 'package:path_provider/path_provider.dart';
 
-Future<void> main() async {
+Future<void> main() => runOwnedShellRehearsal();
+
+Future<void> runOwnedShellRehearsal({
+  String namespace = 'acceptance_mini_v1',
+  Map<String, dynamic> initialPreferences = const {},
+}) async {
   WidgetsFlutterBinding.ensureInitialized();
   if (!Platform.isAndroid) throw StateError('Owned Android rehearsal only');
   final normal = await getApplicationDocumentsDirectory();
-  final scratch = Directory('${normal.path}/acceptance_mini_v1');
+  if (!RegExp(r'^acceptance_[a-z_]+_v1$').hasMatch(namespace))
+    throw StateError('Invalid owned namespace');
+  final scratch = Directory('${normal.path}/$namespace');
   await scratch.create(recursive: true);
   Hive.init(scratch.path);
   for (final name in ['settings', 'user', 'userNoBackup', 'cache']) {
@@ -100,6 +107,7 @@ Future<void> main() async {
       'predictiveBack': true,
       'languageCode': 'en',
       'playNextSongAutomatically': false,
+      ...initialPreferences,
     });
     await user.putAll({'miniSeeded': true, 'likedSongs': records});
     await Hive.box(

@@ -23,6 +23,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/widgets.dart';
 import 'package:hive/hive.dart';
 import 'package:musify/main.dart' show logger;
@@ -701,10 +702,12 @@ typedef OfflineRegistryWriter =
 /// Optional owned acceptance probe; normal downloads supply no callback.
 enum OfflineCommitBoundary {
   bodyFlushed,
+  ownershipFlushed,
   beforeRename,
   afterRename,
   registryWritten,
   registryFlushed,
+  ownershipRemoved,
   beforeReturn,
 }
 
@@ -727,6 +730,75 @@ Future<T> _serializeOfflineCommit<T>(Future<T> Function() action) {
   );
   return result;
 }
+
+String _offlinePathKey(String value) => Platform.isWindows
+    ? value.split(Platform.pathSeparator).join('/').toLowerCase()
+    : value;
+
+// Explicit retry may roll back our own interrupted rename, never adopt it.
+// Legacy/unknown payloads and malformed ownership proofs remain untouched.
+Future<bool> _rollbackOwnedUnregisteredOffline(
+  File audio,
+  String id,
+  bool Function() cancelled,
+) => _serializeOfflineCommit(() async {
+  final registry = Hive.box(
+    'userNoBackup',
+  ).get('offlineSongs', defaultValue: []);
+  if (registry is! List ||
+      registry.whereType<Map>().any((row) => row['ytid'] == id))
+    return false;
+  for (final marker
+      in audio.parent.listSync(followLinks: false).whereType<File>()) {
+    if (!_offlinePathKey(marker.path)
+            .split('/')
+            .last
+            .startsWith(
+              '${_offlinePathKey(audio.path).split('/').last}.download-',
+            ) ||
+        !marker.path.endsWith('.part.owner.json'))
+      continue;
+    try {
+      final data = jsonDecode(await marker.readAsString());
+      if (data is! Map ||
+          data['schema'] != 1 ||
+          data['ytid'] != id ||
+          data['audioPath'] != audio.path)
+        continue;
+      final partial = data['partialPath'];
+      final expected = data['expectedBytes'];
+      final digest = data['sha256'];
+      final prefix = '${audio.path}.download-';
+      if (partial is! String ||
+          !partial.startsWith(prefix) ||
+          !partial.endsWith('.part') ||
+          _offlinePathKey(marker.path) !=
+              _offlinePathKey('$partial.owner.json') ||
+          !RegExp(
+            r'^\d+$',
+          ).hasMatch(partial.substring(prefix.length, partial.length - 5)) ||
+          expected is! int ||
+          expected <= 0 ||
+          digest is! String ||
+          !RegExp(r'^[a-f0-9]{64}$').hasMatch(digest))
+        continue;
+      if (await audio.length() != expected ||
+          (await sha256.bind(audio.openRead()).first).toString() != digest)
+        continue;
+      if (cancelled()) return false;
+      await audio.delete();
+      try {
+        await marker.delete();
+      } catch (_) {
+        /* Retain proof if cleanup fails. */
+      }
+      return true;
+    } catch (_) {
+      // Do not erase a malformed marker or a payload of unknown ownership.
+    }
+  }
+  return false;
+});
 
 Stream<List<int>> _checkedOfflineStream(
   OfflineAudioDownload audio,
@@ -842,6 +914,8 @@ Future<bool> _makeSongOffline(
 }) async {
   File? partial;
   File? committed;
+  File? ownershipMarker;
+  var commitFinished = false;
   var ownsPartial = false;
   var canRemoveCommitted = false;
   try {
@@ -876,7 +950,11 @@ Future<bool> _makeSongOffline(
 
     // An unregistered existing payload has unknown provenance/completeness.
     // Preserve it; do not adopt it or overwrite it to manufacture success.
-    if (await audioFile.exists() || cancelled()) return false;
+    if (cancelled()) return false;
+    if (await audioFile.exists() &&
+        !await _rollbackOwnedUnregisteredOffline(audioFile, ytid, cancelled))
+      return false;
+    if (cancelled()) return false;
     partial = File(
       '${audioFile.path}.download-${DateTime.now().microsecondsSinceEpoch}.part',
     );
@@ -962,9 +1040,28 @@ Future<bool> _makeSongOffline(
         } else {
           updatedOfflineSongs.add(offlineSong);
         }
+        final candidateMarker = File('${partial!.path}.owner.json');
+        if (await candidateMarker.exists())
+          throw StateError('Offline ownership marker already exists');
+        ownershipMarker = candidateMarker;
+        await ownershipMarker!.writeAsString(
+          jsonEncode({
+            'schema': 1,
+            'ytid': ytid,
+            'audioPath': audioFile.path,
+            'partialPath': partial.path,
+            'expectedBytes': await partial.length(),
+            'sha256': (await sha256.bind(partial.openRead()).first).toString(),
+          }),
+          flush: true,
+        );
+        if (commitProbe != null)
+          await commitProbe(OfflineCommitBoundary.ownershipFlushed);
+        if (cancelled())
+          throw StateError('Offline commit cancelled before rename');
         if (commitProbe != null)
           await commitProbe(OfflineCommitBoundary.beforeRename);
-        await partial!.rename(audioFile.path);
+        await partial.rename(audioFile.path);
         committed = audioFile;
         if (commitProbe != null)
           await commitProbe(OfflineCommitBoundary.afterRename);
@@ -1000,6 +1097,19 @@ Future<bool> _makeSongOffline(
       return false;
     }
 
+    commitFinished = true;
+    try {
+      if (ownershipMarker != null && await ownershipMarker!.exists())
+        await ownershipMarker!.delete();
+    } catch (error, stackTrace) {
+      logger.log(
+        'Offline ownership marker cleanup failed',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+    if (commitProbe != null)
+      await commitProbe(OfflineCommitBoundary.ownershipRemoved);
     if (commitProbe != null)
       await commitProbe(OfflineCommitBoundary.beforeReturn);
     return true;
@@ -1007,6 +1117,14 @@ Future<bool> _makeSongOffline(
     logger.log('Error making song offline', error: e, stackTrace: stackTrace);
     return false;
   } finally {
+    try {
+      if (ownershipMarker != null &&
+          (commitFinished || canRemoveCommitted || committed == null) &&
+          await ownershipMarker!.exists())
+        await ownershipMarker!.delete();
+    } catch (_) {
+      /* Leave known proof for explicit retry if cleanup fails. */
+    }
     if (ownsPartial && partial != null && await partial.exists())
       await partial.delete();
   }
