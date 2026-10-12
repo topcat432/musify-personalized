@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hive/hive.dart';
 import 'package:musify/services/settings_manager.dart';
+import 'package:musify/utilities/flutter_bottom_sheet.dart';
 
 import '../../tool/visual_review_harness.dart';
 
@@ -25,6 +26,7 @@ void main() {
   });
 
   tearDown(() async {
+    closeCurrentBottomSheet();
     await Hive.close();
     if (await hiveRoot.exists()) {
       await hiveRoot.delete(recursive: true);
@@ -55,6 +57,58 @@ void main() {
     await tester.pumpAndSettle();
     return router;
   }
+
+  testWidgets(
+    'Back dismisses repeated persistent pickers without changing Settings tab',
+    (tester) async {
+      final router = await pumpShell(tester, initialLocation: '/settings');
+      for (var repeat = 0; repeat < 2; repeat++) {
+        final context = tester.element(
+          find.byType(PriorityShellBranchPlaceholder).first,
+        );
+        showCustomBottomSheet(context, const Text('Owned picker choice'));
+        await tester.pumpAndSettle();
+        expect(find.text('Owned picker choice'), findsOneWidget);
+        await tester.binding.handlePopRoute();
+        await tester.pumpAndSettle();
+        expect(find.text('Owned picker choice'), findsNothing);
+        expect(
+          router.routerDelegate.currentConfiguration.uri.toString(),
+          '/settings',
+        );
+      }
+      await tester.pumpWidget(const SizedBox.shrink());
+      router.dispose();
+    },
+  );
+
+  testWidgets(
+    'Back dismisses Home sheet and switching tabs closes stale sheet',
+    (tester) async {
+      final router = await pumpShell(tester, initialLocation: '/library');
+      final context = tester.element(
+        find.byType(PriorityShellBranchPlaceholder).first,
+      );
+      showCustomBottomSheet(context, const Text('Owned pending sheet'));
+      await tester.pumpAndSettle();
+      await tapNavDestination(tester, 'Home');
+      await tester.pumpAndSettle();
+      expect(find.text('Owned pending sheet'), findsNothing);
+      expect(currentBottomSheetOpen.value, isFalse);
+      final homeContext = tester.element(find.byType(Scaffold).last);
+      showCustomBottomSheet(homeContext, const Text('Owned Home sheet'));
+      await tester.pumpAndSettle();
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.text('Owned Home sheet'), findsNothing);
+      expect(
+        router.routerDelegate.currentConfiguration.uri.toString(),
+        '/home',
+      );
+      await tester.pumpWidget(const SizedBox.shrink());
+      router.dispose();
+    },
+  );
 
   testWidgets('double-tapping the active tab resets its branch location', (
     tester,

@@ -22,6 +22,7 @@
 import 'package:flutter/material.dart';
 
 PersistentBottomSheetController? _currentBottomSheetController;
+final currentBottomSheetOpen = ValueNotifier<bool>(false);
 
 PersistentBottomSheetController? showCustomBottomSheet(
   BuildContext context,
@@ -75,18 +76,24 @@ PersistentBottomSheetController? showCustomBottomSheet(
   );
 
   _currentBottomSheetController = controller;
+  currentBottomSheetOpen.value = true;
   controller.closed.whenComplete(() {
     if (_currentBottomSheetController == controller) {
       _currentBottomSheetController = null;
+      currentBottomSheetOpen.value = false;
     }
   });
 
   return controller;
 }
 
-void closeCurrentBottomSheet() {
-  try {
-    _currentBottomSheetController?.close();
-  } catch (_) {}
+bool closeCurrentBottomSheet() {
+  final controller = _currentBottomSheetController;
+  if (controller == null) return false;
   _currentBottomSheetController = null;
+  currentBottomSheetOpen.value = false;
+  try {
+    controller.close();
+  } catch (_) {}
+  return true;
 }
