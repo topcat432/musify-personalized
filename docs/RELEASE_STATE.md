@@ -1,5 +1,69 @@
 # Musify Personalized current state
 
+## Production queue closure and release checklist, 2026-10-12
+
+Native source 809cf56d64c7270388bc52c3d7dc9ec4212383a5 adds only owned test support:
+the shell helper can omit queue bootstrap, so restart observations come from the
+production handler. Three independent stopped reopens verify 33 native assertions.
+Two shuffle-on/off cycles, repeated same-mode actions, natural source-order
+restoration, selected recording retention, repeated Stop and explicit replay pass.
+Two real process restarts preserve shuffle/repeat preferences, remain stopped
+without autoplay, and explicit Play resumes the exact latest recording as one item.
+The full former queue/order is not restored across cold process startup: production
+has no durable queue recovery path. No tested session behavior defect was reproduced.
+
+Independent reopen verifies exact saved shuffle/repeat settings, likes/source order,
+offline memberships and owned WAV/artwork payloads. Other user keys remain exact
+apart from the explicit rehearsal checkpoint and separately audited replay
+recency/statistics: monotonic counts/timestamps and deterministic added normalization
+fields, with original recording metadata exact. Every stopped capture preserves
+the normal four Hive files byte-exact. Evidence: queue-restart-independent-proof.json
+and queue-restart-809cf56d-stage-0/1/2 outside Git. No production data/schema changes.
+
+Normal lib/main.dart 809cf56d is restored/stopped on emulator-5556 after inspected
+Home/Library. APK SHA-256
+05544bce374e7d5a9f317d684c623ccc90aad90a14645116843c682fbad2278e
+matches installed hash and retained debug signer. Installation preserves four Hive
+files byte-exact; independent post-startup reopen preserves normal user/settings/
+offline values and reports zero cache timestamp changes. Evidence:
+normal-scratch-809cf56d-install-proof.json and normal-809-observed-final-proof.json.
+
+Local targeted 17 tests, aggregate 391 tests and clean analysis pass. Both strict
+Windows visual suites remain FAIL (16 + 24); representative before/after/diff
+images were inspected and references unchanged. Receipt-only 6212e50d CI
+38320919234 was cancelled by the subsequent source run, not passed.
+Exact 809cf56d CI [38321448856](https://github.com/topcat432/musify-personalized/actions/runs/38321448856)
+passes clean analysis, 391 tests, all 40 strict Linux visuals and Android boundaries.
+
+Current-version reconciliation (canonical acceptance rows below retain their exact
+historical source/evidence; these categories do not collapse device/release gates):
+
+| Area | Implemented and independently verified | Genuine remaining capability or dependency |
+|---|---|---|
+| CSV/import/review/routing | Four selectors; exact alternate/order; successful identity snapshots; unknown legacy baseline; stale/repeat/restart guards; durable decisions and explicit destinations | Online provider preview/identity availability still lacks broader acceptance; no new import architecture is included |
+| Backup/recovery/offline | Saved-file checksums/semantic reopen, corrupt/cancel/rollback/crash recovery, owned download boundaries/retry/reopen and registry preservation | Full live-phone signed update/data acceptance remains required |
+| Home/Search/player/preferences | Bounded Home/shell/accessibility, search lifecycle, native controls/queue/shuffle/repeat/preview and reversible settings with preservation | Cold full-queue restoration is absent; clarify whether exact queue/position recovery is required for this version before durable-state design |
+| Listening/source modes | YouTube-primary compatibility, saved local playback, active-source details with truthful format/quality limits; Premium-free CSV metadata import | Requested visible provider-selection modes are not implemented. Source attribution does not provide YouTube-only/Spotify-only/both policy controls. No working no-Premium Spotify exact-track engine or other feasible replacement is proven |
+| Provider reliability | One complete muxed provider recording plus owned finite-range seek/tail/next/background proofs | Original audio-only HTTP403 remains unresolved; sustained catalog stream/download/review-preview acceptance is unmet. A three-recording private-payload batch remains consent-held and is not a repair or release pass |
+| Visual/CI | 391 local tests/analysis; exact 809cf56d Linux 40 strict visuals and Android CI pass | Windows strict comparisons remain failed |
+| Physical listening | Scoped emulator media state/background/queue behavior | Audible speaker/wired/BT output, focus/reconnect and actual-phone native/data acceptance require device/output access and separately approved installation |
+| Signed delivery | Retained package/signer/default-tip/updater rejection boundaries | Passing product gates, approved integration, exact default-tip signed/published artifact, monotonic code, v2/v3/source/APK checks and disposable in-place rehearsal precede approved live-phone delivery |
+
+D-006 keeps Spotify metadata migration usable without OAuth/Premium; it does not
+establish Spotify playback. D-015 still requires visible source/optional modes and
+the intended recording experience. The unsupported engine/mode gap remains a
+current outcome limitation requiring a feasible bounded provider design or an
+explicitly revised supported-mode acceptance decision; no nonfunctional selector
+is added to imply success. Full cold queue recovery is a separate durable-feature
+scope question, not a permission to migrate the library.
+
+The provider batch remains paused without owner payload/destination approval.
+No denied provider source is replayed/rerouted and no account/cookie/security work
+is authorized. Richer ZIP/JSON/TSV, multi-membership sync/share intake and canonical
+multi-source architecture remain future scope. Independent owned acceptance is
+complete for this continuation; remaining work crosses the named capability/
+consent/device/release boundaries. This candidate is not release-ready.
+
 ## Native controls and scope reconciliation, 2026-10-12
 
 Exact e1498a180bf3a500e458d520712ce9719f848e2b passes Linux CI
