@@ -33,12 +33,14 @@ import 'package:musify/services/data_manager.dart';
 import 'package:musify/services/music_search_service.dart';
 import 'package:musify/services/playlists_manager.dart';
 import 'package:musify/services/router_service.dart';
+import 'package:musify/theme/app_spacing.dart';
 import 'package:musify/utilities/app_utils.dart';
 import 'package:musify/widgets/artist_bar.dart';
 import 'package:musify/widgets/confirmation_dialog.dart';
 import 'package:musify/widgets/custom_bar.dart';
 import 'package:musify/widgets/custom_search_bar.dart';
 import 'package:musify/widgets/mini_player_bottom_space.dart';
+import 'package:musify/widgets/personalized_ui.dart';
 import 'package:musify/widgets/playlist_bar.dart';
 import 'package:musify/widgets/section_title.dart';
 import 'package:musify/widgets/song_bar.dart';
@@ -98,11 +100,22 @@ class _SearchPageState extends State<SearchPage> {
   Timer? _debounce;
   int _latestSuggestionRequest = 0;
   int _latestSearchRequest = 0;
+  String? _completedSearchQuery;
+  bool _searchHadFailure = false;
+
+  bool get _hasSearchResults =>
+      _songsSearchResult.isNotEmpty ||
+      _videosSearchResult.isNotEmpty ||
+      _artistsSearchResult.isNotEmpty ||
+      _albumsSearchResult.isNotEmpty ||
+      _playlistsSearchResult.isNotEmpty;
 
   bool _isCurrentSearch(int requestId, String query) =>
       mounted && requestId == _latestSearchRequest && _searchBar.text == query;
 
   void _clearSearchResults() {
+    _completedSearchQuery = null;
+    _searchHadFailure = false;
     _songsSearchResult = [];
     _videosSearchResult = [];
     _artistsSearchResult = [];
@@ -158,15 +171,39 @@ class _SearchPageState extends State<SearchPage> {
       unawaited(addOrUpdateData<List>('user', 'searchHistory', updatedHistory));
     }
 
+    var hadFailure = false;
+    void markFailure() => hadFailure = true;
     try {
       final results = await Future.wait<List<dynamic>>([
-        _loadSearchCategory(widget.songSearch ?? searchMusicSongs, query),
-        (widget.artistSearch ?? searchArtists)(query),
-        widget.playlistSearch?.call(query, 'album') ??
-            getPlaylists(query: query, type: 'album'),
-        widget.playlistSearch?.call(query, 'playlist') ??
-            getPlaylists(query: query, type: 'playlist'),
-        _loadSearchCategory(widget.videoSearch ?? fetchSongsList, query),
+        _loadSearchCategory(
+          widget.songSearch ?? searchMusicSongs,
+          query,
+          onFailure: markFailure,
+        ),
+        _loadSearchCategory(
+          widget.artistSearch ?? searchArtists,
+          query,
+          onFailure: markFailure,
+        ),
+        _loadSearchCategory(
+          (value) =>
+              widget.playlistSearch?.call(value, 'album') ??
+              getPlaylists(query: value, type: 'album'),
+          query,
+          onFailure: markFailure,
+        ),
+        _loadSearchCategory(
+          (value) =>
+              widget.playlistSearch?.call(value, 'playlist') ??
+              getPlaylists(query: value, type: 'playlist'),
+          query,
+          onFailure: markFailure,
+        ),
+        _loadSearchCategory(
+          widget.videoSearch ?? fetchSongsList,
+          query,
+          onFailure: markFailure,
+        ),
       ]);
 
       if (!_isCurrentSearch(requestId, query)) return;
@@ -176,7 +213,12 @@ class _SearchPageState extends State<SearchPage> {
           .map(Map<String, dynamic>.from)
           .toList();
       if (songs.isEmpty && artists.isNotEmpty && results[4].isEmpty) {
-        songs = await _fetchSongsForResolvedArtist(query, artists, requestId);
+        songs = await _fetchSongsForResolvedArtist(
+          query,
+          artists,
+          requestId,
+          onFailure: markFailure,
+        );
       }
       if (!_isCurrentSearch(requestId, query)) return;
       _songsSearchResult = songs;
@@ -194,6 +236,7 @@ class _SearchPageState extends State<SearchPage> {
       _playlistsSearchResult = results[3];
     } catch (e, stackTrace) {
       if (!_isCurrentSearch(requestId, query)) return;
+      hadFailure = true;
       logger.log(
         'Error while searching online songs',
         error: e,
@@ -201,6 +244,8 @@ class _SearchPageState extends State<SearchPage> {
       );
     } finally {
       if (_isCurrentSearch(requestId, query)) {
+        _completedSearchQuery = query;
+        _searchHadFailure = hadFailure;
         _fetchingSongs.value = false;
         setState(() {});
       }
@@ -209,11 +254,13 @@ class _SearchPageState extends State<SearchPage> {
 
   Future<List<dynamic>> _loadSearchCategory(
     SearchLoader loader,
-    String query,
-  ) async {
+    String query, {
+    VoidCallback? onFailure,
+  }) async {
     try {
       return await loader(query);
     } catch (error, stackTrace) {
+      onFailure?.call();
       logger.log(
         'Search category unavailable',
         error: error,
@@ -226,8 +273,9 @@ class _SearchPageState extends State<SearchPage> {
   Future<List<dynamic>> _fetchSongsForResolvedArtist(
     String query,
     List<Map<String, dynamic>> artists,
-    int requestId,
-  ) async {
+    int requestId, {
+    VoidCallback? onFailure,
+  }) async {
     final artistName = artists.first['title']?.toString().trim();
     if (artistName == null || artistName.isEmpty) return [];
 
@@ -242,6 +290,7 @@ class _SearchPageState extends State<SearchPage> {
       final songs = await _loadSearchCategory(
         widget.songSearch ?? searchMusicSongs,
         fallbackQuery,
+        onFailure: onFailure,
       );
       if (!_isCurrentSearch(requestId, query)) return [];
       if (songs.isNotEmpty) return songs;
@@ -323,6 +372,30 @@ class _SearchPageState extends State<SearchPage> {
               },
             ),
 
+            if (_completedSearchQuery != null &&
+                _completedSearchQuery == _searchBar.text &&
+                _suggestionsList.isEmpty &&
+                (_searchHadFailure || !_hasSearchResults)) ...[
+              const SizedBox(height: AppSpacing.md),
+              PersonalizedStatusBanner(
+                title: _searchHadFailure
+                    ? 'Search incomplete'
+                    : 'No results found',
+                message: _searchHadFailure
+                    ? 'Some search sources are unavailable. Try again.'
+                    : 'Try another search or use a previous query.',
+                tone: _searchHadFailure
+                    ? PersonalizedStatusTone.error
+                    : PersonalizedStatusTone.neutral,
+              ),
+              if (_searchHadFailure)
+                TextButton.icon(
+                  onPressed: _submitSearch,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Retry search'),
+                ),
+              const SizedBox(height: AppSpacing.md),
+            ],
             AnimatedSwitcher(
               duration: const Duration(milliseconds: 200),
               child:

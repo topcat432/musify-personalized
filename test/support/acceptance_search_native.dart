@@ -17,6 +17,7 @@ Map<String, dynamic> ownedCatalog(String id, String title) => {
   'ytid': id,
   'title': title,
   'source': 'user-created',
+  'isAlbum': id == 'customId-gap-album',
   'image': '',
   'list': [
     {
@@ -43,6 +44,16 @@ Future<void> prepareOwnedSearchFixtures() async {
       ],
     });
   }
+  final savedPlaylists = List<dynamic>.from(user.get('customPlaylists'));
+  final albumIndex = savedPlaylists.indexWhere(
+    (row) => row is Map && row['ytid'] == 'customId-gap-album',
+  );
+  if (albumIndex >= 0 && savedPlaylists[albumIndex]['isAlbum'] != true) {
+    savedPlaylists[albumIndex] = Map<String, dynamic>.from(
+      savedPlaylists[albumIndex],
+    )..['isAlbum'] = true;
+    await user.put('customPlaylists', savedPlaylists);
+  }
   // Real artist resolver, verified synthetic ID and complete cached catalog.
   // This is cached navigation, not a live provider-catalog pass.
   final key = 'artist_catalog_v${artistCatalogCacheVersion}_$ownedArtistId';
@@ -56,6 +67,12 @@ Future<void> prepareOwnedSearchFixtures() async {
     '${key}_date': DateTime.now(),
   });
   reloadPlaylistLibraryStateFromStorage();
+  final history = List<dynamic>.from(
+    user.get('searchHistory', defaultValue: []),
+  );
+  if (!history.contains('Owned partial')) {
+    await user.put('searchHistory', [...history, 'Owned partial']);
+  }
   reloadSearchHistoryFromStorage();
 }
 
@@ -67,14 +84,38 @@ Future<List<dynamic>> _lookup(String query, List<dynamic> values) async {
 }
 
 Widget ownedSearchPage() => SearchPage(
-  songSearch: (query) => _lookup(query, []),
-  videoSearch: (query) => _lookup(query, []),
-  artistSearch: (query) => _lookup(query, [ownedArtist]),
-  playlistSearch: (query, type) => _lookup(query, [
-    ownedCatalog(
-      type == 'album' ? 'customId-gap-album' : 'customId-gap-playlist',
-      type == 'album' ? 'Owned route album' : 'Owned route playlist',
-    ),
+  songSearch: (query) => _lookup(query, [
+    {
+      'ytid': 'owned-healthy-recording',
+      'title': 'Owned healthy recording',
+      'artist': 'Owned route artist',
+      'duration': 8,
+      'sourceType': 'youtube_music_song',
+    },
   ]),
+  videoSearch: (query) => _lookup(query, [
+    {
+      'ytid': 'owned-healthy-video',
+      'title': 'Owned healthy video',
+      'artist': 'Owned fixture channel',
+      'duration': 8,
+    },
+  ]),
+  artistSearch: (query) {
+    if (query.toLowerCase().contains('partial'))
+      throw StateError('Owned artist failure');
+    return _lookup(query, [ownedArtist]);
+  },
+  playlistSearch: (query, type) {
+    if (query.toLowerCase().contains('partial') && type == 'album') {
+      throw StateError('Owned album failure');
+    }
+    return _lookup(query, [
+      ownedCatalog(
+        type == 'album' ? 'customId-gap-album' : 'customId-gap-playlist',
+        type == 'album' ? 'Owned route album' : 'Owned route playlist',
+      ),
+    ]);
+  },
   suggestionSearch: (_) async => [],
 );

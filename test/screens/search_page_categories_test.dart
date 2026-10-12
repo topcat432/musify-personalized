@@ -46,6 +46,7 @@ void main() {
     SearchLoader songs,
     SearchLoader videos, {
     SearchLoader? artists,
+    PlaylistSearchLoader? playlists,
   }) async {
     await tester.pumpWidget(
       priorityReviewApp(
@@ -54,7 +55,7 @@ void main() {
           songSearch: songs,
           videoSearch: videos,
           artistSearch: artists ?? (_) async => [],
-          playlistSearch: (_, _) async => [],
+          playlistSearch: playlists ?? (_, _) async => [],
           suggestionSearch: (_) async => [],
         ),
       ),
@@ -174,6 +175,78 @@ void main() {
     expect(find.text('YouTube videos'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'artist and album failures preserve healthy song and video results',
+    (tester) async {
+      await search(
+        tester,
+        (_) async => [video('music', 'Owned music')],
+        (_) async => [video('film', 'Owned video')],
+        artists: (_) async => throw StateError('Owned artist failure'),
+        playlists: (_, type) async {
+          if (type == 'album') throw StateError('Owned album failure');
+          return [];
+        },
+      );
+      expect(find.text('Owned music'), findsOneWidget);
+      expect(find.text('Owned video'), findsOneWidget);
+      expect(find.text('Search incomplete'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'failed Search exposes retry and replaces failure with recovered results',
+    (tester) async {
+      var failed = true;
+      Future<List<dynamic>> lookup(String _) async {
+        if (failed) throw StateError('Owned metadata failure');
+        return [video('recovered', 'Owned recovered recording')];
+      }
+
+      await search(
+        tester,
+        lookup,
+        (_) async => [],
+        artists: (_) async {
+          if (failed) throw StateError('Owned artist failure');
+          return [];
+        },
+        playlists: (_, _) async {
+          if (failed) throw StateError('Owned playlist failure');
+          return [];
+        },
+      );
+      expect(find.text('Search incomplete'), findsOneWidget);
+      expect(find.text('Retry search'), findsOneWidget);
+      failed = false;
+      await tester.ensureVisible(find.text('Retry search'));
+      await tester.runAsync(() async {
+        await tester.tap(find.text('Retry search'));
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      });
+      await tester.pumpAndSettle();
+      expect(find.text('Owned recovered recording'), findsOneWidget);
+      expect(find.text('Search incomplete'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'successful empty Search states no results and clear removes status',
+    (tester) async {
+      await search(tester, (_) async => [], (_) async => []);
+      expect(find.text('No results found'), findsOneWidget);
+      final bar = tester.widget<CustomSearchBar>(find.byType(CustomSearchBar));
+      bar.controller.clear();
+      bar.onChanged!('');
+      await tester.pumpAndSettle();
+      expect(find.text('No results found'), findsNothing);
+      expect(find.text('Search incomplete'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('clearing Search discards a late generic result', (tester) async {
     final pending = Completer<List<dynamic>>();
