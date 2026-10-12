@@ -38,7 +38,7 @@ class _OwnedOfflineRehearsalState extends State<OwnedOfflineRehearsal> {
         }
         await request.response.close();
       } catch (_) {
-        request.response.destroy();
+        // Cancellation closes the owned client; the server is closed below.
       }
     });
     try {
