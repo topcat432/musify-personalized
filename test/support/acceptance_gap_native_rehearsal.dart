@@ -27,6 +27,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'acceptance_search_native.dart';
 import 'acceptance_audio_native.dart';
+import 'acceptance_offline_native.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -108,6 +109,10 @@ Future<void> main() async {
   final router = GoRouter(
     routes: [
       GoRoute(path: '/', builder: (_, _) => const OwnedGapHome()),
+      GoRoute(
+        path: '/owned-offline',
+        builder: (_, _) => const OwnedOfflineRehearsal(),
+      ),
       GoRoute(
         path: '/owned-lyrics',
         builder: (_, _) => const OwnedLyricsRehearsal(),
@@ -202,6 +207,10 @@ class OwnedGapHome extends StatelessWidget {
         FilledButton(
           onPressed: () => context.push('/settings'),
           child: const Text('Owned settings'),
+        ),
+        FilledButton(
+          onPressed: () => context.push('/owned-offline'),
+          child: const Text('Owned offline transfer'),
         ),
         FilledButton(
           onPressed: () => context.push('/matching'),
