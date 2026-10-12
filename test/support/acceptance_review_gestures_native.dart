@@ -11,7 +11,11 @@ import 'package:musify/services/spotify_review_workflow_service.dart';
 import 'acceptance_mini_shell_native.dart';
 
 Future<void> main() async {
-  await runOwnedShellRehearsal(namespace: 'acceptance_review_gestures_v2');
+  // Mount once: replacing Musify would dispose its root and close these boxes.
+  await runOwnedShellRehearsal(
+    namespace: 'acceptance_review_gestures_v3',
+    mountApp: false,
+  );
   final box = Hive.box('user');
   if (!box.containsKey('ownedReviewSeeded')) {
     final rows = [
@@ -31,7 +35,7 @@ Future<void> main() async {
                 'title': 'Owned candidate $row',
                 'artist': 'Owned artist $row',
                 'album': 'Owned album',
-                'duration': 8,
+                'duration': 70,
                 'sourceType': 'owned_fixture',
               },
               'evidence': {
@@ -70,7 +74,7 @@ Future<void> main() async {
   await File('$applicationDirPath/review-native-source.json').writeAsString(
     jsonEncode({
       'sourceSha': const String.fromEnvironment('GIT_SHA'),
-      'namespace': 'acceptance_review_gestures_v2',
+      'namespace': 'acceptance_review_gestures_v3',
       'localPreviewOnly': true,
       'providerRequested': false,
     }),
@@ -84,7 +88,7 @@ Future<void> main() async {
           dataSource: const OwnedTracingReviewSource(),
           audioPlayer: OwnedTracingReviewPlayer(),
           streamResolver: (_) async =>
-              Uri.file('$applicationDirPath/owned-mini-8.wav').toString(),
+              Uri.file('$applicationDirPath/owned-mini-70.wav').toString(),
         ),
       ),
     ),

@@ -19,11 +19,13 @@ Future<void> main() => runOwnedShellRehearsal();
 Future<void> runOwnedShellRehearsal({
   String namespace = 'acceptance_mini_v1',
   Map<String, dynamic> initialPreferences = const {},
+  bool mountApp = true,
 }) async {
   WidgetsFlutterBinding.ensureInitialized();
   if (!Platform.isAndroid) throw StateError('Owned Android rehearsal only');
   final normal = await getApplicationDocumentsDirectory();
-  if (!RegExp(r'^acceptance_[a-z_]+_v1$').hasMatch(namespace))
+  if (!RegExp(r'^acceptance_[a-z_]+_v1$').hasMatch(namespace) &&
+      namespace != 'acceptance_review_gestures_v3')
     throw StateError('Invalid owned namespace');
   final scratch = Directory('${normal.path}/$namespace');
   await scratch.create(recursive: true);
@@ -150,7 +152,9 @@ Future<void> runOwnedShellRehearsal({
     }),
     flush: true,
   );
-  NavigationManager.instance;
-  NavigationManager.router.go('/library');
-  runApp(const Musify());
+  if (mountApp) {
+    NavigationManager.instance;
+    NavigationManager.router.go('/library');
+    runApp(const Musify());
+  }
 }
