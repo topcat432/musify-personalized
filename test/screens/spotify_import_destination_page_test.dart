@@ -91,11 +91,34 @@ void main() {
   }
 
   Future<void> transfer(WidgetTester tester) async {
-    await tester.runAsync(() async {
-      await tester.tap(find.text('Transfer songs'));
-      await Future<void>.delayed(const Duration(milliseconds: 300));
-      await Hive.box('user').flush();
-    });
+    final oldHistory =
+        (Hive.box('user').get('spotifyImportMetadata')['routingHistory']
+                    as List? ??
+                [])
+            .length;
+    await tester.tap(find.text('Transfer songs'));
+    await tester.pump();
+    var completed = false;
+    for (var attempt = 0; attempt < 60; attempt++) {
+      await tester.runAsync(() async {
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      });
+      await tester.pump(const Duration(milliseconds: 50));
+      final history =
+          Hive.box('user').get('spotifyImportMetadata')['routingHistory']
+              as List? ??
+          [];
+      if (history.length == oldHistory + 1 &&
+          find.text('Saving.').evaluate().isEmpty) {
+        completed = true;
+        break;
+      }
+    }
+    expect(
+      completed,
+      isTrue,
+      reason: 'Confirmed transfer must finish its durable audit',
+    );
     await tester.pumpAndSettle();
   }
 
@@ -254,12 +277,7 @@ void main() {
         await tester.tap(find.text('Review'));
       });
       await tester.pumpAndSettle();
-      await tester.runAsync(() async {
-        await tester.tap(find.text('Transfer songs'));
-        await Future<void>.delayed(const Duration(milliseconds: 300));
-        await Hive.box('user').flush();
-      });
-      await tester.pumpAndSettle();
+      await transfer(tester);
       expect(
         tester.widget<TextField>(find.byType(TextField)).controller!.text,
         '1',
@@ -277,12 +295,7 @@ void main() {
       expect(dialog.preview.selectedCount, 1);
       expect(dialog.preview.newCount, 0);
       expect(dialog.preview.alreadyPresentCount, 1);
-      await tester.runAsync(() async {
-        await tester.tap(find.text('Transfer songs'));
-        await Future<void>.delayed(const Duration(milliseconds: 300));
-        await Hive.box('user').flush();
-      });
-      await tester.pumpAndSettle();
+      await transfer(tester);
       expect(userLikedSongsList.value.map((song) => song['ytid']), [
         'fixture-1',
       ]);

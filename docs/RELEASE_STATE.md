@@ -1,5 +1,35 @@
 # Musify Personalized current state
 
+## Approved deferred Home/shell scope, 2026-10-12
+
+The owner approved carrying current-version deferred work into the sole candidate.
+The bounded Home/shell product and regression delta from preserved f14a73fb is
+applied to PR #23: shared spacing tokens, playlist/recommendation semantics,
+announcement typography/shape tokens, a labelled 48-pixel dismiss target, eight
+Home/shell tests and five inspected preserved Linux references. No retired PR,
+workflow or old source branch is revived. Import hub copy now describes chosen
+resolved songs. Production startup never imports the Android-only synthetic
+selector entrypoint under test/support; it opens only separate scratch boxes.
+
+The eight scoped tests, full analysis and all 319 aggregate tests pass. Earlier
+runs exposed a first-N widget's fixed-delay I/O race and background shuffle-fixture
+preloads reopening a deleted cache. The tests now wait for a durable routing audit
+and isolate queue-state assertions from unrelated preloading; product assertions
+and production audio code are unchanged. Failed and passing logs are retained.
+Both strict Windows suites fail all 40 comparisons; exact Linux
+visual/CI/native acceptance remains required. No comparator is changed.
+
+I11 reference source 07508cbd4eda8b33640d00195b3f52a75ebb2f8d passed exact
+[Linux CI 38212793878](https://github.com/topcat432/musify-personalized/actions/runs/38212793878).
+Normal-entrypoint native e1b1bbd8 verified reverse selection/source-order preview,
+cancellation, two zero-addition transfers and restart retaining an empty newly
+resolved delta. Copied-Hive inspection confirms every library/source value,
+old audit, setting and offline registration exact. Only two confirmed routing
+audits and the resolution baseline were added; four normal Hive files were
+byte-exact across installation. The nonempty delta rehearsal uses isolated
+synthetic boxes and has not yet completed. This is not phone/provider/signed
+delivery acceptance. Master remains unchanged and production gates remain held.
+
 ## Import subset routing verification, 2026-10-12
 
 The owner approved I11 individual and newly resolved selectors for the current

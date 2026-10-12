@@ -149,6 +149,7 @@
   "moveToFolder": "Move to folder",
   "name": "Name",
   "newAnnouncement": "New announcement posted",
+  "dismissAnnouncement": "Dismiss announcement",
   "newFolder": "New folder",
   "no": "No",
   "noCustomPlaylists": "No custom playlists created yet",

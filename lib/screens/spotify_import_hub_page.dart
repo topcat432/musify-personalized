@@ -91,7 +91,7 @@ class SpotifyImportHubPage extends StatelessWidget {
                         icon: Icons.move_to_inbox_rounded,
                         title: 'Choose a destination',
                         description:
-                            'Send all or an exact number of resolved songs to Liked Songs or a playlist.',
+                            'Send your chosen resolved songs to Liked Songs or a playlist.',
                         onPressed: () => Navigator.of(context).push(
                           personalizedPageRoute<void>(
                             builder: (_) =>

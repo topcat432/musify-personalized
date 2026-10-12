@@ -1,8 +1,10 @@
-> Current operational scope (2026-10-11): PR #23 is the sole consolidation
+> Current operational scope (2026-10-12): PR #23 is the sole consolidation
 > candidate. This document is design/phase reference, not a second active work
-> queue or proof that planned phases shipped. #22's Home/shell delta remains
-> deferred at f14a73fb7b9b56682d72fa9868a9dec3ffb1a2ac, recoverable from its
-> closed-PR history and the verified pre-cleanup bundle. Use RELEASE_STATE.md
+> queue or proof that planned phases shipped. Following the owner's current-version
+> approval, the bounded Home/shell token/accessibility/test delta preserved at
+> f14a73fb7b9b56682d72fa9868a9dec3ffb1a2ac is carried into the candidate.
+> Retired PR #22 remains closed; its old workflows are not revived. Later broad
+> redesign and future product systems remain planning references. Use RELEASE_STATE.md
 > and CONTRIBUTING.md for current branch, check and acceptance procedures.
 
 # Musify Personalized — Visual Overhaul Plan

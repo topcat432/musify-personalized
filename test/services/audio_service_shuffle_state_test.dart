@@ -19,6 +19,9 @@ void main() {
     await Hive.openBox('user');
     await Hive.openBox('userNoBackup');
     await Hive.openBox('cache');
+    // These assertions cover queue/shuffle state, not stream preloading.
+    // Keep unrelated asynchronous cache preloads out of fixture teardown.
+    offlineMode.value = true;
   });
 
   tearDownAll(() async {
@@ -28,13 +31,10 @@ void main() {
     }
   });
 
-  // These ytids are deliberately not valid YouTube video ids. Resolving a
-  // stream URL for them fails immediately and locally (a parse error, not a
-  // network round trip), so `playSong` fails deterministically without ever
-  // touching the platform's audio player — which has no real implementation
-  // in a `flutter test` unit-test environment. The shuffle/queue bookkeeping
-  // this test checks is all updated synchronously before that playback
-  // attempt resolves, so it's unaffected by the playback outcome.
+  // Synthetic IDs and controlled playback keep these queue-state assertions
+  // independent of provider transport and the platform audio implementation.
+  // The first case deliberately leaves playback pending to reproduce the
+  // asynchronous shuffle bug; the second completes the same handoff promptly.
   Map<String, dynamic> song(String ytid, String title) {
     return {'ytid': ytid, 'title': title};
   }
@@ -102,7 +102,7 @@ void main() {
   test(
     'a bare replace with no explicit shuffle leaves shuffle state off',
     () async {
-      final handler = MusifyAudioHandler();
+      final handler = _ControlledHandler((_) async => true);
       addTearDown(handler.audioPlayer.dispose);
 
       final songs = [

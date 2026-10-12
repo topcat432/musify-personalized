@@ -28,6 +28,7 @@ import 'package:musify/constants/app_constants.dart';
 import 'package:musify/extensions/l10n.dart';
 import 'package:musify/main.dart';
 import 'package:musify/services/settings_manager.dart';
+import 'package:musify/theme/app_spacing.dart';
 import 'package:musify/utilities/flutter_bottom_sheet.dart'
     show closeCurrentBottomSheet;
 import 'package:musify/widgets/mini_player.dart';
@@ -126,8 +127,8 @@ class _BottomNavigationPageState extends State<BottomNavigationPage> {
                                 ),
                                 const Padding(
                                   padding: EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 8,
+                                    horizontal: AppSpacing.sm,
+                                    vertical: AppSpacing.sm,
                                   ),
                                   child: MiniPlayer(),
                                 ),

@@ -316,7 +316,9 @@ Deferred future scope (do not implement or call shipped during stabilization):
 playlist-aware ZIP/JSON/CSV/TSV/repeat synchronization and file share intents;
 optional Spotify PKCE; canonical multi-source/library intelligence; local/server
 lossless; taste/DJ/AutoMix/Music Atlas/radio similarity; Android Auto. #22's
-Home/shell work is recoverably deferred. PRODUCT_VISION and the import roadmap
+The owner-approved bounded Home/shell delta from preserved f14a73fb is now carried
+into the candidate; its current verification is in RELEASE_STATE.md.
+PRODUCT_VISION and the import roadmap
 describe ambitions beyond delivered scope.
 
 Selection ambiguity: current destination code exposes all/first-N. The roadmap
