@@ -154,7 +154,8 @@ Future<void> runOwnedAcceptance(
         'stage': stage,
         'providerRequested': false,
         'physicalOutputVerified': false,
-        'currentIndex': audioHandler.audioPlayer.currentIndex,
+        'currentIndex': audioHandler.playbackState.value.queueIndex,
+        'nativeSourceIndex': audioHandler.audioPlayer.currentIndex,
         'positionMs': audioHandler.audioPlayer.position.inMilliseconds,
         'durationMs': audioHandler.audioPlayer.duration?.inMilliseconds,
         'playing': audioHandler.audioPlayer.playing,
@@ -194,20 +195,20 @@ Future<void> runOwnedAcceptance(
     await proof('background', {'backgroundAdvanced': true});
     var firstTail = false;
     await waitUntil(() {
-      if (audioHandler.audioPlayer.currentIndex == 0 &&
+      if (audioHandler.playbackState.value.queueIndex == 0 &&
           audioHandler.audioPlayer.position >=
               const Duration(milliseconds: 69500))
         firstTail = true;
-      return audioHandler.audioPlayer.currentIndex == 1 ||
+      return audioHandler.playbackState.value.queueIndex == 1 ||
           audioHandler.audioPlayer.processingState == ProcessingState.completed;
     }, const Duration(seconds: 85));
-    if (audioHandler.audioPlayer.currentIndex == 0) {
+    if (audioHandler.playbackState.value.queueIndex == 0) {
       firstTail = true;
       await audioHandler.skipToNext();
     }
     await waitUntil(
       () =>
-          audioHandler.audioPlayer.currentIndex == 1 &&
+          audioHandler.playbackState.value.queueIndex == 1 &&
           audioHandler.audioPlayer.playing,
       const Duration(seconds: 15),
     );
@@ -233,7 +234,7 @@ Future<void> runOwnedAcceptance(
     );
     await waitUntil(
       () =>
-          audioHandler.audioPlayer.currentIndex == 0 &&
+          audioHandler.playbackState.value.queueIndex == 0 &&
           audioHandler.audioPlayer.playing,
       const Duration(seconds: 15),
     );
@@ -247,15 +248,15 @@ Future<void> runOwnedAcceptance(
     await waitUntil(
       () =>
           audioHandler.audioPlayer.position >= const Duration(seconds: 68) ||
-          audioHandler.audioPlayer.currentIndex == 1,
+          audioHandler.playbackState.value.queueIndex == 1,
       const Duration(seconds: 10),
     );
     await proof('seek-tail', {'tailSeek': true});
-    if (audioHandler.audioPlayer.currentIndex == 0)
+    if (audioHandler.playbackState.value.queueIndex == 0)
       await audioHandler.skipToNext();
     await waitUntil(
       () =>
-          audioHandler.audioPlayer.currentIndex == 1 &&
+          audioHandler.playbackState.value.queueIndex == 1 &&
           audioHandler.audioPlayer.playing,
       const Duration(seconds: 15),
     );
