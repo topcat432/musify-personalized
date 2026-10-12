@@ -149,8 +149,14 @@ class GoogleVideoByteSource extends StreamAudioSource {
       sourceLength: sourceLength,
       contentLength: limit - offset,
       offset: offset,
-      contentType: uri.queryParameters['mime'] == 'audio/webm'
-          ? 'audio/webm'
+      contentType:
+          const {
+            'audio/mp4',
+            'audio/webm',
+            'video/mp4',
+            'video/webm',
+          }.contains(uri.queryParameters['mime'])
+          ? uri.queryParameters['mime']!
           : 'audio/mp4',
       stream: _rangeStream(offset, limit, ++_requestId),
     );

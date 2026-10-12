@@ -48,6 +48,16 @@ http.StreamedResponse _correct(http.BaseRequest request) {
 }
 
 void main() {
+  for (final mime in ['audio/mp4', 'audio/webm', 'video/mp4', 'video/webm']) {
+    test('preserves declared $mime container for the native decoder', () async {
+      final uri = _uri.replace(queryParameters: {'clen': '10', 'mime': mime});
+      final source = GoogleVideoByteSource(uri, sourceLength: 10);
+      final response = await source.request();
+      expect(response.contentType, mime);
+      await source.cancelRequests();
+    });
+  }
+
   test(
     'open native read is lazy and returns exact finite chunks including tail',
     () async {

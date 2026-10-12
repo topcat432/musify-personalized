@@ -557,7 +557,12 @@ Future<AudioOnlyStreamInfo?> fetchBestAudioStream(String? songId) async {
 }
 
 /// Resolves a playable stream URL for a song (cached when possible).
-Future<String?> fetchSongStreamUrl(String songId, bool isLive) async {
+Future<String?> fetchSongStreamUrl(
+  String songId,
+  bool isLive, {
+  bool preferMuxed = false,
+  Future<StreamManifest?> Function(String)? manifestLoader,
+}) async {
   try {
     if (songId.isEmpty) {
       logger.log('fetchSongStreamUrl: songId is empty');
@@ -570,7 +575,9 @@ Future<String?> fetchSongStreamUrl(String songId, bool isLive) async {
     }
 
     const _cacheDuration = Duration(hours: 3);
-    final cacheKey = 'song_${songId}_${audioQualitySetting.value}_url';
+    final cacheKey = preferMuxed
+        ? 'song_${songId}_muxed_${audioQualitySetting.value}_url'
+        : 'song_${songId}_${audioQualitySetting.value}_url';
 
     // Try to get from cache
     final cachedUrl = await _getCachedSongUrl(cacheKey, _cacheDuration);
@@ -579,16 +586,18 @@ Future<String?> fetchSongStreamUrl(String songId, bool isLive) async {
     }
 
     // Get fresh URL
-    final manifest = await _fetchStreamManifest(songId);
-    final audioStreams = manifest?.audioOnly;
-    if (audioStreams == null || audioStreams.isEmpty) {
-      logger.log('fetchSongStreamUrl: no audio streams for $songId');
+    final manifest = await (manifestLoader ?? _fetchStreamManifest)(songId);
+    final selectedStream = manifest == null
+        ? null
+        : selectPlaybackStreamForQuality(
+            manifest,
+            songId,
+            preferMuxed: preferMuxed,
+          );
+    if (selectedStream == null) {
+      logger.log('fetchSongStreamUrl: no playable audio formats for $songId');
       return null;
     }
-
-    final selectedStream = selectAudioOnlyStreamForQuality(
-      audioStreams.sortByBitrate(),
-    );
     final url = selectedStream.url.toString();
 
     final requestHeaders = ytClient.videos.streams.requestHeadersFor(
