@@ -267,6 +267,11 @@ class SpotifyTrackMatchingService {
         break;
       }
 
+      // Optional source metadata stays outside candidates/scoring/routing.
+      // Preserve partial stored fields as-is; only new CSV intake validates them.
+      for (final key in const ['spotifyTrackUri', 'spotifyTrackId']) {
+        if (source.containsKey(key)) result[key] = source[key];
+      }
       results.add(result);
       nextIndex++;
       sinceCheckpoint++;
@@ -338,6 +343,8 @@ class SpotifyTrackMatchingService {
               'durationMs',
             ])
               track[key]?.toString(),
+            for (final key in const ['spotifyTrackUri', 'spotifyTrackId'])
+              if (track.containsKey(key)) [key, track[key]?.toString()],
           ],
       ]);
 

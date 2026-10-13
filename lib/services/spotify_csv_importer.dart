@@ -19,6 +19,8 @@ class SpotifyImportTrack {
     required this.isrc,
     required this.durationMs,
     required this.addedAt,
+    this.spotifyTrackUri,
+    this.spotifyTrackId,
   });
 
   final int sourceRow;
@@ -28,6 +30,8 @@ class SpotifyImportTrack {
   final String isrc;
   final int? durationMs;
   final DateTime? addedAt;
+  final String? spotifyTrackUri;
+  final String? spotifyTrackId;
 
   Map<String, dynamic> toJson() => {
     'sourceRow': sourceRow,
@@ -37,6 +41,7 @@ class SpotifyImportTrack {
     'isrc': isrc,
     'durationMs': durationMs,
     'addedAt': addedAt?.toIso8601String(),
+    ..._spotifyTrackIdentity(spotifyTrackUri ?? '', spotifyTrackId ?? ''),
   };
 }
 
@@ -75,12 +80,17 @@ class SpotifyImportException implements Exception {
 class SpotifyCsvImporter {
   const SpotifyCsvImporter._();
 
-  static SpotifyImportPreview parseBytes(Uint8List bytes, {required String fileName}) {
+  static SpotifyImportPreview parseBytes(
+    Uint8List bytes, {
+    required String fileName,
+  }) {
     if (bytes.isEmpty) {
       throw const SpotifyImportException('The selected CSV file is empty.');
     }
 
-    final text = utf8.decode(bytes, allowMalformed: true).replaceFirst('\ufeff', '');
+    final text = utf8
+        .decode(bytes, allowMalformed: true)
+        .replaceFirst('\ufeff', '');
     final rows = _parseCsv(text);
     if (rows.length < 2) {
       throw const SpotifyImportException(
@@ -116,7 +126,8 @@ class SpotifyCsvImporter {
       'duration_ms',
       'duration',
     ]);
-    final durationIsExplicitMilliseconds = durationIndex != null &&
+    final durationIsExplicitMilliseconds =
+        durationIndex != null &&
         const {
           'track duration (ms)',
           'duration (ms)',
@@ -128,8 +139,21 @@ class SpotifyCsvImporter {
       'date added',
       'added_at',
     ]);
+    final spotifyUriIndex = _findHeader(headers, const [
+      'track uri',
+      'spotify track uri',
+      'spotify uri',
+      'spotify track url',
+      'spotify url',
+    ]);
+    // Generic track IDs may belong to another catalog and are not Spotify proof.
+    final spotifyIdIndex = _findHeader(headers, const [
+      'spotify track id',
+      'spotify id',
+    ]);
 
-    final format = headers.contains('track uri') || headers.contains('track name')
+    final format =
+        headers.contains('track uri') || headers.contains('track name')
         ? 'Spotify/Exportify'
         : headers.contains('index') && headers.contains('isrc')
         ? 'Soundiiz'
@@ -158,6 +182,10 @@ class SpotifyCsvImporter {
         continue;
       }
 
+      final spotifyIdentity = _spotifyTrackIdentity(
+        _valueAt(row, spotifyUriIndex),
+        _valueAt(row, spotifyIdIndex),
+      );
       tracks.add(
         SpotifyImportTrack(
           sourceRow: sourceRow,
@@ -170,6 +198,8 @@ class SpotifyCsvImporter {
             valuesAreMilliseconds: durationIsExplicitMilliseconds,
           ),
           addedAt: _parseDate(_valueAt(row, addedAtIndex)),
+          spotifyTrackUri: spotifyIdentity['spotifyTrackUri'],
+          spotifyTrackId: spotifyIdentity['spotifyTrackId'],
         ),
       );
     }
@@ -200,7 +230,8 @@ class SpotifyCsvImporter {
 
       if (inQuotes) {
         if (character == '"') {
-          final isEscapedQuote = index + 1 < input.length && input[index + 1] == '"';
+          final isEscapedQuote =
+              index + 1 < input.length && input[index + 1] == '"';
           if (isEscapedQuote) {
             field.write('"');
             index++;
@@ -219,7 +250,9 @@ class SpotifyCsvImporter {
         row.add(field.toString());
         field.clear();
       } else if (character == '\n' || character == '\r') {
-        if (character == '\r' && index + 1 < input.length && input[index + 1] == '\n') {
+        if (character == '\r' &&
+            index + 1 < input.length &&
+            input[index + 1] == '\n') {
           index++;
         }
         row.add(field.toString());
@@ -242,7 +275,8 @@ class SpotifyCsvImporter {
       rows.add(row);
     }
 
-    while (rows.isNotEmpty && rows.last.every((value) => value.trim().isEmpty)) {
+    while (rows.isNotEmpty &&
+        rows.last.every((value) => value.trim().isEmpty)) {
       rows.removeLast();
     }
 
@@ -289,4 +323,40 @@ class SpotifyCsvImporter {
     if (normalized.isEmpty) return null;
     return DateTime.tryParse(normalized)?.toUtc();
   }
+}
+
+// Metadata validation only: never resolves a link or grants playback access.
+Map<String, String> _spotifyTrackIdentity(String rawUri, String rawId) {
+  final location = rawUri.trim();
+  final suppliedId = rawId.trim();
+  final idPattern = RegExp(r'^[A-Za-z0-9]{22}$');
+  String? uriId;
+  if (location.isNotEmpty) {
+    final direct = RegExp(
+      r'^spotify:track:([A-Za-z0-9]{22})$',
+    ).firstMatch(location);
+    if (direct != null) {
+      uriId = direct.group(1);
+    } else {
+      // Do not accept encoded path/host spelling that Uri would silently decode.
+      if (location.split(RegExp('[?#]')).first.contains('%')) return const {};
+      final uri = Uri.tryParse(location);
+      if (uri == null ||
+          uri.scheme != 'https' ||
+          uri.host != 'open.spotify.com' ||
+          uri.userInfo.isNotEmpty ||
+          (uri.hasPort && uri.port != 443))
+        return const {};
+      uriId = RegExp(
+        r'^/(?:intl-[a-z]{2}/)?track/([A-Za-z0-9]{22})/?$',
+      ).firstMatch(uri.path)?.group(1);
+      if (uriId == null) return const {};
+    }
+  }
+  if (suppliedId.isNotEmpty && !idPattern.hasMatch(suppliedId)) return const {};
+  if (uriId != null && suppliedId.isNotEmpty && uriId != suppliedId)
+    return const {};
+  final id = uriId ?? (suppliedId.isNotEmpty ? suppliedId : null);
+  if (id == null) return const {};
+  return {'spotifyTrackUri': 'spotify:track:$id', 'spotifyTrackId': id};
 }
