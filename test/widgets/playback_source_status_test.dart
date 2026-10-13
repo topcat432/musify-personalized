@@ -43,6 +43,22 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(AlertDialog), findsOneWidget);
       expect(find.textContaining('Spotify'), findsOneWidget);
+      expect(
+        find.textContaining(
+          locale == 'en'
+              ? 'Offline mode uses saved files only'
+              : 'El modo sin conexión usa solo archivos guardados',
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining(
+          locale == 'en'
+              ? 'Spotify imports provide metadata only'
+              : 'Spotify importa solo metadatos',
+        ),
+        findsOneWidget,
+      );
       expect(tester.takeException(), isNull);
       await tester.tap(
         find.descendant(

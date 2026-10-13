@@ -160,7 +160,7 @@
   "noSongsInQueue": "No songs in queue",
   "notYTlist": "Invalid YouTube playlist ID",
   "offlineMode": "Offline mode",
-  "offlineModeDescription": "Disable online features and use Musify completely offline.",
+  "offlineModeDescription": "On: saved files only. Off: saved audio when available, otherwise YouTube. Spotify imports provide metadata only.",
   "offlinePlaylists": "Offline playlists",
   "offlineSongs": "Offline songs",
   "others": "Others",
@@ -265,5 +265,5 @@
   "playbackSourceLocalNote": "This file is playing from this device. Its codec and audio quality have not been verified.",
   "playbackSourceMuxedNote": "Compatibility playback includes video bytes, with video decoding disabled. It may use more data. Audio bitrate is not verified and may differ from your audio quality preference.",
   "playbackSourceUnknownQualityNote": "The delivered audio bitrate and codec have not been verified. No lossless quality is claimed.",
-  "playbackSourceCapabilities": "Playback currently uses YouTube streams or saved local files. Spotify imports provide track metadata; Spotify playback is not available."
+  "playbackSourceCapabilities": "Playback uses saved audio when available, otherwise YouTube. Offline mode uses saved files only. Spotify imports provide metadata only."
 }

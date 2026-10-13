@@ -1,5 +1,23 @@
 # Product acceptance ledger
 
+## Approved supported playback scope, 2026-10-12
+
+Owner decision D-017 accepts YouTube playback plus saved/offline audio, with
+Spotify used for metadata import. Existing Offline mode behavior is retained:
+on uses saved files only; off prefers saved audio when available, otherwise the
+selected YouTube recording. English/Spanish Settings and source-details copy
+now state this scope explicitly. No new provider modes, routing, adapter,
+migration or queue-persistence architecture is added. Spotify-capable no-Premium
+listening remains a high-priority stretch goal, not the release baseline.
+
+Targeted six tests, aggregate 392 tests and clean analysis pass. Two repeated
+mode-toggle/reopen cycles preserve the offlineMode key and unrelated data;
+English/Spanish source details remain usable at narrow width/large text.
+Native UI/reopen and exact-source CI verification are pending. The previous
+source-mode gap is superseded by the owner's supported-scope approval.
+Provider batch consent, provider breadth/403, physical output/device acceptance
+and signed delivery gates remain separate. No phone/signing/merge work occurs.
+
 ## Production queue closure and release checklist, 2026-10-12
 
 Native source 809cf56d64c7270388bc52c3d7dc9ec4212383a5 adds only owned test support:

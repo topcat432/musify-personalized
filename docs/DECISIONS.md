@@ -289,6 +289,36 @@ changes.
   (319 tests, 40 strict visuals); e705fb2b isolated native four-mode/restart proof;
   normal 70313ae8 restored with independent preservation evidence in RELEASE_STATE.md.
 
+## D-017 - Supported playback scope for this release
+
+- Status: accepted by owner, 2026-10-12; production gates remain held.
+- Decision: YouTube playback plus saved/offline audio, with Spotify used for
+  importing metadata. Owner approved the recommendation with “this is fine
+  with me” in the parent conversation. No Spotify-only/both playback engine is
+  promised for this version and no Premium subscription is required for import.
+- Implementation: retain the existing offlineMode setting. Enabled uses saved
+  files only; disabled prefers available saved audio and otherwise uses the
+  selected YouTube recording. Settings and active-source details state this
+  supported scope, including Spotify metadata-only import, without new routing,
+  adapters or durable playback architecture.
+- Boundaries: this scope approval does not authorize the held three-recording
+  private payload to YouTube, account/credential actions, phone installation,
+  integration, signing or publication. Provider reliability and actual output/
+  device/data acceptance still need their own evidence.
+- Owner follow-up: Spotify-capable no-Premium listening remains a strong,
+  high-priority stretch goal, including an explicitly labelled external-app
+  handoff if feasible. It is not the required release baseline. No automatic
+  mixed-service queue, account/credential action or new access-control approach
+  is authorized by that stretch interest.
+- Queue scope: no current-version promise of cold full queue/order/position
+  recovery was found in P01-P06 or the import roadmap. Keep verified session
+  behavior and latest-recording explicit resume; do not invent durable recovery.
+- Visual scope: Linux is the pixel reference. All 40 Windows actuals are byte-exact
+  across the 809cf56d/44481221 control, with identical Roboto/toolchain hashes;
+  Windows remains FAIL from an established cross-platform reference mismatch.
+  Exact 44481221 Linux strict comparisons pass; no current product rendering
+  regression is detected. No rebaseline/comparator relaxation is authorized.
+
 ## New decision template
 
 ```text

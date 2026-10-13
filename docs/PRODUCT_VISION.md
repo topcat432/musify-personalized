@@ -13,6 +13,15 @@ implementation-flexible while requiring avoidance of approaches risking a
 YouTube account ban. Assistant execution constraints are attributed separately
 in [decision D-015](DECISIONS.md#d-015---listening-outcome-and-execution-boundary-attribution).
 
+## Supported release scope, approved 2026-10-12
+
+The owner accepts YouTube playback plus saved/offline audio, with Spotify used
+for importing music metadata. The existing Offline mode control and actual-source
+details expose these capabilities. Saved audio is preferred when available;
+otherwise online playback uses the selected YouTube recording. Offline mode uses
+saved files only. Spotify-only/both playback is not a promised capability of this
+release. See decision D-017; provider, device and signed-delivery gates remain.
+
 ## Core rules
 
 - Treat a song as a canonical musical identity, not merely a YouTube video ID.

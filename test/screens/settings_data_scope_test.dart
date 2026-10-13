@@ -12,7 +12,10 @@ import 'package:musify/screens/settings_page.dart';
 import 'package:musify/screens/search_page.dart' show searchHistoryNotifier;
 import 'package:musify/services/common_services.dart';
 import 'package:musify/services/listening_stats_service.dart';
+import 'package:musify/services/router_service.dart';
+import 'package:musify/services/settings_manager.dart';
 import 'package:musify/utilities/listening_stats_utils.dart';
+import 'package:musify/widgets/custom_bar.dart';
 
 import '../../tool/visual_review_harness.dart';
 
@@ -68,6 +71,71 @@ void main() {
           key.toString(): Hive.box(name).get(key),
       },
   });
+
+  testWidgets(
+    'approved playback switch preserves its key and data on repeated reopen',
+    (tester) async {
+      await tester.runAsync(() async {
+        await Hive.box(
+          'settings',
+        ).putAll({'offlineMode': false, 'keepSetting': 42});
+      });
+      final beforeUser = jsonEncode(Hive.box('user').toMap());
+      final beforeOffline = jsonEncode(Hive.box('userNoBackup').toMap());
+      NavigationManager.instance;
+      for (var cycle = 0; cycle < 2; cycle++) {
+        for (final value in [true, false]) {
+          await pumpSettings(tester);
+          final entry = find.ancestor(
+            of: find.text('Offline mode'),
+            matching: find.byType(CustomBar),
+          );
+          await tester.ensureVisible(entry);
+          expect(
+            find.textContaining(
+              'Off: saved audio when available, otherwise YouTube',
+            ),
+            findsOneWidget,
+          );
+          expect(
+            find.textContaining('Spotify imports provide metadata only'),
+            findsOneWidget,
+          );
+          final toggle = find.descendant(
+            of: entry,
+            matching: find.byType(Switch),
+          );
+          expect(tester.widget<Switch>(toggle).value, !value);
+          await tester.runAsync(() async {
+            await tester.tap(toggle);
+            final deadline = DateTime.now().add(const Duration(seconds: 2));
+            while (Hive.box('settings').get('offlineMode') != value &&
+                DateTime.now().isBefore(deadline)) {
+              await Future<void>.delayed(const Duration(milliseconds: 10));
+            }
+            await Hive.box('settings').flush();
+          });
+          await tester.pumpAndSettle();
+          expect(offlineMode.value, value);
+          expect(tester.widget<Switch>(toggle).value, value);
+          expect(tester.takeException(), isNull);
+          await tester.pumpWidget(const SizedBox.shrink());
+          await tester.runAsync(() async {
+            await Hive.close();
+            await initPriorityReviewHive();
+          });
+          reloadSettingsStateFromStorage();
+          expect(offlineMode.value, value);
+          expect(Hive.box('settings').toMap(), {
+            'offlineMode': value,
+            'keepSetting': 42,
+          });
+          expect(jsonEncode(Hive.box('user').toMap()), beforeUser);
+          expect(jsonEncode(Hive.box('userNoBackup').toMap()), beforeOffline);
+        }
+      }
+    },
+  );
 
   testWidgets('all destructive data dialogs cancel without changing any box', (
     tester,
