@@ -61,7 +61,13 @@ function Invoke-MusifyOwnedRehearsal {
             $booted=$false
             do {
                 Start-Sleep -Seconds 2
-                try {$booted=(Invoke-MusifyOwnedAdb @('shell','getprop','sys.boot_completed')|Out-String).Trim() -eq '1'} catch {$booted=$false}
+                try {
+                    $booted=(Invoke-MusifyOwnedAdb @('shell','getprop','sys.boot_completed')|Out-String).Trim() -eq '1'
+                    if ($booted) {
+                        $package=Invoke-MusifyOwnedAdb @('shell','pm','path','com.topcat432.musifypersonalized.preview.debug')|Out-String
+                        $booted=$package -match '(?m)^package:/data/app/.+/base\.apk\s*$'
+                    }
+                } catch {$booted=$false}
             } while (-not $booted -and [datetime]::UtcNow -lt $end)
             if (-not $booted) {throw 'Owned emulator boot deadline'}
             $owned=Get-MusifyOwnedEmulator

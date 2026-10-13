@@ -11,6 +11,7 @@ Describe 'Owned emulator lifecycle' {
         $global:mockAlive=$false;$global:mockPreexisting=$false
         $global:mockCallbackRan=$false;$global:mockCallbackFailure=$false
         $global:mockBootFailure=$false;$global:mockAdmissionFailure=$false
+        $global:mockPackageWait=$false;$global:mockPackagePolls=0
         $global:mockIdentity='musify_rehearsal_api35'
         Mock Get-MusifyRehearsalAdmission {
             [pscustomobject]@{CFreeBytes=100GB;VFreeBytes=100GB;CommittedBytes=$(if($global:mockAdmissionFailure){79GB}else{10GB});CommitLimit=100GB}
@@ -25,6 +26,11 @@ Describe 'Owned emulator lifecycle' {
         Mock Invoke-MusifyOwnedAdb {
             param($Arguments)
             if($Arguments[1] -eq 'getprop'){'1'}
+            elseif($Arguments[1] -eq 'pm'){
+                $global:mockPackagePolls++
+                if($global:mockPackageWait -and $global:mockPackagePolls -eq 1){throw 'Synthetic package manager not ready'}
+                'package:/data/app/owned/base.apk'
+            }
             elseif($Arguments[1] -eq 'avd'){$global:mockIdentity}
             elseif($Arguments[1] -eq 'kill'){$global:mockAlive=$false}
         }
@@ -43,6 +49,13 @@ Describe 'Owned emulator lifecycle' {
         {Invoke-MusifyOwnedRehearsal -HarnessScript $callback -ApprovedHarnessSha256 $hash} | Should Throw 'Synthetic callback failure'
         $global:mockAlive | Should Be $false
         Assert-MockCalled Invoke-MusifyOwnedAdb -Scope It -Times 1 -Exactly -ParameterFilter {$Arguments[1] -eq 'kill'}
+    }
+    It 'waits for exact package readiness before callback' {
+        $global:mockPackageWait=$true
+        Invoke-MusifyOwnedRehearsal -HarnessScript $callback -ApprovedHarnessSha256 $hash
+        $global:mockPackagePolls | Should Be 2
+        $global:mockCallbackRan | Should Be $true
+        $global:mockAlive | Should Be $false
     }
     It 'gracefully shuts down after boot failure without invoking callback' {
         $global:mockBootFailure=$true
