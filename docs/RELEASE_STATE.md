@@ -1,5 +1,46 @@
 # Musify Personalized current state
 
+## Optional Spotify identity checkpoint, 2026-10-13
+
+Exact source b1dc64fa54d87f966aabea0823f284a837d3c8ea passes
+[Linux CI 38331748430](https://github.com/topcat432/musify-personalized/actions/runs/38331748430):
+clean analysis, aggregate tests, both strict reference visual suites and all
+Android build boundaries. Local analysis and 418 aggregate tests pass, including
+25 new synthetic provenance cases. Windows strict comparisons remain FAIL
+16+24; all40 actuals are byte-exact to the established Windows control and the
+reference images are unchanged. No goldens were rebaselined.
+
+New CSV imports optionally retain a validated Spotify track URI/ID pair through
+matching checkpoints. Selection, scoring, routing payloads, library identity,
+playback and old classifications are unchanged. No adapter/archive-version
+change, migration, historical backfill or mandatory reimport is introduced.
+[SPOTIFY_PROVENANCE_SLICE.md](SPOTIFY_PROVENANCE_SLICE.md) records accepted and
+rejected forms, partial-state behavior, all18 contract dispositions and rollback
+limits. Verified 733a5a9409695298348c023ecbb6e46f511ae036 remains the recovery
+reference. This optional metadata preparation does not fulfill D-018 listening.
+
+Owned emulator-5556 / musify_rehearsal_api35 ran the source-pinned isolated
+native fixture: first checkpoint, partial replacement rollback, cold resume and
+completed read-only restart. Three independent stopped Hive reopens prove exact
+source identities/order, completed selected recording, absent legacy fields,
+unrelated user/settings/cache/offline values and owned WAV/artwork. Controlled
+lookups were 1/2/0; no provider requests or playback were performed. Normal four
+Hive files remain byte-exact at every fixture capture and both installations.
+
+Normal lib/main.dart b1dc64fa is restored and stopped after inspected Home and
+Library. Installed debug APK SHA-256
+cb062973a316761fedcc3feeac60d1cfa6ce01141817c1e33a07a596965e977c
+matches the source-pinned build and retained debug signer. Independent normal
+post-startup reopens preserve user/settings/offline values and all cache values.
+Private receipts remain outside Git under continuing-acceptance-20261012:
+provenance-native-independent-proof.json and normal-b1-library-final-proof.json.
+
+PR23 remains draft/source-only; protected master is unchanged at
+a786323556275a0de745ffca4d3affc088ac2055. The held three-recording batch,
+unresolved later-range HTTP403, physical acceptance and approved signed delivery
+remain separate gates. No phone, merge, publication, account or security action
+occurred. This checkpoint stops before any larger provenance/UI/engine slice.
+
 ## Spotify stretch clarification, 2026-10-13
 
 D-018 supersedes the external-app handoff suggestion as stretch fulfillment.

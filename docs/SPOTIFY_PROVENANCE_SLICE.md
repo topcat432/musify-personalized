@@ -66,7 +66,9 @@ then completed-state cold reopen with zero repeated lookups. Normal four Hive
 files must remain byte-exact through rehearsal installation and stopped captures.
 Independent typed comparison checks track/result identity, source order, selected
 candidate, unrelated library/settings/cache/offline values and exact rollback.
-Native acceptance and exact-source CI remain pending until receipts are recorded.
+Native acceptance and exact-source CI pass at b1dc64fa; source-pinned receipts
+and normal restoration are recorded in RELEASE_STATE. Three stopped independent
+reopens preserve the completed recording, source row order and unrelated data.
 
 Local aggregate: 418 tests PASS; analysis clean. Strict Windows visuals remain
 FAIL 16+24 with all40 actual renders byte-exact to the established control and
