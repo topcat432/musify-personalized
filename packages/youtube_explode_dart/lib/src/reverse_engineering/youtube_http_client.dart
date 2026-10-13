@@ -281,6 +281,12 @@ class YoutubeHttpClient extends http.BaseClient {
     final response = await head(url, headers: headers);
     if (_closed) throw HttpClientClosedException();
 
+    // Even optional length discovery must not interpret an error/redirect body
+    // as media bytes or continue to GET after access denial.
+    if (response.statusCode != 200 && response.statusCode != 206) {
+      _validateResponse(response, response.statusCode);
+      return null;
+    }
     if (validate) {
       _validateResponse(response, response.statusCode);
     }

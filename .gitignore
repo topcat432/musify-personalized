@@ -56,4 +56,5 @@ tool/failures/
 *.musifybackup
 *.hive
 *.jks
+*.hprof
 android/key.properties

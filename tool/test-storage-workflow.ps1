@@ -29,10 +29,20 @@ try{
  foreach($row in $rows){
   $build=$row.Action -eq 'build'
   if($row.Project -ne 'musify' -or -not $row.HashVerified -or
-   $row.C -ne $(if($build){4294967296}else{2147483648}) -or
+   $row.C -ne $(if($build){21474836480}else{2147483648}) -or
    $row.V -ne $(if($build){6442450944}else{5368709120}) -or
-   $row.Commit -ne $(if($build){6442450944}else{3221225472})){throw 'Budget/hash forwarding mismatch'}
+   $row.Commit -ne $(if($build){34359738368}else{3221225472})){throw 'Budget/hash forwarding mismatch'}
  }
+ $passed++
+ $limited=Join-Path $fixture 'limited-commit-session.ps1'
+ @'
+param($Project,$HarnessScript,$ApprovedHarnessSha256,$ExpectedCWritesBytes,$ExpectedVWritesBytes,$ExpectedCommitBytes)
+if($ExpectedCommitBytes -gt 17179869184){throw 'Synthetic projected commit above80%; no harness launched'}
+throw 'Build forecast unexpectedly shrank'
+'@|Set-Content -LiteralPath $limited
+ $blocked=$false
+ try{& (Join-Path $PSScriptRoot 'dev.ps1') build -StorageSessionScript $limited}catch{$blocked=$_.ToString() -match 'above80%'}
+ if(-not $blocked -or $env:MUSIFY_DEV_WORKLOAD_ACTION -ne 'prior-value'){throw 'Build refusal failed or leaked action'}
  $passed++
  & (Join-Path $PSScriptRoot 'dev.ps1') setup -StorageSessionScript (Join-Path $fixture 'missing.ps1')
  if(@(Get-Content -LiteralPath $calls).Count -ne 4){throw 'Setup must not launch a workload'}

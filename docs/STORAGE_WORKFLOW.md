@@ -15,7 +15,15 @@ It declares these conservative planning allowances before any pub/test/build:
 | Work | Expected C: writes | Expected V: writes | Additional host commit |
 |---|---:|---:|---:|
 | test/visual/verify | 2GiB | 5GiB | 3GiB |
-| unsigned build | 4GiB | 6GiB | 6GiB |
+| unsigned build | 20GiB | 6GiB | 32GiB |
+
+The build forecast preserves the configured8GiB Gradle heap,4GiB metaspace and
+512MiB code cache. It conservatively allows a similarly sized compiler/worker JVM
+plus7GiB host/native overhead; this is a planning envelope, not proof those limits
+are reached simultaneously. C: includes4GiB staging plus up to16GiB potential
+heap dumps because HeapDumpOnOutOfMemoryError is configured. No heap/metaspace
+limit or80% admission threshold is lowered to fit. Refuse the build when this
+envelope is not admitted; qualify actual peaks before revising the allowance.
 
 The existing session checks C: reserve10GiB plus declared C: writes, V: reserve
 20GiB plus declared V: writes, and projected commit below80%. It sets only that

@@ -1,5 +1,49 @@
 # Musify Personalized current state
 
+## Offline playback investigation and justified repair, 2026-10-13
+
+Storage-adoption tip57661cf391da4b6902c529577fb2e1f5cb65156e passes
+[CI 38388340061](https://github.com/topcat432/musify-personalized/actions/runs/38388340061).
+No further provider request was made after the recorded later-range403.
+The failed recording1 selection is audio-only Opus/WebM itag251,4,556,211bytes;
+the earlier312-second native pass used muxed MP4/AAC itag18,15,818,625bytes on a
+different source. The earlier captured format had declared length in metadata
+and URI. The recent inventory's ordinary format had neither, so the no-HEAD
+harness skipped it and the unchanged production selector used audio-only fallback.
+That is not proof of a selector regression or provider-wide denial. The older
+native rehearsal explicitly pinned its offered muxed source.
+
+Read-only inspection of a working copy of the retained cache confirms the failed
+URI hash and21,599seconds remaining before its declared expiry at denial. Producer
+User-Agent hash and exact URI were enforced across all five sequential ranges.
+The original cache SHA remained exact. This does not identify the server's reason
+for403, but expiry/header identity loss is not supported by this capture. Latest
+raw player bodies were not retained; recording2's precise codec/length/parser
+exclusion cannot be reconstructed from its narrow summary. Do not invent it.
+
+An independent synthetic reproduction establishes a real SDK bug: optional HEAD
+discovery accepted403's9-byte Forbidden body as a muxed media size and proceeded
+to GET;302's5-byte response body was likewise treated as media bytes. The local
+SDK now rejects error/redirect lengths and makes HEAD403 terminal before GET.
+Three targeted tests pass, including preserved valid200 lengths. This protects
+protocol correctness/access-denial handling; it does not claim to resolve the
+separate real later-range denial, change recording selection/routing, or migrate
+data. Local analysis and421 aggregate tests pass. Both Windows strict suites
+remain FAIL16+24; all40 actuals are byte-exact to their established control,
+representative master/actual/diff images inspected, references unchanged.
+
+The Windows build forecast is corrected without lowering configured8GiB heap,
+4GiB metaspace or80% threshold:32GiB commit,20GiB C: writes,6GiB V: writes.
+It covers a possible second similarly sized compiler/worker JVM, native/host
+overhead and potential configured heap dumps. Six offline refusal/forwarding
+contracts pass. A live admission-only check projected85.27% and refused; no build
+launched. Heap dumps are ignored by Git and remain private diagnostics. Revise
+the forecast only after measured qualification, not to force admission.
+
+Signed/native/last-mile gates remain separate. All source/proof lineage is retained;
+no denied source replay, identity switch, account/proxy secret, production action,
+emulator launch or live-data change occurred during this investigation.
+
 ## Concrete provider result and required storage adoption, 2026-10-13
 
 Exact fe0335ff24fa9e2917a924bf1f0b1682100ff27a passes

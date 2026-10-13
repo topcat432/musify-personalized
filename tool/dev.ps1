@@ -36,9 +36,9 @@ try {
     $env:MUSIFY_DEV_WORKLOAD_ACTION = $Action
     $global:LASTEXITCODE = 0
     & $StorageSessionScript -Project 'musify' -HarnessScript $harness -ApprovedHarnessSha256 $harnessHash `
-        -ExpectedCWritesBytes $(if ($build) { 4294967296 } else { 2147483648 }) `
+        -ExpectedCWritesBytes $(if ($build) { 21474836480 } else { 2147483648 }) `
         -ExpectedVWritesBytes $(if ($build) { 6442450944 } else { 5368709120 }) `
-        -ExpectedCommitBytes $(if ($build) { 6442450944 } else { 3221225472 })
+        -ExpectedCommitBytes $(if ($build) { 34359738368 } else { 3221225472 })
     if ($LASTEXITCODE -ne 0) { throw "Guarded workload failed with exit $LASTEXITCODE." }
 } finally {
     if ($null -eq $savedAction) { [Environment]::SetEnvironmentVariable('MUSIFY_DEV_WORKLOAD_ACTION',[NullString]::Value,'Process') }
