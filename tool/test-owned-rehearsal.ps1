@@ -29,7 +29,7 @@ Describe 'Owned emulator lifecycle' {
             elseif($Arguments[1] -eq 'pm'){
                 $global:mockPackagePolls++
                 if($global:mockPackageWait -and $global:mockPackagePolls -eq 1){throw 'Synthetic package manager not ready'}
-                'package:/data/app/owned/base.apk'
+                if($Arguments[-1] -eq 'android'){'package:/system/framework/framework-res.apk'}else{'package:/data/app/owned/base.apk'}
             }
             elseif($Arguments[1] -eq 'avd'){$global:mockIdentity}
             elseif($Arguments[1] -eq 'kill'){$global:mockAlive=$false}
@@ -84,4 +84,23 @@ Describe 'Owned emulator lifecycle' {
         {Invoke-MusifyOwnedRehearsal -HarnessScript $callback -ApprovedHarnessSha256 $hash} | Should Throw 'not admitted'
         Assert-MockCalled Start-Process -Scope It -Times 0 -Exactly
     }
-}
+    It 'pins isolated bootstrap to serial5558 and persistent V data' {
+        $global:mockIdentity='musify_saved_acceptance_api35'
+        Invoke-MusifyOwnedRehearsal -Target saved -BootstrapSaved -HarnessScript $callback -ApprovedHarnessSha256 $hash
+        $global:mockCallbackRan | Should Be $true
+        Assert-MockCalled Start-Process -Scope It -Times 1 -Exactly -ParameterFilter {$ArgumentList -contains '5558' -and $ArgumentList -contains '-data' -and $ArgumentList -contains 'V:\Storage-Recovery-20261013\ProjectWork\musify-saved-acceptance\avds\musify_saved_acceptance_api35.avd\userdata-qemu.img'}
+        Assert-MockCalled Invoke-MusifyOwnedAdb -Scope It -Times 1 -Exactly -ParameterFilter {$Serial -eq 'emulator-5558' -and $Arguments[1] -eq 'kill'}
+    }
+    It 'allows saved-only cold restart without changing original snapshot flags' {
+        $global:mockIdentity='musify_saved_acceptance_api35'
+        Invoke-MusifyOwnedRehearsal -Target saved -ColdBootSaved -HarnessScript $callback -ApprovedHarnessSha256 $hash
+        Assert-MockCalled Start-Process -Scope It -Times 1 -Exactly -ParameterFilter {$ArgumentList -contains '-no-snapshot-load' -and $ArgumentList -notcontains '-no-snapshot-save' -and $ArgumentList -contains '-data'}
+    }
+    It 'refuses bootstrap of original target before launch' {
+        {Invoke-MusifyOwnedRehearsal -BootstrapSaved -HarnessScript $callback -ApprovedHarnessSha256 $hash} | Should Throw 'Saved-only'
+        Assert-MockCalled Start-Process -Scope It -Times 0 -Exactly
+    }
+    It 'refuses cold override of original target before launch' {
+        {Invoke-MusifyOwnedRehearsal -ColdBootSaved -HarnessScript $callback -ApprovedHarnessSha256 $hash} | Should Throw 'Saved-only'
+        Assert-MockCalled Start-Process -Scope It -Times 0 -Exactly
+    }}

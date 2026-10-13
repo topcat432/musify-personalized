@@ -82,3 +82,21 @@ rebuildable, archive or unresolved items. Older than30days prompts review, not
 deletion. Verify SHA256 and accessible good copy/restoration map before any
 approved relocation. Permanent purge requires consolidated exact-path/size/
 redundancy approval; never auto-purge protected originals or sole recovery copies.
+
+The approved persistent acceptance target is musify_saved_acceptance_api35,
+explicit emulator-5558, under V:/Storage-Recovery-20261013/ProjectWork/
+musify-saved-acceptance/avds. Use Target saved; the wrapper pins that serial/name
+and persistent userdata-qemu.img. BootstrapSaved is allowed only for that new
+target, and its callback must reject an already installed baseline. ColdBootSaved
+bypasses snapshot loading only on this persistent target to prove disk durability.
+Those switches are refused for original/emulator-5556; preserve its configuration.
+The shared owned lease prevents concurrent guarded Musify rehearsal sessions.
+
+Creation/native sessions declared2GiB C: writes,20GiB V: writes and native26GiB
+commit; creation alone used3GiB commit. Actual new AVD file lengths totaled
+4,952,319,691bytes after three sessions. Existing Android35 Google APIs x86_64
+image was reused without download or global SDK/config/security changes. Its
+baseline is explicitly a clone of verified host APK/four-Hive copies, not proof
+that the original AVD's package/data state survived restart. All three guarded
+sessions ended with verified graceful shutdown.12 offline lifecycle contracts
+cover original/saved target separation in addition to failure cleanup.

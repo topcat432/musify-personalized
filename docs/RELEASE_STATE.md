@@ -1,5 +1,74 @@
 # Musify Personalized current state
 
+## Persistent isolated native saved playback closure, 2026-10-13
+
+Approved predeployment target musify_saved_acceptance_api35/emulator-5558 is
+created on V: using the installed Android35 Google APIs x86_64 image. Original
+musify_rehearsal_api35/emulator-5556 and immutable rollback copies were not
+operated on during isolated testing. Original package/restart durability remains
+unverified; the isolated target is an explicitly seeded verified host clone.
+
+Exact product source3b012181c56d4af1181ba534099fab1539b3c3bf, fixture APK SHA256
+688c68bee42c2c492127f7e6566241c85ec6bf7e62ad1a1726b26bdbb6dcfb6d, passes
+full native saved214-second playback, middle/tail seeks, background advancement,
+natural completion into the owned8-second next track, and cold process restart
+with no autoplay/queue restoration. Last observed selected-track position was
+213,577ms before natural queue transition. Saved3,961,198-byte file remains
+SHA25641f0b95163cbfdb3881972564f78931c016d3f74356154af20386365328c8e1b.
+No provider request, alternate source, account or credential was used.
+
+Before fixture installation, a full AVD cold restart without snapshot loading
+preserved the cloned baseline APK and all four known-good Hive lengths/hashes;
+independent remote stat/checksum and host-byte checks reject error-text captures.
+After fixture, normal b1dc64fa APK/entrypoint and four baseline Hive files were
+restored exactly, guest filesystem synced and wrapper gracefully shut down.
+A second full cold restart independently verifies that normal APK/four-Hive
+baseline and saved source file remain exact. Host Hive reopens across playback,
+process restart and AVD restart preserve selected identity/duration, source order,
+library membership, offline preference and completed state. All owned emulators
+are stopped. Physical audible output/focus/accessories and Samsung last-mile
+acceptance remain unverified; this does not establish original AVD durability.
+
+12 mocked owned lifecycle contracts and4 receipt-reader cases PASS. New target
+uses explicit persistent V: data, fixed serial/name, shared lease,26GiB admission,
+hash-pinned callbacks and finally graceful cleanup. Original target rejects
+saved-only bootstrap/cold overrides. No schema migration, clear-data, uninstall,
+merge, phone installation, signing or publication. Current app source is unchanged
+from exact-CI verified3b012181; measured orchestration/evidence delta follows.
+Canonical external receipts: host-provider-diagnostic/isolated-baseline/
+bootstrap-proof.json and saved-native-isolated-3b012181/{native-result.json,
+normal-restored.json,avd-restart-proof.json,independent-hive-proof.json} under the
+established continuing-acceptance-20261012 evidence root. Prior312-second online
+provider native proof is distinct; the original audio-only later-range403 case
+remains unresolved and unreplayed. Immutable rollback/retained normal APK remain.
+
+## Native package gate and preserved rollback, 2026-10-13
+
+Product source3b012181 remains exact-CI verified; its saved-file fixture APK is
+pinned and no provider request was repeated. Orchestration e9cde45c93d562994c0da66829e83c05357073d6
+preserves the existing AVD snapshot configuration and passes8 mocked lifecycle
+contracts. The earlier hooks' exact CI7f464237 passes38405517408; current exact
+[CI38406895221](https://github.com/topcat432/musify-personalized/actions/runs/38406895221) passes.
+
+The owned musify_rehearsal_api35/emulator-5556 reaches boot property1 but its
+required debug package has no APK path, including after preserving original
+Fast Boot configuration. The150-second readiness gate stops before callback,
+fixture installation or app-data mutation; finally graceful shutdown completed.
+No native214-second playback or cold-restart normal-data preservation is claimed.
+Attempt2 verified normal APK/four-Hive restoration inside the session before
+shutdown; this is not post-restart proof. Attempt3's72-byte error texts were
+rejected as Hive data. Three preserved host capture sets each match all four
+known-good Hive lengths/hashes. One canonical immutable rollback copy and pinned
+normal APK remain available outside Git.
+
+A proposed separate persistent-data Android35 AVD would reuse the installed
+system image, restore only verified disposable-target baseline copies, and test
+full saved playback plus process/AVD restart. It is not created or approved as an
+active target. Current original AVD remains stopped, with no wipe/clear/reinstall
+attempt to force the package gate. Canonical external receipt/proposal:
+host-provider-diagnostic/saved-native-persistent-proposal.json in the established
+continuing-acceptance-20261012 evidence root.
+
 ## Wrapper-owned native lifecycle qualification, 2026-10-13
 
 Exact product source3b012181c56d4af1181ba534099fab1539b3c3bf passes

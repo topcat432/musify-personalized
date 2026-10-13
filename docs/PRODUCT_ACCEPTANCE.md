@@ -1,5 +1,26 @@
 # Product acceptance ledger
 
+## Actual saved provider file native acceptance, 2026-10-13
+
+Source3b012181 and its pinned debug fixture decode the fully saved authorized
+214-second MP4/AAC recording on isolated persistent musify_saved_acceptance_api35,
+serial emulator-5558. Middle/tail seek, full background playback, natural queue
+transition/next8-second completion, no-autoplay process restart and independent
+Hive identity/order/membership checks PASS. Before/after full AVD cold restart
+without snapshot loading preserves the verified clone baseline's normal APK/four
+Hive files and the selected saved file checksum. Normal entrypoint restored,
+all owned targets stopped, no provider request or live-phone operation.
+
+This closes native playback/restart proof for the newly delivered saved recording,
+not original AVD durability or universal provider availability. The distinct
+312-second online provider result remains valid. Later-range audio-only403 is
+not retried or claimed resolved. Physical output/focus/accessories, Samsung
+last-mile acceptance, eligible integration and approved signed delivery remain
+separate gates. No extra feature or Spotify playback capability is inferred.
+External evidence: saved-native-isolated-3b012181/native-result.json,
+avd-restart-proof.json and independent-hive-proof.json in the canonical
+host-provider-diagnostic evidence directory referenced by RELEASE_STATE.
+
 ## Spotify stretch clarification, 2026-10-13
 
 D-018 supersedes the external-app handoff suggestion as stretch fulfillment.
