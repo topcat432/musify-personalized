@@ -34,7 +34,9 @@ env:
 jobs:
   build:
     name: Test and build unsigned production candidate
-    if: github.ref_name == github.event.repository.default_branch
+    if: >-
+      (inputs.delivery_mode == 'publish' && github.ref_name == github.event.repository.default_branch) ||
+      (inputs.delivery_mode == 'rehearsal' && github.ref_name == 'agent/local-stable-consolidation')
     runs-on: ubuntu-latest
     timeout-minutes: 45
     outputs:
@@ -62,16 +64,28 @@ jobs:
           ref: ${{ inputs.candidate_ref }}
           fetch-depth: 0
 
-      - name: Require candidate at the default branch tip
+      - name: Require immutable approved candidate or production default tip
         env:
           CANDIDATE_REF: ${{ inputs.candidate_ref }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          DELIVERY_MODE: ${{ inputs.delivery_mode }}
         shell: bash
         run: |
           set -euo pipefail
           git fetch --no-tags origin \
             "+refs/heads/$DEFAULT_BRANCH:refs/remotes/origin/$DEFAULT_BRANCH"
           default_tip="$(git rev-parse "refs/remotes/origin/$DEFAULT_BRANCH")"
+          if [[ "$DELIVERY_MODE" == rehearsal ]]; then
+            test "$GITHUB_REF_NAME" = agent/local-stable-consolidation
+            test "$CANDIDATE_REF" = "$GITHUB_SHA" || {
+              echo "Rehearsal candidate must equal immutable dispatch source."
+              exit 1
+            }
+            git fetch --no-tags origin "+refs/heads/$GITHUB_REF_NAME:refs/remotes/origin/$GITHUB_REF_NAME"
+            candidate_tip="$(git rev-parse "refs/remotes/origin/$GITHUB_REF_NAME")"
+            test "$CANDIDATE_REF" = "$candidate_tip"
+            exit 0
+          fi
           test "$CANDIDATE_REF" = "$default_tip" || {
             echo "candidate_ref must equal the current repository default-branch tip."
             echo "candidate_ref=$CANDIDATE_REF"
@@ -260,7 +274,8 @@ jobs:
     needs: build
     if: >-
       needs.build.result == 'success' &&
-      github.ref_name == github.event.repository.default_branch
+      ((inputs.delivery_mode == 'publish' && github.ref_name == github.event.repository.default_branch) ||
+       (inputs.delivery_mode == 'rehearsal' && github.ref_name == 'agent/local-stable-consolidation'))
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -281,14 +296,22 @@ jobs:
           name: musify-personalized-UNSIGNED-${{ github.run_id }}
           path: ${{ runner.temp }}/candidate
 
-      - name: Recheck exact default tip before signing secrets enter
+      - name: Recheck immutable approved tip before signing secrets enter
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           CANDIDATE_SHA: ${{ needs.build.outputs.candidate_sha }}
+          DELIVERY_MODE: ${{ inputs.delivery_mode }}
         shell: bash
         run: |
           set -euo pipefail
+          if [[ "$DELIVERY_MODE" == rehearsal ]]; then
+            test "$GITHUB_REF_NAME" = agent/local-stable-consolidation
+            test "$CANDIDATE_SHA" = "$GITHUB_SHA"
+            candidate_tip="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$GITHUB_REF_NAME" --jq '.object.sha')"
+            test "$CANDIDATE_SHA" = "$candidate_tip"
+            exit 0
+          fi
           default_tip="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$DEFAULT_BRANCH" --jq '.object.sha')"
           test "$CANDIDATE_SHA" = "$default_tip" || {
             echo "Refusing to sign a stale default-tip candidate."

@@ -1,5 +1,40 @@
 # Product acceptance ledger
 
+## Current transport and review evidence, 2026-10-13
+
+Frozen product source f314b3aa115420a8a5691390b4c9e7b0114c2c8d adds bounded
+same-provider redirects: at most two HTTPS Googlevideo hops, preserved selected
+identity, one deadline, terminal401/403. A separately consented186-second source
+passes full2,394,977-byte host save through one302 ->206 hop. No denied source
+was replayed; this does not prove catalog-wide availability.
+
+Production review on emulator-5558 passes real12-second cutoff (12,042ms),
+seek, pause/resume, Later cancellation and repeated decisions. Independent
+post-UI and full cold-restart Hive reopen preserves three-row order,
+accepted/NoMatch decisions and completed matching state. External receipt:
+`host-provider-diagnostic/live-review-native-f314b3aa-attempt2` in the established
+evidence root. Debug APK SHA256:
+c9e8a81608cfbca57aad0129505fb16c8e74e65c36d071ea0a96e1ba994e5db2.
+
+Current normal-main sourcef314b3aa also passes Home/Library/Settings/About,
+scroll and safe Back on5558 with temporarily disconnected guest networking.
+Afterward the baseline APK/four Hives are restored exactly, and a full cold boot
+verifies APK/Hive hashes and private writable0600 modes. An earlier failure
+traced to clone files inheriting0444 from immutable host copies; host originals
+remain unchanged. External receipts: `normal-ui-f314b3aa-attempt5` and
+`normal-clone-recovery-proof.json` under host-provider-diagnostic. No normal-main
+provider search/playback or physical audibility pass is inferred from navigation.
+
+Local460 aggregate tests/clean analysis and11 offline workflow contracts PASS.
+Prior9c89d4a1 exact CI38412302996 passes439 tests/all40 Linux strict visuals.
+New exact-source CI follows the coherent push. Windows strict failures16+24
+remain unchanged; no comparisons/goldens weakened. See
+[the38-row bridge](RELEASE_ACCEPTANCE_20261013.md) for current remaining gates.
+Candidate-ref sign-only dispatch pins the sole candidate/dispatch SHA/current
+tip; publication retains protected-default-tip gates. Signing/in-place update
+and physical output/focus/accessories remain separate gates.
+
+
 ## Actual saved provider file native acceptance, 2026-10-13
 
 Source3b012181 and its pinned debug fixture decode the fully saved authorized

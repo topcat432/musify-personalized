@@ -1,5 +1,16 @@
 # Update delivery plan
 
+## Candidate sign-only rehearsal, 2026-10-13
+
+The sole signed-release workflow now defaults to sign-only rehearsal. Rehearsal
+is pinned to agent/local-stable-consolidation, the immutable dispatch SHA and
+its current branch tip. It produces verified signed artifacts without creating
+a GitHub release. Publication remains a separate explicit mode restricted to
+the current protected default tip. This preserves the single user-facing signed
+publication path; a rehearsal artifact does not authorize phone installation.
+Actual sealed signing and signed disposable in-place/restart proof remain open.
+
+
 ## Retained stable update identity — local candidate, 2026-10-11
 
 The authorized candidate consolidates PR #20's foundation with corrected PR #21

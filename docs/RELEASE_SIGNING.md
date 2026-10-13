@@ -1,5 +1,26 @@
 # Stable Android signing requirement
 
+## Candidate sign-only rehearsal separation,2026-10-13
+
+The scoped engineering change keeps signed-release.yml as the sole user-facing
+publication path and defaults delivery_mode to rehearsal. Rehearsal only creates
+verified authenticated Actions artifacts, never a draft/live release or latest
+updater asset. Signing job has contents:read; only the separately gated publish
+job has contents:write. Existing alias/sealed secrets, pinned58c531... signer,
+v2/v3, non-debuggable retained package, monotonic version and checksum remain.
+No signing secret is read locally, no new key/credential is generated.
+
+GitHub supports workflow_dispatch --ref on a branch when the workflow exists on
+the default branch. Rehearsal is restricted to agent/local-stable-consolidation,
+candidate_ref equal to immutable dispatch GITHUB_SHA and current candidate tip,
+rechecked before signing secrets enter. Full tests/visuals run first. Publication
+still requires the default branch and exact default tip at build, pre-sign and
+publish; explicit delivery_mode=publish is separately authorized after gates.
+This is no permission to invoke the old coupled default-branch workflow, publish,
+change repository security or merge an unfinished candidate. The code path is
+prepared and offline-contract tested; actual sealed signing/rehearsal remains
+unexecuted until coherent exact-source CI and pre-phone checks complete.
+
 ## Installed identity retained — local candidate, 2026-10-11
 
 The authorized consolidation keeps `com.topcat432.musifypersonalized.preview`.

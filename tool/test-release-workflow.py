@@ -31,10 +31,19 @@ class ReleaseWorkflow(unittest.TestCase):
         self.assertIn('test "$CANDIDATE_SHA" = "$default_tip"',str(self.jobs['publish']))
     def test_sign_checks_tip_before_secret_step(self):
         steps=self.jobs['sign']['steps']
-        check=next(i for i,s in enumerate(steps) if s.get('name')=='Recheck exact default tip before signing secrets enter')
+        check=next(i for i,s in enumerate(steps) if s.get('name')=='Recheck immutable approved tip before signing secrets enter')
         secret=next(i for i,s in enumerate(steps) if 'MUSIFY_SIGNING_KEY_BASE64' in s.get('env',{}))
         self.assertLess(check,secret)
         self.assertIn('test "$CANDIDATE_SHA" = "$default_tip"',steps[check]['run'])
+    def test_rehearsal_is_only_sole_candidate_and_pinned_dispatch(self):
+        for name in ['build','sign']:
+            self.assertIn("github.ref_name == 'agent/local-stable-consolidation'",self.jobs[name]['if'])
+        build="\n".join(s.get('run','') for s in self.jobs['build']['steps'])
+        sign="\n".join(s.get('run','') for s in self.jobs['sign']['steps'])
+        self.assertIn('test "$CANDIDATE_REF" = "$GITHUB_SHA"',build)
+        self.assertIn('test "$CANDIDATE_SHA" = "$GITHUB_SHA"',sign)
+        self.assertIn('test "$CANDIDATE_SHA" = "$candidate_tip"',sign)
+        self.assertIn("inputs.delivery_mode == 'publish'",self.jobs['publish']['if'])
     def test_all_shell_blocks_parse_without_execution(self):
         bash=Path('C:/Program Files/Git/bin/bash.exe')
         if not bash.exists():self.skipTest('Local bash syntax checker unavailable')
