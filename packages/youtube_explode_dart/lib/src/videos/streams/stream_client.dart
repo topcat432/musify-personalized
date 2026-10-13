@@ -252,6 +252,22 @@ class StreamClient {
         validatedStream: validatedStream);
   }
 
+  static bool _trustedMediaHost(Uri uri) {
+    final host = uri.host.toLowerCase();
+    final label = RegExp(r'^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$');
+    return uri.scheme == 'https' &&
+        uri.userInfo.isEmpty &&
+        !uri.authority.contains('@') &&
+        uri.fragment.isEmpty &&
+        uri.port == 443 &&
+        host.length <= 253 &&
+        host.endsWith('.googlevideo.com') &&
+        host
+            .split('.')
+            .every((part) => label.hasMatch(part) && part != 'localhost') &&
+        !RegExp(r'^(?:[0-9]+\.)+[0-9]+\.googlevideo\.com$').hasMatch(host);
+  }
+
   Future<StreamInfo> _discoverSelected(
       StreamInfo stream, int cap, Duration timeout) async {
     Never fail(String reason, [int status = 0]) =>
@@ -262,22 +278,79 @@ class StreamClient {
         stream is! VideoOnlyStreamInfo) fail('unsupported-format');
     if (stream.size.totalBytes > cap || stream.size.totalBytes < 0)
       fail('size-cap');
-    final abort = Completer<void>();
+    if (!_trustedMediaHost(stream.url)) fail('unapproved-source');
+    var abort = Completer<void>();
     http.StreamedResponse? response;
     StreamIterator<List<int>>? body;
+    var resolvedUri = stream.url;
+    final visited = <Uri>{resolvedUri};
+    final clock = Stopwatch()..start();
+    Duration remaining() {
+      final left = timeout - clock.elapsed;
+      if (left <= Duration.zero) fail('probe-deadline');
+      return left;
+    }
+
     try {
-      response = await _httpClient
-          .send(http.AbortableRequest('GET', stream.url,
-              abortTrigger: abort.future)
-            ..followRedirects = false
-            ..headers.addAll(requestHeadersFor(stream) ?? const {})
-            ..headers['Range'] = 'bytes=0-0')
-          .timeout(timeout);
-      if (response.statusCode != 206) fail('http-status', response.statusCode);
+      for (var hop = 0;; hop++) {
+        response = await _httpClient
+            .sendMedia(http.AbortableRequest('GET', resolvedUri,
+                abortTrigger: abort.future)
+              ..followRedirects = false
+              ..headers.addAll(requestHeadersFor(stream) ?? const {})
+              ..headers['Range'] = 'bytes=0-0')
+            .timeout(remaining());
+        final status = response.statusCode;
+        if (status == 206) break;
+        if (!const [301, 302, 303, 307, 308].contains(status)) {
+          fail('http-status', status);
+        }
+        if (hop >= 2) fail('redirect-hop-cap', status);
+        final location = response.headers['location'];
+        if (location == null || location.isEmpty || location.length > 8192) {
+          fail('redirect-location', status);
+        }
+        late Uri target;
+        try {
+          target = resolvedUri.resolve(location);
+        } catch (_) {
+          fail('redirect-location', status);
+        }
+        if (!_trustedMediaHost(target) || target.path != stream.url.path) {
+          fail('unapproved-redirect-target', status);
+        }
+        // Authoritative provider redirect may change delivery server/signature,
+        // but must retain offered recording/format identity and declared length.
+        for (final key in ['id', 'itag', 'mime', 'lmt', 'clen']) {
+          final original = stream.url.queryParameters[key];
+          if (original != null && target.queryParameters[key] != original) {
+            fail('redirect-identity', status);
+          }
+        }
+        final tag = target.queryParameters['itag'];
+        if (tag != null && int.tryParse(tag) != stream.tag) {
+          fail('redirect-format', status);
+        }
+        if (!visited.add(target)) fail('redirect-loop', status);
+        if (!abort.isCompleted) abort.complete();
+        await response.stream
+            .listen(null, onError: (Object _) {})
+            .cancel()
+            .timeout(remaining() < const Duration(seconds: 2)
+                ? remaining()
+                : const Duration(seconds: 2));
+        response = null;
+        abort = Completer<void>();
+        resolvedUri = target;
+      }
       final range = RegExp(r'^bytes 0-0/([1-9][0-9]*)$', caseSensitive: false)
           .firstMatch(response.headers['content-range']?.trim() ?? '');
       final total = int.tryParse(range?.group(1) ?? '');
       if (total == null || total > cap) fail('range-or-size-cap');
+      final redirectedLength =
+          int.tryParse(resolvedUri.queryParameters['clen'] ?? '');
+      if (redirectedLength != null && redirectedLength != total)
+        fail('redirect-length-mismatch');
       if (stream.size.totalBytes > 0 && stream.size.totalBytes != total)
         fail('declared-length-mismatch');
       if (response.contentLength != 1) fail('response-length');
@@ -288,15 +361,16 @@ class StreamClient {
           .toLowerCase();
       if (type != stream.codec.mimeType.toLowerCase()) fail('content-type');
       body = StreamIterator(response.stream);
-      if (!await body.moveNext().timeout(timeout) || body.current.length != 1)
-        fail('one-byte-body');
-      if (stream.size.totalBytes > 0) return stream;
+      if (!await body.moveNext().timeout(remaining()) ||
+          body.current.length != 1) fail('one-byte-body');
+      if (stream.size.totalBytes > 0 && resolvedUri == stream.url)
+        return stream;
       final size = FileSize(total);
       if (stream is MuxedStreamInfo)
         return MuxedStreamInfo(
             stream.videoId,
             stream.tag,
-            stream.url,
+            resolvedUri,
             stream.container,
             size,
             stream.bitrate,
@@ -311,7 +385,7 @@ class StreamClient {
         return AudioOnlyStreamInfo(
             stream.videoId,
             stream.tag,
-            stream.url,
+            resolvedUri,
             stream.container,
             size,
             stream.bitrate,
@@ -324,7 +398,7 @@ class StreamClient {
       return VideoOnlyStreamInfo(
           video.videoId,
           video.tag,
-          video.url,
+          resolvedUri,
           video.container,
           size,
           video.bitrate,

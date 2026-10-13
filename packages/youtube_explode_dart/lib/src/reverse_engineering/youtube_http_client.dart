@@ -203,10 +203,11 @@ class YoutubeHttpClient extends http.BaseClient {
         final response = await retry(this, () async {
           final from = bytesCount;
           final chunkEnd = bytesCount + 10379935;
-          final to = (streamInfo.isThrottled &&
-                      chunkEnd < streamInfo.size.totalBytes
-                  ? chunkEnd
-                  : streamInfo.size.totalBytes) - 1;
+          final to =
+              (streamInfo.isThrottled && chunkEnd < streamInfo.size.totalBytes
+                      ? chunkEnd
+                      : streamInfo.size.totalBytes) -
+                  1;
 
           late final http.Request request;
           if (url.queryParameters['c'] == 'ANDROID') {
@@ -356,6 +357,21 @@ class YoutubeHttpClient extends http.BaseClient {
   //}
 
   @override
+
+  /// Media provenance headers only; never apply API cookies or authorization.
+  Future<http.StreamedResponse> sendMedia(http.BaseRequest request) {
+    if (_closed) throw HttpClientClosedException();
+    if (request.url.userInfo.isNotEmpty ||
+        request.headers.keys.any((key) => const [
+              'cookie',
+              'authorization',
+              'proxy-authorization'
+            ].contains(key.toLowerCase()))) {
+      throw ArgumentError('Credentials are not accepted on media requests.');
+    }
+    return _httpClient.send(request);
+  }
+
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
     if (_closed) throw HttpClientClosedException();
 

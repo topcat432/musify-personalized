@@ -1,10 +1,18 @@
-name: Build and publish signed production APK
+name: Build verified signed APK and optionally publish
 
 on:
   workflow_dispatch:
     inputs:
+      delivery_mode:
+        description: Sign-only rehearsal artifact, or explicitly publish after acceptance
+        required: true
+        default: rehearsal
+        type: choice
+        options:
+          - rehearsal
+          - publish
       candidate_ref:
-        description: Full commit SHA to test, build, sign, and publish
+        description: Full default-tip SHA to test, build and sign; publication depends on delivery_mode
         required: true
         type: string
       release_notes:
@@ -38,9 +46,11 @@ jobs:
       - name: Validate candidate commit input
         env:
           CANDIDATE_REF: ${{ inputs.candidate_ref }}
+          DELIVERY_MODE: ${{ inputs.delivery_mode }}
         shell: bash
         run: |
           set -euo pipefail
+          case "$DELIVERY_MODE" in rehearsal|publish) ;; *) echo "Invalid delivery mode"; exit 1 ;; esac
           [[ "$CANDIDATE_REF" =~ ^[0-9a-f]{40}$ ]] || {
             echo "candidate_ref must be a full lowercase 40-character commit SHA."
             exit 1
@@ -246,7 +256,7 @@ jobs:
           retention-days: 1
 
   sign:
-    name: Sign, verify, and publish production APK
+    name: Sign and verify isolated rehearsal artifact
     needs: build
     if: >-
       needs.build.result == 'success' &&
@@ -254,7 +264,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
-      contents: write
+      contents: read
+    outputs:
+      tag: ${{ steps.signed.outputs.tag }}
 
     steps:
       - name: Set up Java 17
@@ -269,6 +281,19 @@ jobs:
           name: musify-personalized-UNSIGNED-${{ github.run_id }}
           path: ${{ runner.temp }}/candidate
 
+      - name: Recheck exact default tip before signing secrets enter
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          CANDIDATE_SHA: ${{ needs.build.outputs.candidate_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          default_tip="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$DEFAULT_BRANCH" --jq '.object.sha')"
+          test "$CANDIDATE_SHA" = "$default_tip" || {
+            echo "Refusing to sign a stale default-tip candidate."
+            exit 1
+          }
       - name: Restore key, sign, verify, and create update manifest
         id: signed
         env:
@@ -399,11 +424,33 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  publish:
+    name: Publish accepted signed production APK
+    needs: [build, sign]
+    if: >-
+      needs.build.result == 'success' && needs.sign.result == 'success' &&
+      inputs.delivery_mode == 'publish' &&
+      github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Download verified signed artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: musify-personalized-PRODUCTION-${{ github.run_number }}
+          path: .
+      - name: Verify artifact checksum before publication
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha256sum -c musify-personalized-production.apk.sha256
       - name: Publish permanent personalized release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-          RELEASE_TAG: ${{ steps.signed.outputs.tag }}
+          RELEASE_TAG: ${{ needs.sign.outputs.tag }}
           CANDIDATE_SHA: ${{ needs.build.outputs.candidate_sha }}
           VERSION_NAME: ${{ needs.build.outputs.version_name }}
           RELEASE_NOTES: ${{ inputs.release_notes }}
