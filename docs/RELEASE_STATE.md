@@ -1,5 +1,15 @@
 # Musify Personalized current state
 
+## Durable production-router coverage,2026-10-13
+
+The test/documentation-only successor to signed24a2cb38 adds actual production
+Home/Search/Library/Settings tabs and Settings/About/Back coverage at412x915 and
+1280x900, using existing mocks and visible rail targets. Product source remains
+byte-identical to24a; the sealed APK's embedded SHA/version/hash are unchanged.
+See [the complete38-row host/runtime reconciliation](RELEASE_HOST_REVIEW_20261013.md).
+No reproduced low-resource product gap remains. Native queue and separate
+release gates stay open; this host regression does not prove signed Android behavior.
+
 ## Host concurrency and playback follow-up, 2026-10-13
 
 The signed9a6663c6 checkpoint and its immutable APK remain preserved. The current
