@@ -1,5 +1,52 @@
 # Musify Personalized current state
 
+## Resumed independent preparation, 2026-10-13
+
+Read-only reconciliation confirms clean candidate
+acb07a2080d2d92a1255211613893047660fc563 passes
+[exact CI 38333791829](https://github.com/topcat432/musify-personalized/actions/runs/38333791829).
+Sole PR23 remains draft; protected master remains
+a786323556275a0de745ffca4d3affc088ac2055. Product/native b1dc64fa receipts below
+remain valid; no product change or repeated acceptance run is introduced here.
+
+The scoped batch's later authorized harness repair/retry supersedes the earlier
+guard-only receipt below. It skipped case1 to retain its consumed metadata
+request, then case2 hit a 30-second manifest timeout. Cumulative counts are
+3 metadata attempts, 2 selected one-byte probe attempts, 0 downloads and
+0 completed cases; case3 was not processed. Probe status/itag/URI fingerprints
+were not retained, so neither exact response outcomes nor a new HTTP denial can
+be inferred. Per-recording repeat guards were strengthened afterward, with
+5 offline regressions passing and no subsequent network run. This budget and
+deadline are exhausted. The earlier 15,818,625-byte transfer and 312,291-ms
+native provider background playback pass remain proven for one recording;
+broader coverage and the separate audio-only later-range403 remain open.
+
+A separate host-only recording2 diagnostic is prepared outside Git, pinned to
+acb07a20: at most1 metadata POST,1 selected one-byte GET,0 downloads,2minutes;
+no HEAD, automatic retry, redirect following, account/client switch or raw signed
+URI logging. Eight deterministic fake-transport tests pass with zero external
+requests. Its README records the exact guarded command. Continuing provider
+payload authority is still pending; generic development continuation does not
+authorize this new network budget. No real diagnostic has run.
+
+Host storage cleanup is coordinated in a separate lane. Current read-only
+resources show about51.8GiB free on C:,39.24% host commit, and available V:/Gradle
+cache paths; the older259MiB checkpoint below is historical. Storage work still
+owns the stopped AVD/historical evidence move: do not read/mutate those trees or
+launch until its clearance. Future owned rehearsals require the external
+Invoke-OwnedRehearsal.ps1 admission/lease/graceful-shutdown wrapper; its default
+26GiB projected-commit allowance is unchanged. GPU/RAM runtime qualification
+remains unproven; no launch/configuration/security change occurred.
+
+Only the selected Samsung was queried; it remains absent. Fresh phone identity,
+pre-update backup/recovery and audible/focus/accessory acceptance remain gated on
+connection and their scoped authority. The exact-source release sequence is
+prepared: close product gates, approve integration, pin resulting default tip,
+approve coupled signing/publication, verify artifact and signed disposable
+in-place preservation, then authorize the exact live update. No production
+action occurred. D-017 supported baseline and D-018 nonblocking stretch intent
+are unchanged. No new production defect is established by the harness timeout.
+
 ## Release preparation and scoped provider attempt, 2026-10-13
 
 Final candidate 6c05206b2045f27039114bdc0639fc14249c2281 passes
