@@ -1,5 +1,14 @@
 # Musify Personalized current state
 
+## Optional direct saved-track JSON step,2026-10-13
+
+F02 adds a bounded offline YourLibrary saved-track JSON adapter using existing
+import/session fields. Non-song entity counts are disclosed, unsupported formats
+reject, and streamed input is size/depth/deadline bounded with cancellation.
+See [the exact contract and feature acceptance](SPOTIFY_SAVED_TRACK_JSON_IMPORT.md).
+It does not import ZIP/full playlist membership or migrate Spotify preferences.
+Baseline24a/d12f and additive F01 remain distinct; native gates remain open.
+
 ## Optional flat TSV roadmap step,2026-10-13
 
 After host-actionable baseline fixes were exhausted, the owner authorized small

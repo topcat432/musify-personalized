@@ -10,6 +10,7 @@ import 'package:hive/hive.dart';
 import 'package:musify/screens/spotify_import_page.dart';
 import 'package:musify/services/spotify_import_session_service.dart';
 import 'package:musify/services/spotify_csv_importer.dart';
+import 'package:musify/services/spotify_import_file_reader.dart';
 
 void main() {
   late Directory root;
@@ -42,12 +43,15 @@ void main() {
   Finder button(String label) => find.widgetWithText(FilledButton, label);
   Future<void> pumpPage(
     WidgetTester tester,
-    SpotifyImportSessionService service,
-  ) async {
+    SpotifyImportSessionService service, {
+    SpotifyImportReader readFile = SpotifyImportFileReader.read,
+  }) async {
     await tester.binding.setSurfaceSize(const Size(900, 1800));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(
-      MaterialApp(home: SpotifyImportPage(sessionService: service)),
+      MaterialApp(
+        home: SpotifyImportPage(sessionService: service, readFile: readFile),
+      ),
     );
     await tester.pumpAndSettle();
   }
@@ -71,7 +75,7 @@ void main() {
 
   Future<void> choose(WidgetTester tester, String name) async {
     picker.results.add(Future.value(csv(name)));
-    await tester.tap(button('Choose CSV or TSV file'));
+    await tester.tap(button('Choose song list file'));
     await tester.pumpAndSettle();
   }
 
@@ -92,7 +96,7 @@ void main() {
       ]),
     );
     picker.results.add(Future.value(null));
-    await tester.tap(button('Choose CSV or TSV file'));
+    await tester.tap(button('Choose song list file'));
     await tester.pumpAndSettle();
     expect(find.text('Ready for matching'), findsOneWidget);
     expect(Hive.box('user').get('spotifyMatchResults'), [
@@ -150,12 +154,12 @@ void main() {
       );
       await choose(tester, 'A');
       final stalePickCallback = tester
-          .widget<FilledButton>(button('Choose CSV or TSV file'))
+          .widget<FilledButton>(button('Choose song list file'))
           .onPressed!;
       await tester.tap(button('Save and continue'));
       await tester.pump();
       expect(
-        tester.widget<FilledButton>(button('Choose CSV or TSV file')).onPressed,
+        tester.widget<FilledButton>(button('Choose song list file')).onPressed,
         isNull,
       );
       stalePickCallback();
@@ -180,7 +184,7 @@ void main() {
         ]),
       );
       picker.results.add(Future.value(null));
-      await tester.tap(button('Choose CSV or TSV file'));
+      await tester.tap(button('Choose song list file'));
       await tester.pumpAndSettle();
       expect(find.text('Ready for matching'), findsOneWidget);
       expect(
@@ -219,7 +223,7 @@ void main() {
           .onPressed!;
       final read = Completer<FilePickerResult?>();
       picker.results.add(read.future);
-      await tester.tap(button('Choose CSV or TSV file'));
+      await tester.tap(button('Choose song list file'));
       await tester.pump();
       expect(
         tester.widget<FilledButton>(button('Save and continue')).onPressed,
@@ -272,7 +276,7 @@ void main() {
         isNotNull,
       );
       expect(
-        tester.widget<FilledButton>(button('Choose CSV or TSV file')).onPressed,
+        tester.widget<FilledButton>(button('Choose song list file')).onPressed,
         isNotNull,
       );
       expect(Hive.box('user').get('spotifyImportMetadata'), {
@@ -303,9 +307,9 @@ void main() {
         () => Hive.box('user').put('likedSongs', ['keep-owned-liked']),
       );
       await pumpPage(tester, const _IoSessionService());
-      await tester.tap(button('Choose CSV or TSV file'));
+      await tester.tap(button('Choose song list file'));
       await tester.pumpAndSettle();
-      expect(picker.extensions, ['csv', 'tsv']);
+      expect(picker.extensions, ['csv', 'tsv', 'json']);
       expect(find.text('Generic music TSV'), findsOneWidget);
       expect(find.text('First, original'), findsOneWidget);
       expect(Hive.box('user').containsKey('spotifyImportTracks'), isFalse);
@@ -367,19 +371,147 @@ void main() {
         ),
       );
       await pumpPage(tester, const _IoSessionService());
-      await tester.tap(button('Choose CSV or TSV file'));
+      await tester.tap(button('Choose song list file'));
       await tester.pumpAndSettle();
       expect(find.textContaining('A title/track-name column'), findsOneWidget);
       expect(box.toMap(), before);
       expect(button('Save and continue'), findsNothing);
     },
   );
+  testWidgets(
+    'JSON preview discloses track-only scope and saves only on explicit approval',
+    (tester) async {
+      final bytes = Uint8List.fromList(
+        utf8.encode(
+          jsonEncode({
+            'tracks': [
+              {
+                'artist': 'Owned artist',
+                'track': 'Saved JSON song',
+                'album': 'Owned album',
+                'uri': 'spotify:track:AAAAAAAAAAAAAAAAAAAAAA',
+              },
+            ],
+            'albums': [{}],
+          }),
+        ),
+      );
+      picker.results.add(
+        Future.value(
+          FilePickerResult([
+            PlatformFile(
+              name: 'YourLibrary.json',
+              size: bytes.length,
+              bytes: bytes,
+            ),
+          ]),
+        ),
+      );
+      await pumpPage(tester, const _IoSessionService());
+      await tester.tap(button('Choose song list file'));
+      await tester.pumpAndSettle();
+      expect(picker.extensions, ['csv', 'tsv', 'json']);
+      expect(picker.streamed, isTrue);
+      expect(picker.inMemory, isFalse);
+      expect(find.text('Spotify saved tracks JSON'), findsOneWidget);
+      expect(find.text('Albums: 1 entry not imported.'), findsOneWidget);
+      expect(Hive.box('user').containsKey('spotifyImportTracks'), isFalse);
+      await tester.ensureVisible(button('Save and continue'));
+      await tester.tap(button('Save and continue'));
+      await settleSave(tester);
+      expect(find.text('Ready for matching'), findsOneWidget);
+      expect(Hive.box('user').get('spotifyImportTracks')[0]['sourceRow'], 1);
+      expect(
+        Hive.box('user').get('spotifyImportTracks')[0]['spotifyTrackId'],
+        'AAAAAAAAAAAAAAAAAAAAAA',
+      );
+      expect(
+        Hive.box('user').get('spotifyImportMetadata').containsKey('notices'),
+        isFalse,
+      );
+      picker.results.add(Future.value(null));
+      await tester.tap(button('Choose song list file'));
+      await tester.pumpAndSettle();
+      expect(find.text('Ready for matching'), findsOneWidget);
+      expect(
+        tester.widget<FilledButton>(button('Saved for matching')).onPressed,
+        isNull,
+      );
+    },
+  );
+
+  testWidgets(
+    'unsupported JSON leaves the existing completed source and decisions untouched',
+    (tester) async {
+      final box = Hive.box('user');
+      await tester.runAsync(
+        () => box.putAll({
+          'spotifyImportMetadata': {
+            'fileName': 'old.csv',
+            'matchingStatus': 'completed',
+          },
+          'spotifyMatchResults': [
+            {'ytid': 'owned-choice', 'status': 'accepted'},
+          ],
+        }),
+      );
+      final before = Map<dynamic, dynamic>.from(box.toMap());
+      final bytes = Uint8List.fromList(utf8.encode('{"playlists":[]}'));
+      picker.results.add(
+        Future.value(
+          FilePickerResult([
+            PlatformFile(
+              name: 'Playlist.json',
+              size: bytes.length,
+              bytes: bytes,
+            ),
+          ]),
+        ),
+      );
+      await pumpPage(tester, const _IoSessionService());
+      await tester.tap(button('Choose song list file'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Only Spotify YourLibrary'), findsOneWidget);
+      expect(box.toMap(), before);
+      expect(button('Save and continue'), findsNothing);
+    },
+  );
+
+  testWidgets('closing import page cancels its reader without saving', (
+    tester,
+  ) async {
+    var stopped = false;
+    picker.results.add(
+      Future.value(
+        FilePickerResult([PlatformFile(name: 'YourLibrary.json', size: 100)]),
+      ),
+    );
+    Future<Uint8List> pendingRead(
+      PlatformFile file, {
+      Future<void>? cancelled,
+    }) async {
+      await cancelled;
+      stopped = true;
+      throw const SpotifyImportException('Owned cancelled read');
+    }
+
+    await pumpPage(tester, const _IoSessionService(), readFile: pendingRead);
+    await tester.tap(button('Choose song list file'));
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+    expect(stopped, isTrue);
+    expect(Hive.box('user').containsKey('spotifyImportTracks'), isFalse);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 class _Picker extends FilePickerPlatform {
   final results = <Future<FilePickerResult?>>[];
   int calls = 0;
   List<String>? extensions;
+  bool? streamed;
+  bool? inMemory;
   @override
   Future<FilePickerResult?> pickFiles({
     String? dialogTitle,
@@ -396,6 +528,8 @@ class _Picker extends FilePickerPlatform {
     bool cancelUploadOnWindowBlur = true,
   }) {
     extensions = allowedExtensions;
+    streamed = withReadStream;
+    inMemory = withData;
     calls++;
     return results.removeAt(0);
   }

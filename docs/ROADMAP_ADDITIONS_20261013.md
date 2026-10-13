@@ -64,3 +64,14 @@ with the same owned5558/26GiB/80% controls. No phone, merge or publication.
 ## Host validation at additive commit
 
 51 focused parser/widget/session/legacy identity/rollback/backup checks PASS; clean aggregate analysis and497 full tests PASS. Both strict Windows suites FAIL16+24, with all40 actual PNGs byte-exact to the established control after restoring the unrelated matching-empty copy. Before/current/isolated-diff images inspected; no references/comparators/dependencies changed. Exact-source Linux CI is required after push. Native F01 remains unverified; baseline checkpoints and their gates remain distinct.
+
+## F02: direct YourLibrary saved-track JSON
+
+The next bounded adapter is [specified separately](SPOTIFY_SAVED_TRACK_JSON_IMPORT.md).
+It supports the observed flat saved-track variant named in roadmap§5, not
+multi-playlist JSON or ZIP. It discloses non-track library sections before Save;
+no album/follow/blocked-preference mapping is invented. F01 remains a separate
+commit and baseline24a/d12f stay preserved. Native admission was checked once
+2026-10-13T22:54:37Z:33760817152 committed/72846569472 limit plus26GiB =>84.67%;
+no baseline launch. Existing file-picker/native cached-file stream support was
+inspected; actual Android picker and full data/restart acceptance remain queued.

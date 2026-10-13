@@ -1,0 +1,71 @@
+import 'dart:async';
+import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:file_picker/file_picker.dart';
+import 'package:musify/services/spotify_csv_importer.dart';
+import 'package:rxdart/rxdart.dart';
+
+class SpotifyImportFileReader {
+  const SpotifyImportFileReader._();
+  static const readTimeout = Duration(seconds: 20);
+
+  static Future<Uint8List> read(
+    PlatformFile file, {
+    Future<void>? cancelled,
+  }) async {
+    final limit = file.name.toLowerCase().endsWith('.json')
+        ? SpotifyCsvImporter.maxJsonBytes
+        : null;
+    void check(int size) {
+      if (limit != null && size > limit) {
+        throw const SpotifyImportException(
+          'JSON song lists must be 8 MiB or smaller.',
+        );
+      }
+    }
+
+    check(file.size);
+    if (file.bytes != null) {
+      check(file.bytes!.length);
+      return file.bytes!;
+    }
+    var stream =
+        file.readStream ??
+        (file.path == null ? null : File(file.path!).openRead());
+    if (stream == null)
+      throw const SpotifyImportException(
+        'Musify could not read the selected file.',
+      );
+    var wasCancelled = false;
+    if (cancelled != null) {
+      stream = stream.takeUntil(
+        cancelled.asStream().map((_) {
+          wasCancelled = true;
+          return true;
+        }),
+      );
+    }
+    final iterator = StreamIterator<List<int>>(stream);
+    final bytes = BytesBuilder(copy: false);
+    final clock = Stopwatch()..start();
+    try {
+      while (true) {
+        final remaining = readTimeout - clock.elapsed;
+        if (remaining <= Duration.zero) throw TimeoutException('Read deadline');
+        if (!await iterator.moveNext().timeout(remaining)) break;
+        check(bytes.length + iterator.current.length);
+        bytes.add(iterator.current);
+      }
+      if (wasCancelled)
+        throw const SpotifyImportException('File selection was cancelled.');
+      return bytes.takeBytes();
+    } on TimeoutException {
+      throw const SpotifyImportException(
+        'Reading this file timed out. Choose a local song list and try again.',
+      );
+    } finally {
+      await iterator.cancel();
+    }
+  }
+}

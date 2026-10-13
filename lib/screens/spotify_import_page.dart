@@ -7,22 +7,29 @@
  *     (at your option) any later version.
  */
 
-import 'dart:io';
+import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:musify/services/spotify_csv_importer.dart';
+import 'package:musify/services/spotify_import_file_reader.dart';
 import 'package:musify/services/spotify_import_session_service.dart';
 import 'package:musify/widgets/personalized_ui.dart';
+
+typedef SpotifyImportReader =
+    Future<Uint8List> Function(PlatformFile file, {Future<void>? cancelled});
 
 class SpotifyImportPage extends StatefulWidget {
   const SpotifyImportPage({
     super.key,
     this.sessionService = const SpotifyImportSessionService(),
+    this.readFile = SpotifyImportFileReader.read,
   });
 
   final SpotifyImportSessionService sessionService;
+  final SpotifyImportReader readFile;
 
   @override
   State<SpotifyImportPage> createState() => _SpotifyImportPageState();
@@ -34,6 +41,13 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
   bool _isReading = false;
   bool _isSaving = false;
   bool _saved = false;
+  Completer<void>? _readCancellation;
+
+  @override
+  void dispose() {
+    _readCancellation?.complete();
+    super.dispose();
+  }
 
   Future<void> _pickFile() async {
     if (_isReading || _isSaving) return;
@@ -45,22 +59,19 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
     try {
       final result = await FilePicker.pickFiles(
         type: FileType.custom,
-        allowedExtensions: const ['csv', 'tsv'],
-        withData: true,
+        allowedExtensions: const ['csv', 'tsv', 'json'],
+        withReadStream: true,
       );
 
-      if (result == null || result.files.isEmpty) return;
-
+      if (!mounted || result == null || result.files.isEmpty) return;
       final selectedFile = result.files.single;
-      var bytes = selectedFile.bytes;
-      if (bytes == null && selectedFile.path != null) {
-        bytes = await File(selectedFile.path!).readAsBytes();
-      }
-      if (bytes == null) {
-        throw const SpotifyImportException(
-          'Musify could not read the selected file.',
-        );
-      }
+      final cancellation = Completer<void>();
+      _readCancellation = cancellation;
+      final bytes = await widget.readFile(
+        selectedFile,
+        cancelled: cancellation.future,
+      );
+      if (!mounted) return;
 
       final preview = SpotifyCsvImporter.parseBytes(
         bytes,
@@ -85,6 +96,7 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
         _errorMessage = 'The selected song list could not be imported.';
       });
     } finally {
+      _readCancellation = null;
       if (mounted) setState(() => _isReading = false);
     }
   }
@@ -121,7 +133,7 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
     final preview = _preview;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Import CSV or TSV')),
+      appBar: AppBar(title: const Text('Import song list')),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(18, 12, 18, 32),
         children: [
@@ -130,7 +142,7 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
             icon: Icons.file_upload_outlined,
             title: 'Start with your song list',
             description:
-                'Choose a flat CSV or tab-separated TSV song list. Musify checks every row before anything is saved.',
+                'Choose a flat CSV, TSV, or Spotify YourLibrary JSON song list. Musify checks every row before anything is saved.',
           ),
           const SizedBox(height: 24),
           PersonalizedReveal(
@@ -141,7 +153,7 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
                 const PersonalizedSectionHeading(
                   title: 'Source file',
                   description:
-                      'CSV and TSV files need title and artist columns.',
+                      'CSV/TSV need title and artist columns. JSON imports saved tracks from YourLibrary.',
                 ),
                 const SizedBox(height: 12),
                 _CsvPickerSurface(
@@ -205,6 +217,11 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
                 ],
               ),
             ),
+            for (final notice in preview.notices)
+              Padding(
+                padding: const EdgeInsets.only(top: 10),
+                child: Text(notice),
+              ),
             if (preview.rejectedRows.isNotEmpty) ...[
               const SizedBox(height: 14),
               PersonalizedSurface(
@@ -394,7 +411,7 @@ class _CsvPickerSurface extends StatelessWidget {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.folder_open_outlined),
-            label: Text(reading ? 'Checking file…' : 'Choose CSV or TSV file'),
+            label: Text(reading ? 'Checking file…' : 'Choose song list file'),
           ),
         ],
       ),

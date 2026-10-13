@@ -59,6 +59,7 @@ class SpotifyImportPreview {
     required this.totalDataRows,
     required this.tracks,
     required this.rejectedRows,
+    this.notices = const [],
   });
 
   final String fileName;
@@ -66,6 +67,7 @@ class SpotifyImportPreview {
   final int totalDataRows;
   final List<SpotifyImportTrack> tracks;
   final List<SpotifyRejectedRow> rejectedRows;
+  final List<String> notices;
 }
 
 class SpotifyImportException implements Exception {
@@ -80,10 +82,17 @@ class SpotifyImportException implements Exception {
 class SpotifyCsvImporter {
   const SpotifyCsvImporter._();
 
+  static const maxJsonBytes = 8 * 1024 * 1024;
+  static const maxJsonTracks = 10000;
+  static const maxJsonDepth = 24;
+
   static SpotifyImportPreview parseBytes(
     Uint8List bytes, {
     required String fileName,
   }) {
+    if (fileName.toLowerCase().endsWith('.json')) {
+      return _parseLibraryJson(bytes, fileName);
+    }
     final isTsv = fileName.toLowerCase().endsWith('.tsv');
     if (bytes.isEmpty) {
       throw const SpotifyImportException(
@@ -244,6 +253,186 @@ class SpotifyCsvImporter {
       totalDataRows: rows.length - 1,
       tracks: List.unmodifiable(tracks),
       rejectedRows: List.unmodifiable(rejectedRows),
+    );
+  }
+
+  static void _validateJsonStructure(String text) {
+    final objects = <Set<String>?>[];
+    final expectingKey = <bool>[];
+    var quoted = false;
+    var escaped = false;
+    var key = false;
+    var start = 0;
+    for (var index = 0; index < text.length; index++) {
+      final code = text.codeUnitAt(index);
+      if (quoted) {
+        if (escaped) {
+          escaped = false;
+        } else if (code == 92) {
+          escaped = true;
+        } else if (code == 34) {
+          quoted = false;
+          if (key &&
+              !objects.last!.add(
+                jsonDecode(text.substring(start, index + 1)) as String,
+              )) {
+            throw const SpotifyImportException(
+              'The JSON contains duplicate fields.',
+            );
+          }
+        }
+      } else if (code == 34) {
+        quoted = true;
+        start = index;
+        key = objects.isNotEmpty && objects.last != null && expectingKey.last;
+      } else if (code == 123 || code == 91) {
+        if (objects.length >= maxJsonDepth)
+          throw const SpotifyImportException('The JSON is nested too deeply.');
+        objects.add(code == 123 ? <String>{} : null);
+        expectingKey.add(code == 123);
+      } else if (code == 125 || code == 93) {
+        if (objects.isEmpty)
+          throw const FormatException('Unexpected closing bracket');
+        objects.removeLast();
+        expectingKey.removeLast();
+      } else if (objects.isNotEmpty && objects.last != null) {
+        if (code == 44) expectingKey[expectingKey.length - 1] = true;
+        if (code == 58) expectingKey[expectingKey.length - 1] = false;
+      }
+    }
+  }
+
+  static SpotifyImportPreview _parseLibraryJson(
+    Uint8List bytes,
+    String fileName,
+  ) {
+    if (bytes.length > maxJsonBytes) {
+      throw const SpotifyImportException(
+        'JSON song lists must be 8 MiB or smaller.',
+      );
+    }
+    dynamic document;
+    try {
+      final text = utf8.decode(bytes).replaceFirst('\ufeff', '');
+      _validateJsonStructure(text);
+      document = jsonDecode(text);
+    } on FormatException {
+      throw const SpotifyImportException(
+        'The selected JSON is malformed or is not valid UTF-8.',
+      );
+    }
+    const sections = [
+      'albums',
+      'shows',
+      'episodes',
+      'bannedTracks',
+      'artists',
+      'bannedArtists',
+      'other',
+    ];
+    if (document is! Map<String, dynamic> ||
+        document['tracks'] is! List ||
+        document.keys.any(
+          (key) => key != 'tracks' && !sections.contains(key),
+        )) {
+      throw const SpotifyImportException(
+        'Only Spotify YourLibrary saved-track JSON is supported. Playlist and other JSON formats are not imported.',
+      );
+    }
+    final rows = document['tracks'] as List;
+    if (rows.length > maxJsonTracks) {
+      throw const SpotifyImportException(
+        'JSON song lists may contain at most 10,000 tracks.',
+      );
+    }
+    final notices = <String>[];
+    for (final section in sections) {
+      if (!document.containsKey(section)) continue;
+      final values = document[section];
+      if (values is! List) {
+        throw const SpotifyImportException(
+          'YourLibrary sections must be arrays.',
+        );
+      }
+      if (values.isNotEmpty) {
+        final label = const {
+          'albums': 'Albums',
+          'shows': 'Shows',
+          'episodes': 'Episodes',
+          'bannedTracks': 'Blocked songs',
+          'artists': 'Artists',
+          'bannedArtists': 'Blocked artists',
+          'other': 'Other library items',
+        }[section]!;
+        notices.add(
+          '$label: ${values.length} ${values.length == 1 ? 'entry' : 'entries'} not imported.',
+        );
+      }
+    }
+    if (notices.isNotEmpty) {
+      notices.insert(
+        0,
+        'Saved songs only. Album/artist collections, podcasts and blocked-item preferences stay in the export.',
+      );
+    }
+    final tracks = <SpotifyImportTrack>[];
+    final rejected = <SpotifyRejectedRow>[];
+    for (var index = 0; index < rows.length; index++) {
+      final row = rows[index];
+      String? reason;
+      if (row is! Map<String, dynamic> ||
+          row.keys.any(
+            (key) => !const ['artist', 'track', 'album', 'uri'].contains(key),
+          )) {
+        reason = 'Unsupported saved-track entry.';
+      } else if (row['track'] is! String ||
+          (row['track'] as String).trim().isEmpty) {
+        reason = 'Missing track title.';
+      } else if (row['artist'] is! String ||
+          (row['artist'] as String).trim().isEmpty) {
+        reason = 'Missing artist name.';
+      } else if ((row['album'] != null && row['album'] is! String) ||
+          (row['uri'] != null && row['uri'] is! String)) {
+        reason = 'Album and URI must be text.';
+      }
+      final identity = reason == null
+          ? _spotifyTrackIdentity((row['uri'] as String?) ?? '', '')
+          : const <String, String>{};
+      if (reason == null &&
+          (row['uri'] as String?)?.trim().isNotEmpty == true &&
+          identity.isEmpty) {
+        reason = 'Not a supported Spotify track URI.';
+      }
+      if (reason != null) {
+        rejected.add(SpotifyRejectedRow(sourceRow: index + 1, reason: reason));
+        continue;
+      }
+      tracks.add(
+        SpotifyImportTrack(
+          sourceRow: index + 1,
+          title: (row['track'] as String).trim(),
+          artist: (row['artist'] as String).trim(),
+          album: ((row['album'] as String?) ?? '').trim(),
+          isrc: '',
+          durationMs: null,
+          addedAt: null,
+          spotifyTrackUri: identity['spotifyTrackUri'],
+          spotifyTrackId: identity['spotifyTrackId'],
+        ),
+      );
+    }
+    if (tracks.isEmpty) {
+      throw const SpotifyImportException(
+        'No valid saved tracks were found in this JSON.',
+      );
+    }
+    return SpotifyImportPreview(
+      fileName: fileName,
+      format: 'Spotify saved tracks JSON',
+      totalDataRows: rows.length,
+      tracks: List.unmodifiable(tracks),
+      rejectedRows: List.unmodifiable(rejected),
+      notices: List.unmodifiable(notices),
     );
   }
 

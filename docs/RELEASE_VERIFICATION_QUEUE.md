@@ -51,3 +51,7 @@ The queue is a plan, not evidence that a native stage ran or passed.
 ## Optional F01 queue,2026-10-13
 
 Flat TSV intake is a separate additive roadmap step; see [its acceptance rows](ROADMAP_ADDITIONS_20261013.md). Preserve baseline24a signed APK/d12f test checkpoint and complete their ordered queue independently. The sealed24a APK does not contain TSV. Later exact-source F01 native checks cover picker/cancel/rejection, explicit save, process/full cold restart, selected routing and actual backup/semantic reopen. No claim of playlist-aware import, no baseline migration and no phone/publication authorization.
+
+## Optional F02 queue,2026-10-13
+
+Direct saved-track JSON has [its own contract and acceptance rows](SPOTIFY_SAVED_TRACK_JSON_IMPORT.md). The signed24a baseline contains neither optional adapter. After independent baseline gates and admitted exact feature source/artifact, verify Android picker/stream limits/cancel, compact non-track disclosures, explicit atomic save, process/full cold restart, selected-alternative routing and actual backup/semantic reopen. Do not attribute standalone reader or synthetic widget proof to native Android; retain26GiB/80%, owned5558 lease/finally and normal clone rollback.
