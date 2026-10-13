@@ -1,5 +1,59 @@
 # Musify Personalized current state
 
+## Supported-scope native closure, 2026-10-13
+
+Exact source 52576c31e6457d239c36563d20b22c2dacaa1630 passes
+[Linux CI 38326041187](https://github.com/topcat432/musify-personalized/actions/runs/38326041187):
+clean analysis, 393 tests, all 40 strict reference visuals and Android boundaries.
+Local 14 targeted/393 aggregate tests and analysis pass. Windows strict results
+remain FAIL 16 + 24; all 40 current actuals are byte-exact to the established
+control and reference PNGs remain unchanged. This is a known cross-platform
+reference mismatch, not a detected current product rendering regression or
+an unexplained product release blocker. Exact rasterization cause is unisolated.
+
+The owner-approved D-017 baseline is implemented through the existing Offline
+mode switch and actual-source details. Native English/Spanish copy is readable;
+two online/offline cycles change four/three-tab navigation and survive restart.
+Seven independent stopped reopens preserve exact expected settings, recording
+order/memberships, owned WAV/artwork and unrelated values. Deliberate rehearsal
+queue starts have narrowly audited monotonic recency/statistics changes, and only
+two owned guard-fixture cache timestamps refresh. Every stopped fixture capture
+preserves the normal four Hive files byte-exact. Repeated native absent/missing
+saved-file cases reject the synthetic cached online slot before source loading,
+retaining the current source, selected recording and queue. No provider media
+request is used. Evidence: supported-mode-native-independent-proof.json and
+the seven supported-mode-52576c31 snapshots outside Git.
+
+Normal lib/main.dart 52576c31 is restored/stopped on emulator-5556 with the
+retained debug signer. Installed/source APK SHA-256
+92c74cbb0d09ae5bb8c5c38ec46f3ab39646f7e6e5fe55bd2320c56456b938e3
+matches. Installation preserves four Hive files byte-exact; post-startup
+Home/Library independent reopen preserves user/settings/offline values, with
+one separately recorded derived cache timestamp refresh and all other cache
+values exact. Evidence: normal-scratch-52576c31-install-proof.json and
+normal-525-observed-final-proof.json. No migration, phone, signing or merge.
+
+Spotify stretch assessment: official
+[Android content linking](https://developer.spotify.com/documentation/android/tutorials/content-linking)
+supports explicit external content handoff, and Spotify's
+[Free experience announcement](https://newsroom.spotify.com/2025-09-15/free-experience-updates-features-tips/)
+describes Free song-selection features. Neither establishes Musify SDK playback
+or guaranteed external playback completion. The current SpotifyImportTrack
+model/parser does not retain the exact Spotify URI, even when Track URI identifies
+the CSV format. Spotify is absent on the approved emulator, so installed/logged-out/
+unavailable/return/overlap acceptance is unavailable. Exact-identity propagation,
+durable old-state handling and native external-app verification make this more
+than a small link-only addition to the present data model. Retain it as a
+high-priority post-release candidate; no search substitution, fake playback mode,
+SDK/account action or external handoff is added to the approved baseline.
+
+Remaining actual acceptance inputs: explicit three-recording payload/destination
+consent, broader provider playback/download/preview proof and original audio-only
+HTTP403 resolution; actual physical output/focus/accessories and phone acceptance;
+eligible exact-tip integration, approved signed publication/in-place rehearsal
+and live installation. No new queue-recovery or Spotify engine decision blocks
+the approved supported scope. Master remains unchanged; sole PR23 stays draft.
+
 ## Approved supported playback scope, 2026-10-12
 
 Owner decision D-017 accepts YouTube playback plus saved/offline audio, with
