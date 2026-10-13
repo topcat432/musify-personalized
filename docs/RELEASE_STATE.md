@@ -1,5 +1,46 @@
 # Musify Personalized current state
 
+## Release preparation and scoped provider attempt, 2026-10-13
+
+Final candidate 6c05206b2045f27039114bdc0639fc14249c2281 passes
+[exact CI 38332605213](https://github.com/topcat432/musify-personalized/actions/runs/38332605213).
+PR23 remains clean, draft and mergeable; master remains a7863235. This receipt
+does not prove merged, signed, phone-installed or release-ready status.
+
+The owner answered the specific three-recording payload/destination request;
+the approval retry was allowed. A fixture-only erroneous await was removed after
+an initial compile failure with zero requests. The batch then stopped on case1
+after one metadata request: the bounded harness rejected the resolver's HEAD
+content-length request before transmission. Zero media probes/downloads and
+completed cases; cases2/3 untouched. This is a request-allowlist failure, not a
+new provider HTTP denial or playback pass. No broadened requests, batch retry,
+client/identity switch or denied-source replay occurred. Existing audio-only
+later-range HTTP403 and complete provider listening/download/preview gates remain.
+
+Read-only check of only the selected Samsung reports device not found. Current
+package/version/signer therefore cannot be revalidated; prior public identity
+receipts remain historical. No security/ADB-server/device change was attempted.
+Preserved installed baseline APK and real backup/re-export hashes were rechecked
+and match prior receipts. The real independent restore/reboot/typed comparison
+remains available; fresh pre-update phone inventory/backup is still required.
+
+Exact physical/signed-preserving-update preparation is outside Git at
+continuing-acceptance-20261012/release-preflight-20261013/
+physical-and-release-sequence.md. It records artifact locations, fresh latest
+legacy release manifest, installed signer, monotonic workflow formula, actual
+default-tip gate and staged backup/disposable/live acceptance order. Signing and
+publication are coupled in signed-release.yml and need approval together after
+product gates and approved integration. No workflow was dispatched.
+
+Minimal physical participation is reconnect/unlock through the existing setup,
+identify available speaker/wired/Bluetooth outputs, and human audible/focus/
+reconnect confirmation after approved exact installation. Unavailable outputs
+stay unverified. Local free space at this checkpoint is about 259MiB, below the
+three-case maximum media budget plus staging/build overhead; reserve space before
+any future authorized larger transfer/build, preserving private evidence/data.
+Independent preparation is exhausted at these named gates; no optional backlog
+or production action is started. Normal b1dc64fa debug app remains stopped.
+
 ## Optional Spotify identity checkpoint, 2026-10-13
 
 Exact source b1dc64fa54d87f966aabea0823f284a837d3c8ea passes
