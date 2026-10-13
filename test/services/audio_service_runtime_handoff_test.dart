@@ -7,6 +7,8 @@ import 'package:hive/hive.dart';
 import 'package:http/http.dart' as http;
 import 'package:just_audio/just_audio.dart';
 import 'package:musify/services/audio_service.dart';
+import 'package:musify/services/common_services.dart'
+    show songStreamUrlCacheKey;
 import 'package:musify/services/settings_manager.dart';
 import 'package:musify/services/online_audio_source.dart';
 import 'package:rxdart/rxdart.dart';
@@ -52,6 +54,50 @@ void main() {
       await player.dispose();
     }
   });
+
+  test(
+    'offline mode rejects unsaved queue items before cached online resolution',
+    () async {
+      offlineMode.value = true;
+      sponsorBlockSupport.value = false;
+      final owned = File('${directory.path}/owned-cache-source.wav')
+        ..writeAsBytesSync([0]);
+      for (final missingPath in [false, true]) {
+        final id = 'owned-offline-missing-$missingPath';
+        final key = songStreamUrlCacheKey(id);
+        const location = 'https://owned.invalid/synthetic-audio';
+        await Hive.box(
+          'cache',
+        ).putAll({key: location, '${key}_date': DateTime.now()});
+        final player = _PendingPlayer();
+        var onlineSources = 0;
+        final handler = MusifyAudioHandler(
+          player: player,
+          sourceFactory: (url, {tag, onUnavailable}) {
+            onlineSources++;
+            return AudioSource.file(owned.path, tag: tag);
+          },
+        );
+        try {
+          final result = await handler.playSong({
+            'ytid': id,
+            'title': 'Missing saved fixture',
+            'highResImage': '',
+            if (missingPath) 'audioPath': '${directory.path}/not-present.wav',
+          });
+          expect(result, isFalse);
+          expect(onlineSources, 0);
+          expect(player.loadedIds, isEmpty);
+          expect(player.playing, isFalse);
+          expect(Hive.box('cache').get(key), location);
+        } finally {
+          await handler.stop();
+          await player.dispose();
+        }
+      }
+      offlineMode.value = false;
+    },
+  );
 
   test('Replay after healthy completion seeks zero and resumes without waiting '
       'for the playback lifetime or reloading the source', () async {

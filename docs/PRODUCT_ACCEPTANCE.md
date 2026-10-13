@@ -10,11 +10,19 @@ now state this scope explicitly. No new provider modes, routing, adapter,
 migration or queue-persistence architecture is added. Spotify-capable no-Premium
 listening remains a high-priority stretch goal, not the release baseline.
 
-Targeted six tests, aggregate 392 tests and clean analysis pass. Two repeated
+Targeted 14 tests, aggregate 393 tests and clean analysis pass. Two repeated
 mode-toggle/reopen cycles preserve the offlineMode key and unrelated data;
 English/Spanish source details remain usable at narrow width/large text.
 Native UI/reopen and exact-source CI verification are pending. The previous
 source-mode gap is superseded by the owner's supported-scope approval.
+Offline-only edge correction, 2026-10-13: a synthetic fresh cached location
+reproduced unsaved queue playback while Offline mode was on (expected false,
+actual true). The resolver now rejects absent/missing saved audio before any
+cache or online resolution and preserves the offline-unavailable reason. Both
+controlled cases pass without provider traffic. Native owned guard/reopen proof
+is pending. Exact copy-only 410370e5 CI 38325048313 passes 392 tests and all 40
+strict Linux visuals; the guarded source requires its own exact verification.
+
 Provider batch consent, provider breadth/403, physical output/device acceptance
 and signed delivery gates remain separate. No phone/signing/merge work occurs.
 

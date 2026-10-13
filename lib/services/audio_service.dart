@@ -1959,7 +1959,7 @@ class MusifyAudioHandler extends BaseAudioHandler {
       }
 
       if (playback == null) {
-        _lastError = 'Failed to get song URL';
+        _lastError ??= 'Failed to get song URL';
         return false;
       }
 
@@ -2006,6 +2006,11 @@ class MusifyAudioHandler extends BaseAudioHandler {
 
   Future<_PlaybackSource?> _resolvePlaybackSource(Map songData) async {
     final isOffline = await _resolveOfflineAndSetPaths(songData);
+    if (offlineMode.value && !isOffline) {
+      _lastError = 'Saved audio is unavailable in offline mode.';
+      logger.log('Offline mode has no saved audio; skipping online resolution');
+      return null;
+    }
     final songUrl = await _getPlaybackUrl(songData, isOffline);
 
     if (songUrl == null || songUrl.isEmpty) {
