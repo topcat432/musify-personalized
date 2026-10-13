@@ -3,6 +3,21 @@
 Read docs/RELEASE_STATE.md for the living repository/device map, then
 CONTRIBUTING.md for reproducible development and acceptance. Actual workflows
 override summaries. MASTER_AGENT_HANDOVER.md is an index, not current proof.
+On Windows also read docs/STORAGE_WORKFLOW.md before any workload. This adopts
+the owner's Windows Project Storage Standard, Library version1; it is mandatory,
+not an optional helper. Use tool/dev.ps1 for normal checks/builds, which invokes
+the hash-pinned task-storage session with declared C:/V: writes and commit.
+Other owned workloads must invoke the same admission/session controls explicitly.
+Declare staging, cache misses, downloads, outputs and snapshot costs together;
+preserve10GiB C: after writes and projected commit below80%. V: must be present
+for relocated caches/state, and is working storage, not an independent backup.
+Owned emulator work additionally uses Invoke-OwnedRehearsal.ps1 with its lease
+and verified graceful finally shutdown; retain26GiB commit planning until measured
+qualification supports less. Guest RAM is not a host cap. Never bypass admission,
+adopt/kill unrelated processes, silently change global TEMP/cache/security or purge
+unique evidence. Persistent logs need implemented10MiB/three-generation bounds;
+environment hints do not enforce limits. Keep one canonical artifact/manifest and
+lineage index; retirement review is not deletion authorization.
 
 ## Work and authorization
 

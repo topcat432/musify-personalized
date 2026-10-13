@@ -1,5 +1,50 @@
 # Musify Personalized current state
 
+## Concrete provider result and required storage adoption, 2026-10-13
+
+Exact fe0335ff24fa9e2917a924bf1f0b1682100ff27a passes
+[CI 38381772666](https://github.com/topcat432/musify-personalized/actions/runs/38381772666).
+Its delta from verified acb07a20 is only this map; product/native lineage remains
+unchanged. Continuing provider consent was explicitly received at10:17 UTC.
+Samsung is intentionally last-mile only: stop routine presence/reconnection
+requests while predeployment engineering remains incomplete.
+
+The prepared host diagnostic completed in340ms:1 metadata POST HTTP200,
+0 media probes/downloads, no declared compatible muxed format. This narrow result
+is not a timeout or proof that production's audio-only fallback is absent.
+After deterministic production-selector/SDK guard qualification, a bounded
+three-recording follow-up selected offered Opus/WebM itag251 for its first case.
+Metadata HTTP200, one-byte probe206, four256KiB ranges206 (exactly1MiB delivered),
+then range1048576-1310719 HTTP403. The wave immediately stopped; other cases were
+untouched, no complete download published, no retry/client/source switch occurred.
+Counts:1 metadata,1 probe,5 range requests,0 completed downloads. This is a real
+later-range denial, unlike the earlier harness guard/timeout findings. Private
+proof: host-provider-diagnostic/wave-real-20261013T104621532/
+production-followup-proof.json outside Git. The earlier15,818,625-byte transfer
+and312,291-ms native provider pass remain valid for one different source.
+
+The follow-up guard initially intercepted403 before production could classify
+it; its resulting network label is a harness artifact, not an established app
+classification defect. An offline adapter repair now preserves the response for
+production while blocking every later transmission. No denied source is replayed.
+
+The owner's storage standard is now required by AGENTS/CONTRIBUTING and
+[STORAGE_WORKFLOW.md](STORAGE_WORKFLOW.md). Windows tool/dev.ps1 workload actions
+actually invoke the existing exact-hash session helper with declared C:/V: writes
+and commit; setup remains configuration only. Missing guard/V: fails closed.
+Five offline workflow contracts pass; a small existing-helper session qualifies
+V: TEMP/TMP, owned rename and caller-environment restoration. No build/pub/test,
+emulator, SDK installation, global setting change or automatic purge occurs in
+those contract checks. The external provider entrypoint also uses the session
+helper and enforces10MiB/three-generation logs with confirmed owned cancellation.
+The emulator guard's26GiB allowance is unchanged; native lifecycle/renderer
+qualification remains separate, not implied by mock/host-session checks.
+
+No product behavior/schema/scoring/routing/selection change is introduced by
+storage adoption. Provider reliability remains the predeployment blocker; exact
+signed disposable in-place delivery and last-mile physical acceptance are still
+separately gated. No production signing/publication, integration or installation.
+
 ## Resumed independent preparation, 2026-10-13
 
 Read-only reconciliation confirms clean candidate

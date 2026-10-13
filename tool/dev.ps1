@@ -1,7 +1,8 @@
 param(
     [Parameter(Position=0)]
     [ValidateSet('setup','test','visual','verify','build')]
-    [string]$Action = 'verify'
+    [string]$Action = 'verify',
+    [string]$StorageSessionScript = 'C:\Users\james\Documents\Codex\2026-10-12\task\task-storage-session.ps1'
 )
 $ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath (Split-Path -Parent $PSScriptRoot)
@@ -19,28 +20,27 @@ function Invoke-FlutterCheck([string[]]$Arguments) {
     & $flutterExecutable @Arguments
     if ($LASTEXITCODE -ne 0) { throw "Flutter check failed with exit $($LASTEXITCODE): $($Arguments -join ' ')" }
 }
-$versionText = & $flutterExecutable --version --machine
+$versionText = & $flutterExecutable --no-version-check --suppress-analytics --version --machine
 if ($LASTEXITCODE -ne 0) { throw 'Unable to read Flutter version.' }
 $version = ($versionText -join [Environment]::NewLine) | ConvertFrom-Json
 if ($version.frameworkVersion -ne '3.44.5') { throw "Expected Flutter 3.44.5; found $($version.frameworkVersion)." }
 Write-Output "Flutter $($version.frameworkVersion); Java $env:JAVA_HOME; SDK $env:ANDROID_SDK_ROOT"
 if ($Action -eq 'setup') { return }
-Invoke-FlutterCheck -Arguments @('pub','get')
-if ($Action -in @('test','verify')) {
-    Invoke-FlutterCheck -Arguments @('analyze','--no-pub','.')
-    Invoke-FlutterCheck -Arguments @('test','--no-pub')
+if (-not (Test-Path -LiteralPath $StorageSessionScript -PathType Leaf)) { throw 'Required storage-session helper missing; do not bypass admission.' }
+if (-not (Test-Path -LiteralPath 'V:\') -or -not (Test-Path -LiteralPath 'C:\Users\james\.gradle\caches')) { throw 'Required V: working volume or Gradle cache lookup unavailable.' }
+$harness = Join-Path $PSScriptRoot 'dev-workload.ps1'
+$harnessHash = (Get-FileHash -LiteralPath $harness -Algorithm SHA256).Hash
+$build = $Action -eq 'build'
+$savedAction = [Environment]::GetEnvironmentVariable('MUSIFY_DEV_WORKLOAD_ACTION','Process')
+try {
+    $env:MUSIFY_DEV_WORKLOAD_ACTION = $Action
+    $global:LASTEXITCODE = 0
+    & $StorageSessionScript -Project 'musify' -HarnessScript $harness -ApprovedHarnessSha256 $harnessHash `
+        -ExpectedCWritesBytes $(if ($build) { 4294967296 } else { 2147483648 }) `
+        -ExpectedVWritesBytes $(if ($build) { 6442450944 } else { 5368709120 }) `
+        -ExpectedCommitBytes $(if ($build) { 6442450944 } else { 3221225472 })
+    if ($LASTEXITCODE -ne 0) { throw "Guarded workload failed with exit $LASTEXITCODE." }
+} finally {
+    if ($null -eq $savedAction) { [Environment]::SetEnvironmentVariable('MUSIFY_DEV_WORKLOAD_ACTION',[NullString]::Value,'Process') }
+    else { $env:MUSIFY_DEV_WORKLOAD_ACTION = $savedAction }
 }
-if ($Action -in @('visual','verify')) {
-    Invoke-FlutterCheck -Arguments @('test','--no-pub','tool/visual_review_test.dart')
-    Invoke-FlutterCheck -Arguments @('test','--no-pub','tool/visual_review_priority_test.dart')
-}
-if ($Action -eq 'build') {
-    if (Test-Path -LiteralPath 'android/key.properties') { throw 'Expected unsigned build; signing configuration exists.' }
-    if (Test-Path -LiteralPath 'android/app/key.jks') { throw 'Expected unsigned build; key file exists.' }
-    $sourceCommit = & git rev-parse HEAD
-    if ($LASTEXITCODE -ne 0) { throw 'Cannot establish source commit.' }
-    if (& git status --porcelain --untracked-files=normal) { throw 'Commit changes before attributing an APK to a commit.' }
-    Invoke-FlutterCheck -Arguments @('build','apk','--no-pub','--release','--flavor','github',"--dart-define=GIT_SHA=$sourceCommit")
-}
-& git diff --check
-if ($LASTEXITCODE -ne 0) { throw 'Git whitespace check failed.' }

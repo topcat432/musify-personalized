@@ -29,6 +29,12 @@ origin/master on one task branch/PR, avoiding competing overhaul branches.
 
 ## Toolchain and checks
 
+Windows work must follow [STORAGE_WORKFLOW.md](docs/STORAGE_WORKFLOW.md).
+tool/dev.ps1 setup still configures only the calling process; test/visual/verify/
+build now require the existing task-storage session, which checks resources and
+applies process-local V: temp/cache placement before the workload. Missing guard
+or V: fails closed. These forecasts are not OS quotas or a universal watchdog.
+
 Flutter 3.44.5 / Dart 3.12.2, Java 17, wrapper Gradle 8.14.3, compile SDK 36,
 NDK 28.2.13676358, CMake 3.22.1. Pubspec/workflows pin Flutter. Resolve dependencies normally
 through pub.dev, Gradle Plugin Portal, Maven Central and Google. Do not bypass
