@@ -178,7 +178,7 @@ class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
       builder: (dialogContext) => AlertDialog(
         title: const Text('Restart matching?'),
         content: const Text(
-          'This clears the current staged matching results and starts again with the newest finder. Your imported CSV remains saved.',
+          'This clears the current staged matching results and starts again with the newest finder. Your imported song list remains saved.',
         ),
         actions: [
           TextButton(

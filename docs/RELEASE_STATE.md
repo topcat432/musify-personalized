@@ -1,5 +1,14 @@
 # Musify Personalized current state
 
+## Optional flat TSV roadmap step,2026-10-13
+
+After host-actionable baseline fixes were exhausted, the owner authorized small
+roadmap additions. F01 adds flat TSV selection/preview/save using the existing
+import session, with no schema, dependency, matching or routing changes.
+See [inventory and separate feature acceptance rows](ROADMAP_ADDITIONS_20261013.md).
+Signed24a2cb38 and CI-verifiedd12f932d remain separate baseline checkpoints.
+Their unresolved native/provider/physical gates are not closed by F01.
+
 ## Durable production-router coverage,2026-10-13
 
 The test/documentation-only successor to signed24a2cb38 adds actual production

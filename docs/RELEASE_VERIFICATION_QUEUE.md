@@ -47,3 +47,7 @@ fulfillment. No durable full-queue recovery or multi-service playback is added.
 Provider reliability, physical audibility/focus/accessories, real storage failure
 and latest signed semantic/empty/restart results remain distinct open subgates.
 The queue is a plan, not evidence that a native stage ran or passed.
+
+## Optional F01 queue,2026-10-13
+
+Flat TSV intake is a separate additive roadmap step; see [its acceptance rows](ROADMAP_ADDITIONS_20261013.md). Preserve baseline24a signed APK/d12f test checkpoint and complete their ordered queue independently. The sealed24a APK does not contain TSV. Later exact-source F01 native checks cover picker/cancel/rejection, explicit save, process/full cold restart, selected routing and actual backup/semantic reopen. No claim of playlist-aware import, no baseline migration and no phone/publication authorization.

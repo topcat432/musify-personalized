@@ -84,21 +84,43 @@ class SpotifyCsvImporter {
     Uint8List bytes, {
     required String fileName,
   }) {
+    final isTsv = fileName.toLowerCase().endsWith('.tsv');
     if (bytes.isEmpty) {
-      throw const SpotifyImportException('The selected CSV file is empty.');
+      throw const SpotifyImportException(
+        'The selected song-list file is empty.',
+      );
     }
 
     final text = utf8
         .decode(bytes, allowMalformed: true)
         .replaceFirst('\ufeff', '');
-    final rows = _parseCsv(text);
+    final rows = _parseDelimited(text, delimiter: isTsv ? '\t' : ',');
     if (rows.length < 2) {
       throw const SpotifyImportException(
-        'The CSV must contain a header row and at least one song.',
+        'The song list must contain a header row and at least one song.',
       );
     }
 
     final headers = rows.first.map(_normalizeHeader).toList(growable: false);
+    if (isTsv &&
+        headers.any(
+          (header) => const {
+            'playlist',
+            'playlist name',
+            'playlist names',
+            'playlist id',
+            'playlist uri',
+            'playlist membership',
+            'playlists',
+            'playlist_name',
+            'playlist_id',
+            'playlist_uri',
+          }.contains(header),
+        )) {
+      throw const SpotifyImportException(
+        'This TSV includes playlist membership. Use a flat song list; playlist-aware imports are not supported yet.',
+      );
+    }
     final titleIndex = _findHeader(headers, const [
       'track name',
       'title',
@@ -113,7 +135,7 @@ class SpotifyCsvImporter {
 
     if (titleIndex == null || artistIndex == null) {
       throw const SpotifyImportException(
-        'Unsupported CSV. A title/track-name column and an artist column are required.',
+        'Unsupported song list. A title/track-name column and an artist column are required.',
       );
     }
 
@@ -152,12 +174,18 @@ class SpotifyCsvImporter {
       'spotify id',
     ]);
 
-    final format =
+    final detectedFormat =
         headers.contains('track uri') || headers.contains('track name')
         ? 'Spotify/Exportify'
         : headers.contains('index') && headers.contains('isrc')
         ? 'Soundiiz'
         : 'Generic music CSV';
+
+    final format = isTsv
+        ? detectedFormat == 'Generic music CSV'
+              ? 'Generic music TSV'
+              : '$detectedFormat TSV'
+        : detectedFormat;
 
     final tracks = <SpotifyImportTrack>[];
     final rejectedRows = <SpotifyRejectedRow>[];
@@ -206,7 +234,7 @@ class SpotifyCsvImporter {
 
     if (tracks.isEmpty) {
       throw const SpotifyImportException(
-        'No valid songs were found in the selected CSV.',
+        'No valid songs were found in the selected song list.',
       );
     }
 
@@ -219,7 +247,10 @@ class SpotifyCsvImporter {
     );
   }
 
-  static List<List<String>> _parseCsv(String input) {
+  static List<List<String>> _parseDelimited(
+    String input, {
+    required String delimiter,
+  }) {
     final rows = <List<String>>[];
     var row = <String>[];
     final field = StringBuffer();
@@ -246,7 +277,7 @@ class SpotifyCsvImporter {
 
       if (character == '"') {
         inQuotes = true;
-      } else if (character == ',') {
+      } else if (character == delimiter) {
         row.add(field.toString());
         field.clear();
       } else if (character == '\n' || character == '\r') {
@@ -266,7 +297,7 @@ class SpotifyCsvImporter {
 
     if (inQuotes) {
       throw const SpotifyImportException(
-        'The CSV contains an unterminated quoted field.',
+        'The song list contains an unterminated quoted field.',
       );
     }
 

@@ -71,7 +71,7 @@ void main() {
 
   Future<void> choose(WidgetTester tester, String name) async {
     picker.results.add(Future.value(csv(name)));
-    await tester.tap(button('Choose .csv file'));
+    await tester.tap(button('Choose CSV or TSV file'));
     await tester.pumpAndSettle();
   }
 
@@ -92,7 +92,7 @@ void main() {
       ]),
     );
     picker.results.add(Future.value(null));
-    await tester.tap(button('Choose .csv file'));
+    await tester.tap(button('Choose CSV or TSV file'));
     await tester.pumpAndSettle();
     expect(find.text('Ready for matching'), findsOneWidget);
     expect(Hive.box('user').get('spotifyMatchResults'), [
@@ -150,12 +150,12 @@ void main() {
       );
       await choose(tester, 'A');
       final stalePickCallback = tester
-          .widget<FilledButton>(button('Choose .csv file'))
+          .widget<FilledButton>(button('Choose CSV or TSV file'))
           .onPressed!;
       await tester.tap(button('Save and continue'));
       await tester.pump();
       expect(
-        tester.widget<FilledButton>(button('Choose .csv file')).onPressed,
+        tester.widget<FilledButton>(button('Choose CSV or TSV file')).onPressed,
         isNull,
       );
       stalePickCallback();
@@ -180,7 +180,7 @@ void main() {
         ]),
       );
       picker.results.add(Future.value(null));
-      await tester.tap(button('Choose .csv file'));
+      await tester.tap(button('Choose CSV or TSV file'));
       await tester.pumpAndSettle();
       expect(find.text('Ready for matching'), findsOneWidget);
       expect(
@@ -219,7 +219,7 @@ void main() {
           .onPressed!;
       final read = Completer<FilePickerResult?>();
       picker.results.add(read.future);
-      await tester.tap(button('Choose .csv file'));
+      await tester.tap(button('Choose CSV or TSV file'));
       await tester.pump();
       expect(
         tester.widget<FilledButton>(button('Save and continue')).onPressed,
@@ -272,7 +272,7 @@ void main() {
         isNotNull,
       );
       expect(
-        tester.widget<FilledButton>(button('Choose .csv file')).onPressed,
+        tester.widget<FilledButton>(button('Choose CSV or TSV file')).onPressed,
         isNotNull,
       );
       expect(Hive.box('user').get('spotifyImportMetadata'), {
@@ -284,11 +284,102 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+  testWidgets(
+    'TSV preview saves offline and reopens in the existing session shape',
+    (tester) async {
+      final bytes = Uint8List.fromList(
+        utf8.encode(
+          'title\tartist\tduration ms\nFirst, original\tOwned artist\t8000\nSecond\tOther artist\t9000\n',
+        ),
+      );
+      picker.results.add(
+        Future.value(
+          FilePickerResult([
+            PlatformFile(name: 'owned.tsv', size: bytes.length, bytes: bytes),
+          ]),
+        ),
+      );
+      await tester.runAsync(
+        () => Hive.box('user').put('likedSongs', ['keep-owned-liked']),
+      );
+      await pumpPage(tester, const _IoSessionService());
+      await tester.tap(button('Choose CSV or TSV file'));
+      await tester.pumpAndSettle();
+      expect(picker.extensions, ['csv', 'tsv']);
+      expect(find.text('Generic music TSV'), findsOneWidget);
+      expect(find.text('First, original'), findsOneWidget);
+      expect(Hive.box('user').containsKey('spotifyImportTracks'), isFalse);
+      await tester.ensureVisible(button('Save and continue'));
+      await tester.tap(button('Save and continue'));
+      await settleSave(tester);
+      expect(find.text('Ready for matching'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.runAsync(() async {
+        await Hive.close();
+        final box = await Hive.openBox('user');
+        expect(
+          (box.get('spotifyImportTracks') as List).map((t) => t['title']),
+          ['First, original', 'Second'],
+        );
+        expect(
+          (box.get('spotifyImportTracks') as List).map((t) => t['sourceRow']),
+          [2, 3],
+        );
+        expect(box.get('spotifyImportMetadata')['fileName'], 'owned.tsv');
+        expect(box.get('spotifyImportMetadata')['format'], 'Generic music TSV');
+        expect(
+          box.get('spotifyImportMetadata')['matchingStatus'],
+          'not_started',
+        );
+        expect(box.get('spotifyMatchResults'), isEmpty);
+        expect(box.get('likedSongs'), ['keep-owned-liked']);
+      });
+    },
+  );
+
+  testWidgets(
+    'invalid TSV preview leaves the existing completed import intact',
+    (tester) async {
+      final box = Hive.box('user');
+      await tester.runAsync(
+        () => box.putAll({
+          'spotifyImportTracks': [
+            {'title': 'Owned original'},
+          ],
+          'spotifyImportMetadata': {
+            'fileName': 'original.csv',
+            'matchingStatus': 'completed',
+          },
+          'spotifyMatchResults': [
+            {'status': 'accepted', 'ytid': 'owned-choice'},
+          ],
+        }),
+      );
+      final before = Map<dynamic, dynamic>.from(box.toMap());
+      final bytes = Uint8List.fromList(
+        utf8.encode('album\tgenre\nOwned\tRock\n'),
+      );
+      picker.results.add(
+        Future.value(
+          FilePickerResult([
+            PlatformFile(name: 'invalid.tsv', size: bytes.length, bytes: bytes),
+          ]),
+        ),
+      );
+      await pumpPage(tester, const _IoSessionService());
+      await tester.tap(button('Choose CSV or TSV file'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('A title/track-name column'), findsOneWidget);
+      expect(box.toMap(), before);
+      expect(button('Save and continue'), findsNothing);
+    },
+  );
 }
 
 class _Picker extends FilePickerPlatform {
   final results = <Future<FilePickerResult?>>[];
   int calls = 0;
+  List<String>? extensions;
   @override
   Future<FilePickerResult?> pickFiles({
     String? dialogTitle,
@@ -304,6 +395,7 @@ class _Picker extends FilePickerPlatform {
     bool readSequential = false,
     bool cancelUploadOnWindowBlur = true,
   }) {
+    extensions = allowedExtensions;
     calls++;
     return results.removeAt(0);
   }

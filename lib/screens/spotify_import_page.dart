@@ -35,7 +35,7 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
   bool _isSaving = false;
   bool _saved = false;
 
-  Future<void> _pickCsv() async {
+  Future<void> _pickFile() async {
     if (_isReading || _isSaving) return;
     setState(() {
       _isReading = true;
@@ -45,7 +45,7 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
     try {
       final result = await FilePicker.pickFiles(
         type: FileType.custom,
-        allowedExtensions: const ['csv'],
+        allowedExtensions: const ['csv', 'tsv'],
         withData: true,
       );
 
@@ -82,7 +82,7 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
       if (!mounted) return;
       setState(() {
         _preview = null;
-        _errorMessage = 'The selected CSV could not be imported.';
+        _errorMessage = 'The selected song list could not be imported.';
       });
     } finally {
       if (mounted) setState(() => _isReading = false);
@@ -121,7 +121,7 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
     final preview = _preview;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Import CSV')),
+      appBar: AppBar(title: const Text('Import CSV or TSV')),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(18, 12, 18, 32),
         children: [
@@ -130,7 +130,7 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
             icon: Icons.file_upload_outlined,
             title: 'Start with your song list',
             description:
-                'Choose a Spotify, Exportify, or Soundiiz CSV. Musify checks every row before anything is saved.',
+                'Choose a flat CSV or tab-separated TSV song list. Musify checks every row before anything is saved.',
           ),
           const SizedBox(height: 24),
           PersonalizedReveal(
@@ -140,13 +140,14 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
               children: [
                 const PersonalizedSectionHeading(
                   title: 'Source file',
-                  description: 'Only compatible .csv files can be selected.',
+                  description:
+                      'CSV and TSV files need title and artist columns.',
                 ),
                 const SizedBox(height: 12),
                 _CsvPickerSurface(
                   reading: _isReading,
                   fileName: preview?.fileName,
-                  onPressed: _isSaving ? null : _pickCsv,
+                  onPressed: _isSaving ? null : _pickFile,
                 ),
               ],
             ),
@@ -219,7 +220,7 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
                     for (final rejected in preview.rejectedRows.take(25))
                       ListTile(
                         dense: true,
-                        title: Text('CSV row ${rejected.sourceRow}'),
+                        title: Text('Source row ${rejected.sourceRow}'),
                         subtitle: Text(rejected.reason),
                       ),
                   ],
@@ -281,7 +282,7 @@ class _ImportSummaryCard extends StatelessWidget {
         children: [
           PersonalizedStatusBanner(
             tone: PersonalizedStatusTone.success,
-            title: saved ? 'Ready for matching' : 'CSV validated',
+            title: saved ? 'Ready for matching' : 'Song list validated',
             message: saved
                 ? 'This validated song list is saved on your device.'
                 : 'Review the counts below, then save this list.',
@@ -393,7 +394,7 @@ class _CsvPickerSurface extends StatelessWidget {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.folder_open_outlined),
-            label: Text(reading ? 'Checking file…' : 'Choose .csv file'),
+            label: Text(reading ? 'Checking file…' : 'Choose CSV or TSV file'),
           ),
         ],
       ),
