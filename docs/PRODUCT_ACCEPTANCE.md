@@ -1,5 +1,39 @@
 # Product acceptance ledger
 
+## Valid empty-box correction and signed rehearsal status, 2026-10-13
+
+The bounded correction accepts Hive's legitimate zero-byte empty boxes without
+manufacturing a playlist. Backup descriptors/checksums and semantic inventories
+remain required; declared nonempty data truncated to zero is rejected. Strict
+frame/CRC validation disables automatic repair of malformed nonempty input.
+Preflight rejection leaves existing boxes/files unchanged, while failure after
+replacement restores exact original bytes, including zero-byte originals.
+No Hive, bundle or restore-journal schema/version changed. Older backup readers
+can reject newly valid empty payloads; nonempty historical bundles stay readable.
+
+29 targeted backup regressions, 472 aggregate tests and analysis PASS locally.
+Windows strict suites remain FAIL16+24; all40 actual images are byte-exact to
+established Windows control. No goldens/comparisons changed. Corrected exact CI,
+signed artifact and affected native recovery checks are pending.
+
+Immutable signed source018bb5c772c36448b8a72dd7c4f4a568a3eafc19 passed
+CI38433405297/sign-only38434666060; Publish skipped. APK SHA256:
+8852dfaba4a46de8aa6c1f1855bdb7c459708c0db970a5ee227136b93c781048.
+On5558 the actual retained production baseline was prepared through supported
+local persistence/legacy recovery, then full cold boot, nonempty saved export,
+payload checksums and independent typed Hive close/reopen PASS:4 imports,
+4 matches,3 strong,1 exclusion,5 favorites,2 playlists. Original zero-box failure
+and insufficient UI-only confirmation remain recorded as earlier failed checks.
+
+That verified018 APK installs in place with retained .preview identity,
+version300000001 ->300000012 and unchanged UID10210. It renders normal main.
+Post-update semantic export/restart remains UNVERIFIED: repeated Settings taps
+stayed on Home; source versus input-harness cause is not yet isolated. Provider
+integration has no new result. Normal debug baseline four Hive bytes/private0600
+are restored exactly after each completed native session; immutable originals
+and signed artifact are preserved. Native diagnostics await unchanged26GiB/80%
+admission. No phone operation, merge or publication occurred.
+
 ## Current transport and review evidence, 2026-10-13
 
 Frozen product source f314b3aa115420a8a5691390b4c9e7b0114c2c8d adds bounded

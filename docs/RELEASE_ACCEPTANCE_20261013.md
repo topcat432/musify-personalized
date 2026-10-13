@@ -1,5 +1,41 @@
 # Current38-row release bridge,2026-10-13
 
+## Valid empty-box correction and signed rehearsal status, 2026-10-13
+
+The bounded correction accepts Hive's legitimate zero-byte empty boxes without
+manufacturing a playlist. Backup descriptors/checksums and semantic inventories
+remain required; declared nonempty data truncated to zero is rejected. Strict
+frame/CRC validation disables automatic repair of malformed nonempty input.
+Preflight rejection leaves existing boxes/files unchanged, while failure after
+replacement restores exact original bytes, including zero-byte originals.
+No Hive, bundle or restore-journal schema/version changed. Older backup readers
+can reject newly valid empty payloads; nonempty historical bundles stay readable.
+
+29 targeted backup regressions, 472 aggregate tests and analysis PASS locally.
+Windows strict suites remain FAIL16+24; all40 actual images are byte-exact to
+established Windows control. No goldens/comparisons changed. Corrected exact CI,
+signed artifact and affected native recovery checks are pending.
+
+Immutable signed source018bb5c772c36448b8a72dd7c4f4a568a3eafc19 passed
+CI38433405297/sign-only38434666060; Publish skipped. APK SHA256:
+8852dfaba4a46de8aa6c1f1855bdb7c459708c0db970a5ee227136b93c781048.
+On5558 the actual retained production baseline was prepared through supported
+local persistence/legacy recovery, then full cold boot, nonempty saved export,
+payload checksums and independent typed Hive close/reopen PASS:4 imports,
+4 matches,3 strong,1 exclusion,5 favorites,2 playlists. Original zero-box failure
+and insufficient UI-only confirmation remain recorded as earlier failed checks.
+
+That verified018 APK installs in place with retained .preview identity,
+version300000001 ->300000012 and unchanged UID10210. It renders normal main.
+Post-update semantic export/restart remains UNVERIFIED: repeated Settings taps
+stayed on Home; source versus input-harness cause is not yet isolated. Provider
+integration has no new result. Normal debug baseline four Hive bytes/private0600
+are restored exactly after each completed native session; immutable originals
+and signed artifact are preserved. Native diagnostics await unchanged26GiB/80%
+admission. No phone operation, merge or publication occurred.
+
+
+
 This reconciles evidence; it does not upgrade old native results to a current full-product pass. Product3b012181 was tested for214s saved playback;9c89d4a1 exact CI38412302996 passes439 tests/all40 Linux visuals. Frozen transport/rehearsal sourcef314b3aa adds bounded same-provider redirects and sign-only defaults;460 local tests/clean analysis and11 offline workflow contracts pass. Its real production review preview passes12,042ms cutoff after seeking, pause/resume, Later cancellation and repeated decisions; independent post-UI and cold-restart Hive reopen passes. Normal-main integration remains separate.
 
 Code carry-forward checked independently: backup service has no diff251f5c43→3b012181; screens/widgets/main/router have no diffb1dc64fa→3b012181. Transport changes affect live resolution/preview and need their own evidence. Original AVD durability is not inferred from persistent5558 clone proof. Samsung is deliberately last-mile, not an engineering setup blocker.
@@ -51,7 +87,7 @@ Code carry-forward checked independently: backup service has no diff251f5c43→3
 2. Production review12s cutoff, pause/resume, Later cancellation and repeated decisions PASS on frozenf314b3aa; independent Hive audit after UI and full cold restart PASS. SourceURI remains within approved recording2. This does not prove physical output or all-catalog availability.
 3. Search-result-to-play/current-source/unsupported feedback using bounded consented resources. Transport302→HTTPS Googlevideo→206 now full host save verified;403/401/cross-provider remain terminal, not exclusions.
 4. Exact-source CI and immutable source/APK/signer linkage after coherent push.
-5. Sign-only workflow execution and signed disposable in-place data/restart rehearsal. GitHub supports candidate --ref dispatch; rehearsal code pins the sole candidate branch/dispatch SHA/current tip. Publication retains default-tip gates. Actual sealed signing/in-place rehearsal remains unexecuted until current code gates pass; no master-only integration is required to expose rehearsal.
+5. Sign-only workflow execution and signed disposable in-place data/restart rehearsal. GitHub supports candidate --ref dispatch; rehearsal code pins the sole candidate branch/dispatch SHA/current tip. Publication retains default-tip gates. Sealed sign-only38434666060 PASS for018bb5c7; Publish skipped. Baseline data preparation and signed in-place/restart rehearsal remain UNVERIFIED.
 6. Fresh authorized phone recovery/update plus physical output/focus/accessories as final mile.
 
 No recording set proves all catalog availability. No credentials, identity switching, denied251 replay, reset/reimport or schema migration is authorized by this bridge. D-017 baseline remains YouTube/saved audio plus Spotify metadata; D-018 ad-free in-app/no-Premium Spotify remains a separate nonblocking stretch.

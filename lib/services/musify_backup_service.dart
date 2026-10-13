@@ -161,9 +161,9 @@ class MusifyBackupService {
             'The required $boxName database file does not exist.',
           );
         }
-        if (await source.length() == 0) {
+        if (await source.length() == 0 && box.isNotEmpty) {
           throw BackupValidationException(
-            'The required $boxName database file is empty.',
+            'The $boxName file is empty but its open box contains data.',
           );
         }
         sourceFiles[boxName] = source;
@@ -703,9 +703,6 @@ class MusifyBackupService {
           'The $boxName database payload is not valid Base64.',
         );
       }
-      if (bytes.isEmpty) {
-        throw BackupValidationException('The $boxName database is empty.');
-      }
       final record = Map<String, dynamic>.from(payloadRecord);
       final expectedLength = _readNonNegativeInt(
         record['byteLength'],
@@ -768,6 +765,7 @@ class MusifyBackupService {
     final rollbackBytes = <String, Uint8List>{};
     final preRestoreFiles = <String, File>{};
     File? journalFile;
+    var transactionStarted = false;
     try {
       staging = await _newTemporaryDirectory('restore-transaction');
       final candidateSnapshots = await _validatePayloadSet(
@@ -798,6 +796,11 @@ class MusifyBackupService {
         rollbackBytes[boxName] = Uint8List.fromList(
           await currentFile.readAsBytes(),
         );
+        if (rollbackBytes[boxName]!.isEmpty && box.isNotEmpty) {
+          throw BackupValidationException(
+            'The $boxName file is empty but its open box contains data.',
+          );
+        }
       }
 
       // A rollback copy must itself be readable before live data is touched.
@@ -825,6 +828,7 @@ class MusifyBackupService {
         );
       }
       await _writeRestoreJournal(journalFile, state: 'replacing');
+      transactionStarted = true;
 
       var replacements = 0;
       for (final boxName in _requiredBoxNames) {
@@ -849,7 +853,7 @@ class MusifyBackupService {
 
       final restoredSnapshots = <String, _BoxSnapshot>{};
       for (final boxName in _requiredBoxNames) {
-        final box = await Hive.openBox(boxName);
+        final box = await _openStrictBox(boxName);
         restoredSnapshots[boxName] = _snapshotOpenBox(boxName, box);
       }
       final restoredSummary = _summaryFromSnapshots(restoredSnapshots);
@@ -877,17 +881,24 @@ class MusifyBackupService {
         error: error,
         stackTrace: stackTrace,
       );
-      final rollbackError = await _rollBackRestore(
-        targetPaths: targetPaths,
-        rollbackBytes: rollbackBytes,
-        journalFile: journalFile,
-      );
+      // Preflight rejection must not close/reopen or rewrite existing files.
+      // In particular, Hive's normal crash recovery could otherwise truncate
+      // corrupt originals while handling an import that never replaced data.
+      final rollbackError = transactionStarted
+          ? await _rollBackRestore(
+              targetPaths: targetPaths,
+              rollbackBytes: rollbackBytes,
+              journalFile: journalFile,
+            )
+          : null;
       final reason = error is BackupValidationException
           ? error.message
           : error.toString();
       return BackupOperationResult(
         success: false,
-        message: rollbackError == null
+        message: !transactionStarted
+            ? 'Restore rejected before replacement; original data was not changed. $reason'
+            : rollbackError == null
             ? 'Restore rejected; original data was restored. $reason'
             : 'Restore failed and automatic rollback also failed: '
                   '$reason; rollback: $rollbackError',
@@ -899,7 +910,17 @@ class MusifyBackupService {
   }
 
   static Future<Box> _openRequiredBox(String name) async {
-    return Hive.isBoxOpen(name) ? Hive.box(name) : Hive.openBox(name);
+    return Hive.isBoxOpen(name) ? Hive.box(name) : _openStrictBox(name);
+  }
+
+  static Future<Box> _openStrictBox(String name, {String? path}) async {
+    // Hive 2.2.3 shares a completion future for concurrent opens, but leaves
+    // its error unobserved when there is only one caller. Join that same open
+    // through the public API so both error futures are handled, without
+    // enabling recovery or repairing rejected bytes.
+    final first = Hive.openBox(name, path: path, crashRecovery: false);
+    final joined = Hive.openBox(name, path: path, crashRecovery: false);
+    return (await Future.wait([first, joined])).first;
   }
 
   /// Repairs an interrupted two-box restore before Hive opens either box.
@@ -1110,11 +1131,6 @@ class MusifyBackupService {
         );
       }
       final byteLength = await file.length();
-      if (byteLength == 0) {
-        throw BackupValidationException(
-          'The required $boxName database file is empty.',
-        );
-      }
       descriptors[boxName] = _PayloadDescriptor(
         byteLength: byteLength,
         sha256: await _streamSha256(file),
@@ -1180,8 +1196,8 @@ class MusifyBackupService {
     final snapshots = <String, _BoxSnapshot>{};
     for (final boxName in _requiredBoxNames) {
       final source = payloadFiles[boxName]!;
-      if (!await source.exists() || await source.length() == 0) {
-        throw BackupValidationException('The $boxName database is empty.');
+      if (!await source.exists()) {
+        throw BackupValidationException('The $boxName database is missing.');
       }
       final uniqueName =
           'verify_${boxName}_${DateTime.now().microsecondsSinceEpoch}';
@@ -1189,7 +1205,7 @@ class MusifyBackupService {
       await source.openRead().pipe(staged.openWrite());
       Box? box;
       try {
-        box = await Hive.openBox(uniqueName, path: directory.path);
+        box = await _openStrictBox(uniqueName, path: directory.path);
         snapshots[boxName] = _snapshotOpenBox(boxName, box);
       } catch (error) {
         throw BackupValidationException(
@@ -1220,16 +1236,15 @@ class MusifyBackupService {
     final snapshots = <String, _BoxSnapshot>{};
     for (final boxName in _requiredBoxNames) {
       final bytes = payloads[boxName]!;
-      if (bytes.isEmpty) {
-        throw BackupValidationException('The $boxName database is empty.');
-      }
+      // Hive represents a new, valid empty box with zero bytes. Nonempty
+      // input must still pass strict frame/CRC validation without repair.
       final uniqueName =
           'verify_${boxName}_${DateTime.now().microsecondsSinceEpoch}';
       final file = File('${directory.path}/$uniqueName.hive');
       await file.writeAsBytes(bytes, flush: true);
       Box? box;
       try {
-        box = await Hive.openBox(uniqueName, path: directory.path);
+        box = await _openStrictBox(uniqueName, path: directory.path);
         snapshots[boxName] = _snapshotOpenBox(boxName, box);
       } catch (error) {
         throw BackupValidationException(
@@ -1405,7 +1420,7 @@ class MusifyBackupService {
         if (await preRestore.exists()) await preRestore.delete();
       }
       for (final boxName in _requiredBoxNames) {
-        await Hive.openBox(boxName);
+        await _openStrictBox(boxName);
       }
       if (journalFile != null && await journalFile.exists()) {
         await journalFile.delete();

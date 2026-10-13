@@ -23,6 +23,267 @@ void main() {
     if (await hiveRoot.exists()) await hiveRoot.delete(recursive: true);
   });
 
+  Future<ValidatedBackup> candidate() async {
+    final payloads = await _createMatchingPayloads(
+      importedTracks: 3,
+      matched: 2,
+      review: 1,
+      unmatched: 0,
+    );
+    return MusifyBackupService.inspectBundleBytes(
+      await MusifyBackupService.createBundleBytesForTesting(payloads),
+      sourceDescription: 'synthetic.musifybackup',
+    );
+  }
+
+  test(
+    'valid zero-byte boxes round-trip through byte and streamed backups',
+    () async {
+      final payloads = {'user': Uint8List(0), 'settings': Uint8List(0)};
+      final bytes = await MusifyBackupService.createBundleBytesForTesting(
+        payloads,
+      );
+      final inMemory = await MusifyBackupService.inspectBundleBytes(
+        bytes,
+        sourceDescription: 'empty.musifybackup',
+      );
+      expect(inMemory.summary.userKeys, 0);
+      expect(inMemory.summary.settingsKeys, 0);
+      final file = await MusifyBackupService.createStreamedBundleFileForTesting(
+        payloads,
+        hiveRoot,
+      );
+      final streamed = await MusifyBackupService.inspectBundleFileForTesting(
+        file,
+      );
+      expect(streamed.summary.importedTracks, 0);
+      expect(streamed.summary.favorites, 0);
+    },
+  );
+
+  for (final populatedSettings in [false, true]) {
+    test(
+      'restore into empty user and ${populatedSettings ? 'populated' : 'empty'} settings persists without a manufactured key',
+      () async {
+        final incoming = await candidate();
+        final user = await Hive.openBox('user');
+        final settings = await Hive.openBox('settings');
+        if (populatedSettings) await settings.put('sentinel', true);
+        await user.flush();
+        expect(await File(user.path!).length(), 0);
+        final result = await MusifyBackupService.restoreValidatedBackup(
+          incoming,
+        );
+        expect(result.success, isTrue, reason: result.message);
+        await Hive.close();
+        expect(
+          (await Hive.openBox('user')).get('spotifyImportTracks'),
+          hasLength(3),
+        );
+        expect((await Hive.openBox('settings')).get('wrappedEnabled'), isTrue);
+      },
+    );
+  }
+
+  test(
+    'explicit valid empty backup replaces nonempty boxes and reopens',
+    () async {
+      final incoming = await MusifyBackupService.inspectBundleBytes(
+        await MusifyBackupService.createBundleBytesForTesting({
+          'user': Uint8List(0),
+          'settings': Uint8List(0),
+        }),
+        sourceDescription: 'declared-empty.musifybackup',
+      );
+      await (await Hive.openBox('user')).put('sentinel', 'old-user');
+      await (await Hive.openBox('settings')).put('sentinel', 'old-settings');
+      final result = await MusifyBackupService.restoreValidatedBackup(incoming);
+      expect(result.success, isTrue, reason: result.message);
+      await Hive.close();
+      for (final name in ['user', 'settings']) {
+        expect((await Hive.openBox(name)).isEmpty, isTrue);
+        expect(await File('${hiveRoot.path}/$name.hive').length(), 0);
+      }
+    },
+  );
+
+  for (final failureAt in [1, 2]) {
+    test(
+      'failure after $failureAt replacements preserves exact empty rollback and populated settings',
+      () async {
+        final incoming = await candidate();
+        final user = await Hive.openBox('user');
+        final settings = await Hive.openBox('settings');
+        await settings.put('sentinel', 'original-settings');
+        await settings.flush();
+        final beforeUser = await File(user.path!).readAsBytes();
+        final beforeSettings = await File(settings.path!).readAsBytes();
+        expect(beforeUser, isEmpty);
+        final result = await MusifyBackupService.restoreValidatedBackup(
+          incoming,
+          simulateFailureAfterReplacements: failureAt,
+        );
+        expect(result.success, isFalse);
+        expect(await File(user.path!).readAsBytes(), beforeUser);
+        expect(await File(settings.path!).readAsBytes(), beforeSettings);
+        await Hive.close();
+        expect((await Hive.openBox('user')).isEmpty, isTrue);
+        expect(
+          (await Hive.openBox('settings')).get('sentinel'),
+          'original-settings',
+        );
+      },
+    );
+  }
+
+  test(
+    'truncated declared nonempty payload is never reclassified as valid empty',
+    () async {
+      final incoming = await candidate();
+      final original = await MusifyBackupService.createBundleBytesForTesting(
+        incoming.payloads,
+      );
+      final root = jsonDecode(utf8.decode(original)) as Map;
+      (root['payloads'] as Map)['user.hive'] = '';
+      await expectLater(
+        MusifyBackupService.inspectBundleBytes(
+          utf8.encode(jsonEncode(root)),
+          sourceDescription: 'truncated.musifybackup',
+        ),
+        throwsA(isA<BackupValidationException>()),
+      );
+      final file = File('${hiveRoot.path}/truncated.musifybackup');
+      await file.writeAsString(jsonEncode(root));
+      await expectLater(
+        MusifyBackupService.inspectBundleFileForTesting(file),
+        throwsA(isA<BackupValidationException>()),
+      );
+    },
+  );
+
+  test(
+    'strict validation rejects malformed and partial nonempty Hive frames',
+    () async {
+      final incoming = await candidate();
+      final user = incoming.payloads['user']!;
+      for (final corrupt in [
+        Uint8List.fromList([1, 2, 3, 4, 5]),
+        Uint8List.sublistView(user, 0, user.length - 1),
+      ]) {
+        await expectLater(
+          MusifyBackupService.createBundleBytesForTesting({
+            'user': corrupt,
+            'settings': incoming.payloads['settings']!,
+          }),
+          throwsA(isA<BackupValidationException>()),
+        );
+        await expectLater(
+          MusifyBackupService.createStreamedBundleFileForTesting({
+            'user': corrupt,
+            'settings': incoming.payloads['settings']!,
+          }, hiveRoot),
+          throwsA(isA<BackupValidationException>()),
+        );
+      }
+    },
+  );
+
+  for (final zeroFile in [false, true]) {
+    test(
+      'preflight rejects ${zeroFile ? 'zeroed' : 'partial'} rollback file without rewriting or repairing originals',
+      () async {
+        final incoming = await candidate();
+        final user = await Hive.openBox('user');
+        final settings = await Hive.openBox('settings');
+        await user.put('sentinel', 'original-user');
+        await settings.put('sentinel', 'original-settings');
+        await user.flush();
+        await settings.flush();
+        final file = File(user.path!);
+        final original = await file.readAsBytes();
+        final corrupt = zeroFile
+            ? Uint8List(0)
+            : Uint8List.sublistView(original, 0, original.length - 1);
+        await file.writeAsBytes(corrupt, flush: true);
+        final result = await MusifyBackupService.restoreValidatedBackup(
+          incoming,
+        );
+        expect(result.success, isFalse);
+        expect(result.message, contains('before replacement'));
+        expect(await file.readAsBytes(), corrupt);
+        expect(Hive.box('user').get('sentinel'), 'original-user');
+        expect(Hive.box('settings').get('sentinel'), 'original-settings');
+        expect(
+          await File(
+            '${hiveRoot.path}/musify_restore_transaction.json',
+          ).exists(),
+          isFalse,
+        );
+        await file.writeAsBytes(original, flush: true);
+      },
+    );
+  }
+
+  test(
+    'invalid incoming data leaves fresh empty originals open and unchanged',
+    () async {
+      final valid = await candidate();
+      final user = await Hive.openBox('user');
+      final settings = await Hive.openBox('settings');
+      final bad = ValidatedBackup(
+        payloads: {
+          'user': Uint8List.fromList([1, 2, 3, 4, 5]),
+          'settings': valid.payloads['settings']!,
+        },
+        summary: valid.summary,
+        manifest: valid.manifest,
+        sourceDescription: 'invalid-import',
+      );
+      final result = await MusifyBackupService.restoreValidatedBackup(bad);
+      expect(result.success, isFalse);
+      expect(Hive.isBoxOpen('user'), isTrue);
+      expect(Hive.isBoxOpen('settings'), isTrue);
+      expect(await File(user.path!).length(), 0);
+      expect(await File(settings.path!).length(), 0);
+    },
+  );
+
+  test(
+    'cold recovery restores zero-byte original with populated partner exactly',
+    () async {
+      final incoming = await candidate();
+      final user = await Hive.openBox('user');
+      final settings = await Hive.openBox('settings');
+      await settings.put('sentinel', 'original-settings');
+      await settings.flush();
+      final oldSettings = await File(settings.path!).readAsBytes();
+      await Hive.close();
+      await File(
+        '${hiveRoot.path}/user.hive',
+      ).rename('${hiveRoot.path}/user.hive.pre-restore');
+      await File(
+        '${hiveRoot.path}/user.hive',
+      ).writeAsBytes(incoming.payloads['user']!, flush: true);
+      await File(
+        '${hiveRoot.path}/settings.hive.restore-candidate',
+      ).writeAsBytes(incoming.payloads['settings']!, flush: true);
+      await File(
+        '${hiveRoot.path}/musify_restore_transaction.json',
+      ).writeAsString(jsonEncode({'state': 'replacing'}), flush: true);
+      await MusifyBackupService.recoverInterruptedRestoreInDirectory(hiveRoot);
+      expect(await File('${hiveRoot.path}/user.hive').length(), 0);
+      expect(
+        await File('${hiveRoot.path}/settings.hive').readAsBytes(),
+        oldSettings,
+      );
+      expect((await Hive.openBox('user')).isEmpty, isTrue);
+      expect(
+        (await Hive.openBox('settings')).get('sentinel'),
+        'original-settings',
+      );
+    },
+  );
+
   test('rejects an arbitrary renamed file', () async {
     await expectLater(
       MusifyBackupService.inspectBundleBytes(
