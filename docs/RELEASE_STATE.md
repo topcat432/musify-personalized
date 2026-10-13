@@ -1,5 +1,18 @@
 # Musify Personalized current state
 
+## Strict validation cleanup correction, 2026-10-13
+
+Exact CI38453235406 at1e24ad8b failed four rejection tests on Linux: Hive2.2.3
+starts an unawaited close after failed initialization, and deleting the staged
+lock first causes its later lock deletion to throw PathNotFoundException.
+The bounded correction waits up to two seconds for that validation copy's own
+lock to disappear before deleting the copy. Strict CRC/frame validation,
+zero-byte empty-box support and original-file preservation remain unchanged.
+29 targeted tests,472 aggregate tests and analysis PASS locally. Corrected
+exact Linux CI/sign-only/native acceptance still require fresh evidence.
+The earlier018bb5c7 signed result is installation-only PASS; semantic
+preservation, full restart and signed UI usability remain UNVERIFIED.
+
 ## Valid empty-box correction and signed rehearsal status, 2026-10-13
 
 The bounded correction accepts Hive's legitimate zero-byte empty boxes without

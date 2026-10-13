@@ -1213,6 +1213,9 @@ class MusifyBackupService {
         );
       } finally {
         await box?.close();
+        if (box == null) {
+          await _waitForValidationClose(uniqueName, directory);
+        }
         try {
           await Hive.deleteBoxFromDisk(uniqueName, path: directory.path);
         } catch (_) {
@@ -1252,6 +1255,9 @@ class MusifyBackupService {
         );
       } finally {
         await box?.close();
+        if (box == null) {
+          await _waitForValidationClose(uniqueName, directory);
+        }
         try {
           await Hive.deleteBoxFromDisk(uniqueName, path: directory.path);
         } catch (_) {
@@ -1260,6 +1266,24 @@ class MusifyBackupService {
       }
     }
     return snapshots;
+  }
+
+  static Future<void> _waitForValidationClose(
+    String uniqueName,
+    Directory directory,
+  ) async {
+    // Hive starts close without awaiting it after a failed initialization.
+    // Its own lock deletion must finish before we remove the staged copy.
+    final lock = File('${directory.path}/$uniqueName.lock');
+    final deadline = DateTime.now().add(const Duration(seconds: 2));
+    while (await lock.exists()) {
+      if (DateTime.now().isAfter(deadline)) {
+        throw const BackupValidationException(
+          'The rejected validation database could not be closed safely.',
+        );
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
   }
 
   static _BoxSnapshot _snapshotOpenBox(String logicalName, Box box) {
