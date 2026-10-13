@@ -1,5 +1,26 @@
 # Musify Personalized current state
 
+## Wrapper-owned native lifecycle qualification, 2026-10-13
+
+Exact product source3b012181c56d4af1181ba534099fab1539b3c3bf passes
+[CI38401391442](https://github.com/topcat432/musify-personalized/actions/runs/38401391442).
+Its saved-file fixture compiled in195.5s with the separate process-local4GiB
+heap/2GiB metaspace/one-worker profile; default32GiB allowance remains unchanged.
+Debug x86_64 APK SHA256:
+688c68bee42c2c492127f7e6566241c85ec6bf7e62ad1a1726b26bdbb6dcfb6d.
+Sparse host-commit samples peaked42.31%; this is not continuous peak proof.
+
+Automatic review rejected creation of a callback containing a direct emulator
+launcher before execution. Parent instructed a compliant wrapper-owned launch
+hook. tool/Invoke-OwnedRehearsal.ps1 now owns admission, fixed target launch,
+boot/identity, lease and finally graceful shutdown; callback is hash-pinned and
+contains acceptance operations only. Seven mocked lifecycle contracts PASS,
+including callback/boot failure cleanup and foreign/pre-existing process refusal.
+No native data or APK was changed by mocks. The external established invocation
+path delegates to this reviewed implementation. Native saved-file acceptance
+remains pending; the product source/APK stays pinned to3b012181 because this
+change is orchestration only. No additional provider request is needed.
+
 ## Selected-format length discovery and host delivery, 2026-10-13
 
 Candidate repair selects the offered recording/format before one bounded GET

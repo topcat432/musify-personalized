@@ -50,6 +50,12 @@ C:/Users/james/Documents/Codex/2026-10-10/task/musify-source-comparison/emulator
 It enforces admission, an exclusive owned lease, identity and graceful finally
 shutdown. Preserve the default26GiB emulator commit allowance until measured
 lower-memory qualification supports less; guest RAM flags are not a host cap.
+The reviewed tool/Invoke-OwnedRehearsal.ps1 implementation now owns launch and
+boot as well as shutdown; the external invocation path delegates to that code.
+Pass an explicit owned callback and ApprovedHarnessSha256. The callback contains
+acceptance operations only, never an emulator launcher. CheckOnly launches
+nothing. Offline lifecycle contracts cover callback/boot failure, pre-existing
+process and foreign-AVD refusal, hash/admission rejection and successful cleanup.
 Abrupt supervisor termination can leave an orphan, which the wrapper refuses to
 adopt. Stop only verified owned work; never kill unrelated workloads or remove
 SDK locks. A passing mock lifecycle is not a qualified native launch.
