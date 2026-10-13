@@ -56,7 +56,7 @@ function Invoke-MusifyOwnedRehearsal {
         $started=[datetime]::UtcNow
         $env:ANDROID_AVD_HOME='C:\Users\james\Documents\Codex\2026-10-10\task\musify-source-comparison\emulator-rehearsal\avds'
         try {
-            Start-Process -FilePath 'C:\devtools\android-sdk\emulator\emulator.exe' -ArgumentList @('-avd','musify_rehearsal_api35','-port','5556','-no-window','-no-audio','-gpu','swiftshader_indirect','-no-snapshot-load','-no-snapshot-save') -WindowStyle Hidden | Out-Null
+            Start-Process -FilePath 'C:\devtools\android-sdk\emulator\emulator.exe' -ArgumentList @('-avd','musify_rehearsal_api35','-port','5556','-no-window','-no-audio','-gpu','swiftshader_indirect') -WindowStyle Hidden | Out-Null
             $end=[datetime]::UtcNow.AddSeconds(150)
             $booted=$false
             do {

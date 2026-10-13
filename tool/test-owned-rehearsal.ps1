@@ -41,7 +41,7 @@ Describe 'Owned emulator lifecycle' {
         $global:mockCallbackRan | Should Be $true
         $global:mockAlive | Should Be $false
         ([string]$env:ANDROID_AVD_HOME -ceq [string]$prior) | Should Be $true
-        Assert-MockCalled Start-Process -Scope It -Times 1 -Exactly
+        Assert-MockCalled Start-Process -Scope It -Times 1 -Exactly -ParameterFilter {$ArgumentList -notcontains '-no-snapshot-load' -and $ArgumentList -notcontains '-no-snapshot-save' -and $WindowStyle -eq 'Hidden'}
         Assert-MockCalled Invoke-MusifyOwnedAdb -Scope It -Times 1 -Exactly -ParameterFilter {$Arguments[1] -eq 'kill'}
     }
     It 'gracefully shuts down when callback throws' {
