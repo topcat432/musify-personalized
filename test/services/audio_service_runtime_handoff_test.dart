@@ -5,6 +5,9 @@ import 'package:audio_service/audio_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:musify/models/playback_source_info.dart';
+import 'package:musify/services/stream_request_context.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:musify/services/audio_service.dart';
 import 'package:musify/services/common_services.dart'
@@ -23,6 +26,281 @@ void main() {
       await Hive.openBox(name);
     }
   });
+
+  test(
+    'late native cancellation error after Stop cannot restart the queue',
+    () async {
+      offlineMode.value = true;
+      sponsorBlockSupport.value = false;
+      playNextSongAutomatically.value = false;
+      repeatNotifier.value = AudioServiceRepeatMode.none;
+      final file = File('${directory.path}/late-stop-error.wav')
+        ..writeAsBytesSync([0]);
+      final player = _PendingPlayer();
+      final handler = MusifyAudioHandler(player: player);
+      Map<String, dynamic> song(String name) => {
+        'ytid': name,
+        'title': name,
+        'audioPath': file.path,
+        'highResImage': '',
+      };
+      try {
+        await handler.addPlaylistToQueue(
+          [song('Stopped'), song('Next')],
+          replace: true,
+          startIndex: 0,
+        );
+        await handler.stop();
+        player.errors.add(
+          PlayerException(0, 'Owned late cancellation callback', 0),
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 2300));
+        expect(player.loadedIds, ['Stopped']);
+        expect(player.playing, isFalse);
+        expect(handler.playbackState.value.errorMessage, isNull);
+        expect(handler.activeSource.value, isNull);
+        await handler.play();
+        expect(player.playing, isTrue);
+        expect(handler.activeSource.value?.kind, PlaybackSourceKind.local);
+      } finally {
+        await handler.stop();
+        await player.dispose();
+        offlineMode.value = false;
+      }
+    },
+  );
+
+  test(
+    'an old native failure finishing after Stop and explicit Play cannot own the replay',
+    () async {
+      offlineMode.value = true;
+      sponsorBlockSupport.value = false;
+      playNextSongAutomatically.value = false;
+      repeatNotifier.value = AudioServiceRepeatMode.none;
+      final file = File('${directory.path}/pending-stop-replay.wav')
+        ..writeAsBytesSync([0]);
+      final player = _DelayedPausePlayer();
+      final handler = MusifyAudioHandler(player: player);
+      Map<String, dynamic> song(String name) => {
+        'ytid': name,
+        'title': name,
+        'audioPath': file.path,
+        'highResImage': '',
+      };
+      try {
+        await handler.addPlaylistToQueue(
+          [song('Replay'), song('Next')],
+          replace: true,
+          startIndex: 0,
+        );
+        final oldFailure = handler.handleRuntimePlaybackError(
+          PlayerException(0, 'Owned old event', 0),
+        );
+        await player.pauseStarted.future;
+        await handler.stop();
+        await handler.play();
+        expect(player.playing, isTrue);
+        expect(player.stopCalls, 1);
+        expect(player.loadedIds, ['Replay']);
+        expect(handler.playbackState.value.errorMessage, isNull);
+        expect(handler.activeSource.value?.kind, PlaybackSourceKind.local);
+        // The newer playback still owns a real current error: stale ownership
+        // suppression must not hide failures after replay becomes active.
+        await handler.handleRuntimePlaybackError(
+          PlayerException(0, 'Owned current event', 0),
+        );
+        expect(player.playing, isFalse);
+        expect(player.stopCalls, 2);
+        expect(handler.playbackState.value.errorMessage, isNotNull);
+        player.finishPause.complete();
+        await oldFailure;
+        // Completing the old handler cannot undo or duplicate the newer error.
+        expect(player.playing, isFalse);
+        expect(player.stopCalls, 2);
+        await handler.handleRuntimePlaybackError(
+          PlayerException(0, 'Owned duplicate current event', 0),
+        );
+        expect(player.stopCalls, 2);
+      } finally {
+        if (!player.finishPause.isCompleted) player.finishPause.complete();
+        await handler.stop();
+        await player.dispose();
+        offlineMode.value = false;
+      }
+    },
+  );
+
+  for (final online in [false, true]) {
+    test('healthy ${online ? 'online' : 'local'} Stop then Play restores '
+        'source ownership and attribution', () async {
+      offlineMode.value = !online;
+      sponsorBlockSupport.value = false;
+      playNextSongAutomatically.value = false;
+      repeatNotifier.value = AudioServiceRepeatMode.none;
+      final file = File('${directory.path}/stopped-replay.wav')
+        ..writeAsBytesSync([0]);
+      const id = 'owned-stop-replay';
+      const url =
+          'https://fixture.googlevideo.com/audio?mime=audio/webm&clen=10';
+      streamRequestContexts.remember(url, {
+        'User-Agent': 'Owned fixture',
+      }, sourceLength: 10);
+      final key = songStreamUrlCacheKey(id);
+      await Hive.box('cache').putAll({
+        key: url,
+        '${key}_date': DateTime.now(),
+        '${key}_requestContext': streamRequestContexts.snapshot(url),
+      });
+      final sources = <GoogleVideoByteSource>[];
+      final unavailableCallbacks = <void Function()>[];
+      var requests = 0;
+      final player = _PendingPlayer();
+      final handler = MusifyAudioHandler(
+        player: player,
+        sourceFactory: (location, {tag, onUnavailable}) {
+          if (onUnavailable != null) unavailableCallbacks.add(onUnavailable);
+          final source = GoogleVideoByteSource(
+            Uri.parse(location),
+            sourceLength: 10,
+            tag: tag,
+            onUnavailable: onUnavailable,
+            clientFactory: () => MockClient((request) async {
+              requests++;
+              return http.Response.bytes(
+                List.filled(10, 7),
+                206,
+                headers: {
+                  'content-length': '10',
+                  'content-range': 'bytes 0-9/10',
+                },
+              );
+            }),
+          );
+          sources.add(source);
+          return source;
+        },
+      );
+      try {
+        await handler.addPlaylistToQueue(
+          [
+            {
+              'ytid': id,
+              'title': 'Healthy',
+              'highResImage': '',
+              if (!online) 'audioPath': file.path,
+            },
+          ],
+          replace: true,
+          startIndex: 0,
+        );
+        final firstSource = player.audioSource;
+        await handler.stop();
+        expect(handler.activeSource.value, isNull);
+        if (online) {
+          await expectLater(sources.first.request(), throwsStateError);
+        }
+        await handler.play();
+        expect(player.playing, isTrue);
+        expect(
+          handler.activeSource.value?.kind,
+          online ? PlaybackSourceKind.youtube : PlaybackSourceKind.local,
+        );
+        expect(handler.currentSong!['ytid'], id);
+        expect(handler.queue.value.length, 1);
+        if (online) {
+          expect(sources.length, 2);
+          expect(player.audioSource, isNot(same(firstSource)));
+          unavailableCallbacks.first();
+          await Future<void>.delayed(Duration.zero);
+          expect(player.playing, isTrue);
+          expect(player.loadedIds, ['Healthy', 'Healthy']);
+          expect(handler.playbackState.value.errorMessage, isNull);
+          final response = await sources.last.request();
+          expect(
+            await response.stream.fold<int>(
+              0,
+              (sum, bytes) => sum + bytes.length,
+            ),
+            10,
+          );
+          await expectLater(sources.first.request(), throwsStateError);
+          expect(requests, 1);
+        } else {
+          expect(player.audioSource, same(firstSource));
+          expect(player.loadedIds, ['Healthy']);
+          expect(requests, 0);
+        }
+      } finally {
+        await handler.stop();
+        await player.dispose();
+        offlineMode.value = false;
+      }
+    });
+  }
+
+  for (final fails in [false, true]) {
+    test('superseded initial native ${fails ? 'failure' : 'success'} preserves '
+        'the chosen source without stale recovery', () async {
+      offlineMode.value = false;
+      sponsorBlockSupport.value = false;
+      playNextSongAutomatically.value = false;
+      repeatNotifier.value = AudioServiceRepeatMode.none;
+      final file = File('${directory.path}/late-load.wav')
+        ..writeAsBytesSync([0]);
+      final key = songStreamUrlCacheKey('owned-old-load');
+      await Hive.box('cache').putAll({
+        key: 'https://owned.invalid/stale-recovery',
+        '${key}_date': DateTime.now(),
+      });
+      final player = _DelayedFirstLoadPlayer();
+      var staleRecoveries = 0;
+      final handler = MusifyAudioHandler(
+        player: player,
+        sourceFactory: (url, {tag, onUnavailable}) {
+          staleRecoveries++;
+          return AudioSource.file(file.path, tag: tag);
+        },
+      );
+      Map<String, dynamic> song(String id, String title) => {
+        'ytid': id,
+        'title': title,
+        'audioPath': file.path,
+        'highResImage': '',
+      };
+      try {
+        final oldLoad = handler.addPlaylistToQueue(
+          [song('owned-old-load', 'Old'), song('owned-chosen', 'Chosen')],
+          replace: true,
+          startIndex: 0,
+        );
+        await player.firstLoadStarted.future;
+        await handler.skipToQueueItem(1);
+        expect(player.playing, isTrue);
+        final chosenSource = player.audioSource;
+        if (fails) {
+          player.finishFirstLoad.completeError(
+            PlayerException(0, 'Owned superseded load failure', 0),
+          );
+        } else {
+          player.finishFirstLoad.complete();
+        }
+        await oldLoad;
+        await Future<void>.delayed(Duration.zero);
+        expect(player.stopCalls, 0);
+        expect(player.playing, isTrue);
+        expect(player.audioSource, same(chosenSource));
+        expect(handler.currentSong!['title'], 'Chosen');
+        expect(handler.playbackState.value.errorMessage, isNull);
+        expect(staleRecoveries, 0);
+      } finally {
+        if (!player.finishFirstLoad.isCompleted) {
+          player.finishFirstLoad.complete();
+        }
+        await handler.stop();
+        await player.dispose();
+      }
+    });
+  }
 
   test('a new paused Now Playing subscriber gets current position and duration '
       'without waiting for resumed playback', () async {
@@ -448,6 +726,38 @@ class _PendingPlayer extends AudioPlayer {
   Future<void> dispose() async {
     await errors.close();
     await super.dispose();
+  }
+}
+
+class _DelayedFirstLoadPlayer extends _PendingPlayer {
+  final firstLoadStarted = Completer<void>();
+  final finishFirstLoad = Completer<void>();
+  int stopCalls = 0;
+
+  @override
+  Future<Duration?> setAudioSource(
+    AudioSource audioSource, {
+    bool preload = true,
+    int? initialIndex,
+    Duration? initialPosition,
+  }) async {
+    await super.setAudioSource(
+      audioSource,
+      preload: preload,
+      initialIndex: initialIndex,
+      initialPosition: initialPosition,
+    );
+    if (loadedIds.last == 'Old') {
+      firstLoadStarted.complete();
+      await finishFirstLoad.future;
+    }
+    return duration;
+  }
+
+  @override
+  Future<void> stop() async {
+    stopCalls++;
+    await super.stop();
   }
 }
 

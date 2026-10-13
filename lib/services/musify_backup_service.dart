@@ -1275,9 +1275,9 @@ class MusifyBackupService {
     // Hive starts close without awaiting it after a failed initialization.
     // Its own lock deletion must finish before we remove the staged copy.
     final lock = File('${directory.path}/$uniqueName.lock');
-    final deadline = DateTime.now().add(const Duration(seconds: 2));
+    final elapsed = Stopwatch()..start();
     while (await lock.exists()) {
-      if (DateTime.now().isAfter(deadline)) {
+      if (elapsed.elapsed >= const Duration(seconds: 2)) {
         throw const BackupValidationException(
           'The rejected validation database could not be closed safely.',
         );
@@ -1467,7 +1467,19 @@ class MusifyBackupService {
   static Future<void> _deleteDirectoryQuietly(Directory? directory) async {
     if (directory == null) return;
     try {
-      if (await directory.exists()) await directory.delete(recursive: true);
+      if (!await directory.exists()) return;
+      // A rejected Hive open may still be closing after our bounded wait.
+      // Do not remove its lock behind the unawaited backend close, including
+      // when the wait timed out. These are only our own validation copies.
+      await for (final entity in directory.list(followLinks: false)) {
+        if (entity is File &&
+            RegExp(
+              r'^verify_(user|settings)_[0-9]+[.]lock$',
+            ).hasMatch(entity.uri.pathSegments.last)) {
+          return;
+        }
+      }
+      await directory.delete(recursive: true);
     } catch (error, stackTrace) {
       _logError(
         'Failed to delete temporary backup directory',

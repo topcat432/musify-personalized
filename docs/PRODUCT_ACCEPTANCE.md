@@ -1,5 +1,86 @@
 # Product acceptance ledger
 
+## Host concurrency and playback follow-up, 2026-10-13
+
+The signed9a6663c6 checkpoint and its immutable APK remain preserved. The current
+successor delta fixes reproduced ownership races: late load success stopped a
+newer source; late load failure built stale recovery; healthy Stop/Play reused a
+permanently cancelled byte source and lost attribution; a late native error
+restarted the queue after explicit Stop. A global pending-error flag also blocked
+a genuine replay failure while its older handler was still awaiting Pause; the
+existing per-transition duplicate guard now owns errors without that global gate.
+Healthy explicit replay recreates the
+same recording's source; cancelled originals and terminal failures stay blocked.
+
+CSV reading/saving are mutually exclusive, picker cancellation retains saved
+state, and a saved preview cannot silently create another session and erase
+matching work. The service rejects overlapping writers across page instances
+until commit or complete rollback finishes. No schema, recording selection,
+source order, matching score, provider identity or dependency changed.
+
+54 targeted host checks PASS, including29 backup rejection/empty/rollback cases
+and a controlled slow-close timeout case,
+real production-router three/four-tab Home/Library/Settings/Back, delayed CSV picker
+and partial-write failure, two concurrent-writer/reopen cases, healthy source
+replay and late native cancellation. Fake backend tests do not establish signed
+Android usability or provider availability. Settings navigation source is unchanged;
+its signed Android failure still needs input/focus/log diagnosis.
+
+Slow failed validation close now retains its own temporary staging while the
+validation lock exists, including timeout, instead of deleting it behind Hive.
+The two-second wait uses a monotonic clock. Strict rejection is unchanged; no
+unhandled cleanup error occurs in the controlled delayed-close regression.
+
+The38-row audit retains the existing selector/import/offline/library implementation;
+remaining provider, signed data/restart and physical-output rows require runtime
+proof. No missing current-version selector or new Spotify playback engine is
+inferred. Final local analysis and487 aggregate tests PASS. Windows strict remains
+FAIL16+24; all40 actuals remain byte-exact to the established control, with
+before/after/isolated diff inspected and no comparator/golden changes. Successor
+exact CI/signing remain pending. All four CSV UI races fail against an exact
+checkpoint9a UI-source control, including lost ready state after cancellation
+and erased accepted matching work after a stale saved callback; corrected
+controls pass. Follow [the dependency-ordered verification queue](RELEASE_VERIFICATION_QUEUE.md).
+
+## Corrected candidate CI and sealed artifact, 2026-10-13
+
+Source9a6663c6c5626bd5d1a8e4a377a1a1b35693f4e4 is pushed to sole draft PR23.
+The bounded validation-copy cleanup wait fixes four Linux rejection-test races
+from CI38453235406; strict malformed/truncated rejection and original-byte
+preservation remain intact. Local29 targeted/472 aggregate tests and analysis
+PASS. Windows strict FAIL16+24; all40 actuals are byte-exact to retained control.
+[Exact CI38456177304](https://github.com/topcat432/musify-personalized/actions/runs/38456177304)
+PASS:472 tests, both strict Linux suites, debug/F-Droid boundaries and unsigned
+release assembly. No schema, dependency, comparator or golden changed.
+
+[Sign-only38457361054](https://github.com/topcat432/musify-personalized/actions/runs/38457361054)
+PASS; Publish skipped. Independent downloaded-APK verification agrees with the
+manifest/checksum/proof and embedded x64 Git SHA: retained .preview package,
+version300000013, signer58c5316466da7a426c4411beb33b3b594ef58875bcfa31e092a5afce8cf9999e,
+v2/v3 true, non-debuggable. APK SHA256:
+6ef557958a3e947ec59964ceaf4b21697526a32945371c4191c5ebece2f0945d.
+Canonical immutable artifact/receipts remain outside Git under the established
+host-provider-diagnostic evidence root, immutable-signed-9a6663c6-run38457361054.
+This artifact is not a published updater asset and has not been installed.
+
+Earlier018bb5c7 remains installation-only PASS. Its post-update semantics,
+full restart and signed UI usability remain UNVERIFIED. Host comparison finds
+no lib/Android delta from the earlier successful normal-main navigation build;
+the saved Settings tap lies within its observed semantic button bounds. Neither
+observation distinguishes input delivery/timing from release application behavior.
+The exact signed navigation diagnostic therefore remains required; no navigation
+code was changed without evidence. Corrected signed semantic/full-restart,
+empty-library restore and normal-entrypoint provider checks await admission.
+
+Latest host committed bytes35116941312, limit72846569472: unchanged26GiB native
+allowance projects86.53%,4756973159 bytes above the80% cap. No native launch or
+provider request occurred during this correction. Normal clone and immutable
+baseline/artifact copies retain the previous verified checkpoint; no fresh native
+preservation pass is inferred. All owned CI/sign/download jobs are terminal.
+No phone operation, merge, publication or unrelated workload change occurred.
+The corrected source tip is frozen while these acceptance receipts are reconciled.
+
+
 ## Valid empty-box correction and signed rehearsal status, 2026-10-13
 
 The bounded correction accepts Hive's legitimate zero-byte empty boxes without

@@ -18,6 +18,7 @@ class SpotifyImportSessionService {
   const SpotifyImportSessionService({this.sessionWriter});
 
   final SpotifyImportSessionWriter? sessionWriter;
+  static bool _saveInProgress = false;
 
   static const _sessionKeys = <String>[
     'spotifyImportTracks',
@@ -27,6 +28,21 @@ class SpotifyImportSessionService {
   ];
 
   Future<void> saveNewImport(
+    SpotifyImportPreview preview, {
+    DateTime? importedAt,
+  }) async {
+    if (_saveInProgress) {
+      throw StateError('An import is already being saved.');
+    }
+    _saveInProgress = true;
+    try {
+      await _replaceImport(preview, importedAt: importedAt);
+    } finally {
+      _saveInProgress = false;
+    }
+  }
+
+  Future<void> _replaceImport(
     SpotifyImportPreview preview, {
     DateTime? importedAt,
   }) async {

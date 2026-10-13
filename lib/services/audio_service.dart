@@ -76,6 +76,7 @@ class MusifyAudioHandler extends BaseAudioHandler {
   }
 
   final activeSource = BehaviorSubject<PlaybackSourceInfo?>.seeded(null);
+  PlaybackSourceInfo? _loadedSourceInfo;
   late final AndroidEqualizer _androidEqualizer;
   late final AudioPlayer audioPlayer;
   final OnlineSourceFactory _onlineSourceFactory;
@@ -103,7 +104,7 @@ class MusifyAudioHandler extends BaseAudioHandler {
 
   bool _completionEventPending = false;
   bool _completionHandlerLoadStarted = false;
-  bool _runtimeErrorPending = false;
+  bool _explicitlyStopped = false;
   int _handledRuntimeErrorTransition = -1;
   final _streamSponsorSegments = <String, List<Map<String, dynamic>>>{};
   bool _sponsorSeekPending = false;
@@ -752,17 +753,18 @@ class MusifyAudioHandler extends BaseAudioHandler {
     PlayerException error, {
     bool fromBoundedTransport = false,
   }) async {
-    if (_currentLoadingIndex >= 0 ||
-        _runtimeErrorPending ||
+    if (_explicitlyStopped ||
+        _currentLoadingIndex >= 0 ||
         _handledRuntimeErrorTransition == _songTransitionCounter ||
         _currentQueueIndex < 0 ||
         _currentQueueIndex >= _queueList.length) {
       return;
     }
-    _runtimeErrorPending = true;
     final failedIndex = _currentQueueIndex;
     final entryId = _queueEntryIds.ensureId(_queueList[failedIndex]);
     final transition = _songTransitionCounter;
+    // Deduplicate this transition, not all in-flight error handlers. An older
+    // pause/close may still be pending when explicit Play starts a new owner.
     _handledRuntimeErrorTransition = transition;
     final failedSource = audioPlayer.audioSource;
     try {
@@ -801,8 +803,6 @@ class MusifyAudioHandler extends BaseAudioHandler {
       _handlePlaybackError(currentFailedIndex);
     } catch (failure) {
       logger.log('Native failure handling failed', error: failure.runtimeType);
-    } finally {
-      _runtimeErrorPending = false;
     }
   }
 
@@ -1415,6 +1415,7 @@ class MusifyAudioHandler extends BaseAudioHandler {
     }
 
     // Start new transition
+    _explicitlyStopped = false;
     _songTransitionCounter++;
     final currentTransitionId = _songTransitionCounter;
     _currentLoadingIndex = index;
@@ -1769,13 +1770,25 @@ class MusifyAudioHandler extends BaseAudioHandler {
   Future<void> play() async {
     try {
       if (_visiblePlaybackError != null) return;
-      if (audioPlayer.audioSource == null) {
+      final source = audioPlayer.audioSource;
+      if (source is GoogleVideoByteSource && source.isCancelled) {
+        // Stop permanently cancels this byte source. An explicit healthy replay
+        // resolves the same queue recording into a new source; denied sources
+        // retain their error and are never revived.
+        if (source.isUnavailable) return;
+        if (_currentQueueIndex >= 0 && _currentQueueIndex < _queueList.length) {
+          await _playFromQueue(_currentQueueIndex);
+        }
+        return;
+      }
+      if (source == null) {
         final recentSong = _latestResumableSong();
         if (recentSong != null) {
           await _playResumableSong(recentSong);
           return;
         }
       }
+      _explicitlyStopped = false;
       // Do NOT await play(): its future only completes when playback pauses/
       // stops/finishes (just_audio semantics), which would defer the resume
       // below until the song ended - losing the whole session.
@@ -1789,6 +1802,7 @@ class MusifyAudioHandler extends BaseAudioHandler {
           _lastError = e.toString();
         }),
       );
+      activeSource.add(_loadedSourceInfo);
       listeningStatsService.resumeListeningSession(currentSong: currentSong);
     } catch (e, stackTrace) {
       logger.log('Error in play()', error: e, stackTrace: stackTrace);
@@ -1811,6 +1825,7 @@ class MusifyAudioHandler extends BaseAudioHandler {
 
   @override
   Future<void> stop() async {
+    _explicitlyStopped = true;
     activeSource.add(null);
     // Invalidate queued retries and loads so an explicit stop stays stopped.
     _songTransitionCounter++;
@@ -2121,7 +2136,9 @@ class MusifyAudioHandler extends BaseAudioHandler {
       // could have loaded and started playing while we were buffering/setting up.
       // If so, stop the source we just loaded and yield to the newer song.
       if (_isStaleTransition(transitionId)) {
-        unawaited(audioPlayer.stop());
+        if (identical(audioPlayer.audioSource, audioSource)) {
+          unawaited(audioPlayer.stop());
+        }
         return false;
       }
 
@@ -2129,9 +2146,12 @@ class MusifyAudioHandler extends BaseAudioHandler {
         _updateCurrentMediaItemWithDuration(audioPlayer.duration!);
       }
 
-      activeSource.add(
-        PlaybackSourceInfo.loaded(songUrl, isOffline: isOffline),
+      _explicitlyStopped = false;
+      _loadedSourceInfo = PlaybackSourceInfo.loaded(
+        songUrl,
+        isOffline: isOffline,
       );
+      activeSource.add(_loadedSourceInfo);
 
       // Finish the old session and start the new one as one atomic pair, only
       // after every abort path above is cleared. Finishing before the staleness
@@ -2169,6 +2189,7 @@ class MusifyAudioHandler extends BaseAudioHandler {
 
       return true;
     } catch (e, stackTrace) {
+      if (_isStaleTransition(transitionId)) return false;
       logger.log(
         'Error setting audio source',
         error: audioSource is GoogleVideoByteSource
@@ -2212,12 +2233,14 @@ class MusifyAudioHandler extends BaseAudioHandler {
         if (songId != null && songId.isNotEmpty) {
           final cacheKey = songStreamUrlCacheKey(songId);
           await deleteData('cache', cacheKey);
+          if (_isStaleTransition(transitionId)) return false;
 
           final refreshedUrl = await fetchSongStreamUrl(
             songId,
             song['isLive'] ?? false,
           );
 
+          if (_isStaleTransition(transitionId)) return false;
           if (refreshedUrl != null && refreshedUrl.isNotEmpty) {
             final refreshedSource = await buildAudioSource(
               song,
@@ -2251,12 +2274,13 @@ class MusifyAudioHandler extends BaseAudioHandler {
     int? transitionId,
   }) async {
     // Do not attempt any network calls when offline mode is enabled.
-    if (offlineMode.value) return false;
+    if (offlineMode.value || _isStaleTransition(transitionId)) return false;
 
     final onlineUrl = await fetchSongStreamUrl(
       song['ytid'],
       song['isLive'] ?? false,
     );
+    if (_isStaleTransition(transitionId)) return false;
     if (onlineUrl != null && onlineUrl.isNotEmpty) {
       final onlineSource = await buildAudioSource(song, onlineUrl, false);
       if (onlineSource != null) {

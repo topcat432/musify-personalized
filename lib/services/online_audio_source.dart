@@ -90,6 +90,7 @@ class GoogleVideoByteSource extends StreamAudioSource {
   int _requestId = 0;
   bool _cancelled = false;
   bool get isUnavailable => _terminalError != null;
+  bool get isCancelled => _cancelled;
   AudioTransportFailure? get failure => _terminalError;
 
   void _report(Map<String, Object?> diagnostic) {

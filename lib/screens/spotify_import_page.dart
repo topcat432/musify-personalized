@@ -36,10 +36,10 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
   bool _saved = false;
 
   Future<void> _pickCsv() async {
+    if (_isReading || _isSaving) return;
     setState(() {
       _isReading = true;
       _errorMessage = null;
-      _saved = false;
     });
 
     try {
@@ -68,7 +68,10 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
       );
 
       if (!mounted) return;
-      setState(() => _preview = preview);
+      setState(() {
+        _preview = preview;
+        _saved = false;
+      });
     } on SpotifyImportException catch (error) {
       if (!mounted) return;
       setState(() {
@@ -88,7 +91,7 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
 
   Future<void> _saveImport() async {
     final preview = _preview;
-    if (preview == null || _isSaving) return;
+    if (preview == null || _isReading || _isSaving || _saved) return;
 
     setState(() => _isSaving = true);
     try {
@@ -143,7 +146,7 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
                 _CsvPickerSurface(
                   reading: _isReading,
                   fileName: preview?.fileName,
-                  onPressed: _pickCsv,
+                  onPressed: _isSaving ? null : _pickCsv,
                 ),
               ],
             ),
@@ -227,7 +230,9 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
             SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
-                onPressed: _isSaving ? null : _saveImport,
+                onPressed: _isReading || _isSaving || _saved
+                    ? null
+                    : _saveImport,
                 icon: _isSaving
                     ? const SizedBox.square(
                         dimension: 18,
@@ -333,7 +338,7 @@ class _CsvPickerSurface extends StatelessWidget {
 
   final bool reading;
   final String? fileName;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
