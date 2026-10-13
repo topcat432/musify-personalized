@@ -1,5 +1,15 @@
 # Musify Personalized current state
 
+## Spotify stretch clarification, 2026-10-13
+
+D-018 supersedes the external-app handoff suggestion as stretch fulfillment.
+Required stretch listening is inside Musify, ad-free and without Premium;
+handoff, ads and previews do not qualify. No handoff code was added. The approved
+YouTube/saved-offline/Spotify-metadata baseline and passing f579b371 CI
+38327263611 remain unchanged. Neither Spotify-led discovery with alternate audio
+nor Spotify-delivered audio is claimed to fulfill the clarified goal. No access/
+ad-entitlement bypass, account action or three-recording approval is inferred.
+
 ## Supported-scope native closure, 2026-10-13
 
 Exact source 52576c31e6457d239c36563d20b22c2dacaa1630 passes

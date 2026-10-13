@@ -22,6 +22,14 @@ otherwise online playback uses the selected YouTube recording. Offline mode uses
 saved files only. Spotify-only/both playback is not a promised capability of this
 release. See decision D-017; provider, device and signed-delivery gates remain.
 
+## Spotify stretch clarification, 2026-10-13
+
+The owner requires Spotify-led playback inside Musify, without playback ads
+or Premium. External handoff and previews do not fulfill that stretch. Research
+must distinguish Spotify-led metadata/discovery with attributed alternate audio
+from Spotify-delivered audio; no fulfillment claim is established for either.
+The supported release baseline above continues unchanged. See D-018.
+
 ## Core rules
 
 - Treat a song as a canonical musical identity, not merely a YouTube video ID.

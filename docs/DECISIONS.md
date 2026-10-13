@@ -319,6 +319,22 @@ changes.
   Exact 44481221 Linux strict comparisons pass; no current product rendering
   regression is detected. No rebaseline/comparator relaxation is authorized.
 
+## D-018 - Spotify stretch fulfillment boundary
+
+- Status: owner clarification, 2026-10-13 00:35 UTC; supersedes D-017's
+  follow-up suggestion that an external-app handoff could fulfill the stretch.
+- Goal: Spotify-led playback must occur inside Musify, contain no playback ads
+  and require no Premium. External-app handoff, ads and previews do not qualify.
+- Baseline: the accepted YouTube plus saved/offline audio and Spotify metadata
+  import release continues unchanged. The stretch is not its delivery gate.
+- Evidence boundary: distinguish Spotify-led library/discovery with honestly
+  attributed alternate audio from Spotify-delivered audio. Neither is claimed
+  to meet the owner's intent until the distinction is resolved. No Open in
+  Spotify feature was implemented or used as fulfillment.
+- Authorization: no paid-access/ad-entitlement bypass, account/credential
+  actions or new service grants. The three-recording payload/destination
+  approval remains pending; no provider retries are inferred.
+
 ## New decision template
 
 ```text
