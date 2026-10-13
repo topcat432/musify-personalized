@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:collection';
 
 import 'package:http/http.dart' as http;
@@ -31,7 +32,8 @@ class StreamClient {
       _requestHeaders[stream];
 
   Map<String, String> _mediaHeaders(YoutubeApiClient client) {
-    String? agent = client.payload['context']?['client']?['userAgent'] as String?;
+    String? agent =
+        client.payload['context']?['client']?['userAgent'] as String?;
     if (agent == null) {
       for (final header in _httpClient.headers.entries) {
         if (header.key.toLowerCase() == 'user-agent') agent = header.value;
@@ -79,17 +81,56 @@ class StreamClient {
   /// });
   /// ```
   Future<StreamManifest> getManifest(dynamic videoId,
-      {@Deprecated(
-          'Use the ytClient parameter instead passing the proper [YoutubeApiClient]s')
-      bool fullManifest = false,
-      List<YoutubeApiClient>? ytClients,
-      bool requireWatchPage = true,
-      StreamInfo? Function(List<StreamInfo>)? streamForValidation}) async {
+          {@Deprecated(
+              'Use the ytClient parameter instead passing the proper [YoutubeApiClient]s')
+          bool fullManifest = false,
+          List<YoutubeApiClient>? ytClients,
+          bool requireWatchPage = true,
+          StreamInfo? Function(List<StreamInfo>)? streamForValidation}) =>
+      _getManifest(videoId,
+          ytClients: ytClients,
+          requireWatchPage: requireWatchPage,
+          streamForValidation: streamForValidation);
+
+  /// Discover only the chosen progressive format's length with one bounded GET.
+  /// A size of zero exists only in the selection callback, never the result.
+  Future<StreamManifest> getManifestWithSelectedLength(
+    dynamic videoId, {
+    required List<YoutubeApiClient> ytClients,
+    bool requireWatchPage = false,
+    required StreamInfo? Function(List<StreamInfo>) streamForValidation,
+    int maximumStreamBytes = 2 * 1024 * 1024 * 1024,
+    Duration probeTimeout = const Duration(seconds: 10),
+  }) =>
+      _getManifest(videoId,
+          ytClients: ytClients,
+          requireWatchPage: requireWatchPage,
+          streamForValidation: streamForValidation,
+          selectedLengthDiscovery: true,
+          maximumStreamBytes: maximumStreamBytes,
+          probeTimeout: probeTimeout);
+
+  Future<StreamManifest> _getManifest(
+    dynamic videoId, {
+    List<YoutubeApiClient>? ytClients,
+    bool requireWatchPage = true,
+    StreamInfo? Function(List<StreamInfo>)? streamForValidation,
+    bool selectedLengthDiscovery = false,
+    int maximumStreamBytes = 2 * 1024 * 1024 * 1024,
+    Duration probeTimeout = const Duration(seconds: 10),
+  }) async {
     assert(ytClients == null || ytClients.isNotEmpty,
         'ytClients cannot be an empty list');
 
     videoId = VideoId.fromString(videoId);
     final clients = ytClients ?? [YoutubeApiClient.androidSdkless];
+    if (selectedLengthDiscovery &&
+        (clients.length != 1 ||
+            maximumStreamBytes <= 0 ||
+            probeTimeout <= Duration.zero)) {
+      throw ArgumentError(
+          'Selected discovery requires one client and positive limits.');
+    }
 
     if (_jsChallengeSolver != null && ytClients == null) {
       clients.add(YoutubeApiClient.safari);
@@ -112,6 +153,7 @@ class StreamClient {
     );
 
     Object? lastException;
+    StreamInfo? validatedStream;
 
     for (final client in clients) {
       _logger.fine(
@@ -122,6 +164,7 @@ class StreamClient {
             videoId,
             ytClient: client,
             requireWatchPage: requireWatchPage,
+            selectedLengthDiscovery: selectedLengthDiscovery,
           ).toList();
           if (streams.isEmpty) {
             throw VideoUnavailableException(
@@ -135,7 +178,21 @@ class StreamClient {
               ? streams.first
               : streamForValidation(List.unmodifiable(streams));
           if (probe == null || !streams.any((s) => identical(s, probe))) {
+            if (selectedLengthDiscovery) {
+              throw FatalFailureException('No eligible selected format.', 0,
+                  terminal: true);
+            }
             throw VideoUnavailableException('No eligible stream to validate.');
+          }
+          if (selectedLengthDiscovery) {
+            final resolved = await _discoverSelected(
+                probe, maximumStreamBytes, probeTimeout);
+            _requestHeaders[resolved] = requestHeadersFor(probe) ?? const {};
+            uniqueStreams.addAll(streams.where((stream) =>
+                !identical(stream, probe) && stream.size.totalBytes > 0));
+            uniqueStreams.add(resolved);
+            validatedStream = resolved;
+            return;
           }
           // Some media servers reject HEAD while accepting playback GETs.
           // Probe one byte with the same signed URI, then cancel the body even
@@ -164,7 +221,8 @@ class StreamClient {
       } catch (e, s) {
         // A denied request cannot be repaired by repeating it or changing
         // client identity. Preserve that failure rather than falling back.
-        if (e is FatalFailureException && e.statusCode == 403) rethrow;
+        if (e is FatalFailureException && (e.statusCode == 403 || e.terminal))
+          rethrow;
         _logger.severe(
             'Failed to get stream manifest for video $videoId with client: ${client.payload['context']['client']['clientName']}. Reason: $e\n',
             e,
@@ -174,8 +232,11 @@ class StreamClient {
     }
 
     // If the user has not provided any client retry with the tv which work also in some restricted videos.
-    if (uniqueStreams.isEmpty && ytClients == null) {
-      return getManifest(videoId, ytClients: [YoutubeApiClient.tv],
+    if (uniqueStreams.isEmpty &&
+        ytClients == null &&
+        !selectedLengthDiscovery) {
+      return getManifest(videoId,
+          ytClients: [YoutubeApiClient.tv],
           streamForValidation: streamForValidation);
     }
     if (uniqueStreams.isEmpty) {
@@ -187,7 +248,110 @@ class StreamClient {
           VideoUnavailableException(
               'Video "$videoId" has no available streams');
     }
-    return StreamManifest(uniqueStreams.toList());
+    return StreamManifest(uniqueStreams.toList(),
+        validatedStream: validatedStream);
+  }
+
+  Future<StreamInfo> _discoverSelected(
+      StreamInfo stream, int cap, Duration timeout) async {
+    Never fail(String reason, [int status = 0]) =>
+        throw FatalFailureException('Selected format probe: $reason', status,
+            terminal: true);
+    if (stream is! MuxedStreamInfo &&
+        stream is! AudioOnlyStreamInfo &&
+        stream is! VideoOnlyStreamInfo) fail('unsupported-format');
+    if (stream.size.totalBytes > cap || stream.size.totalBytes < 0)
+      fail('size-cap');
+    final abort = Completer<void>();
+    http.StreamedResponse? response;
+    StreamIterator<List<int>>? body;
+    try {
+      response = await _httpClient
+          .send(http.AbortableRequest('GET', stream.url,
+              abortTrigger: abort.future)
+            ..followRedirects = false
+            ..headers.addAll(requestHeadersFor(stream) ?? const {})
+            ..headers['Range'] = 'bytes=0-0')
+          .timeout(timeout);
+      if (response.statusCode != 206) fail('http-status', response.statusCode);
+      final range = RegExp(r'^bytes 0-0/([1-9][0-9]*)$', caseSensitive: false)
+          .firstMatch(response.headers['content-range']?.trim() ?? '');
+      final total = int.tryParse(range?.group(1) ?? '');
+      if (total == null || total > cap) fail('range-or-size-cap');
+      if (stream.size.totalBytes > 0 && stream.size.totalBytes != total)
+        fail('declared-length-mismatch');
+      if (response.contentLength != 1) fail('response-length');
+      final type = (response.headers['content-type'] ?? '')
+          .split(';')
+          .first
+          .trim()
+          .toLowerCase();
+      if (type != stream.codec.mimeType.toLowerCase()) fail('content-type');
+      body = StreamIterator(response.stream);
+      if (!await body.moveNext().timeout(timeout) || body.current.length != 1)
+        fail('one-byte-body');
+      if (stream.size.totalBytes > 0) return stream;
+      final size = FileSize(total);
+      if (stream is MuxedStreamInfo)
+        return MuxedStreamInfo(
+            stream.videoId,
+            stream.tag,
+            stream.url,
+            stream.container,
+            size,
+            stream.bitrate,
+            stream.audioCodec,
+            stream.videoCodec,
+            stream.qualityLabel,
+            stream.videoQuality,
+            stream.videoResolution,
+            stream.framerate,
+            stream.codec);
+      if (stream is AudioOnlyStreamInfo)
+        return AudioOnlyStreamInfo(
+            stream.videoId,
+            stream.tag,
+            stream.url,
+            stream.container,
+            size,
+            stream.bitrate,
+            stream.audioCodec,
+            stream.qualityLabel,
+            stream.fragments,
+            stream.codec,
+            stream.audioTrack);
+      final video = stream as VideoOnlyStreamInfo;
+      return VideoOnlyStreamInfo(
+          video.videoId,
+          video.tag,
+          video.url,
+          video.container,
+          size,
+          video.bitrate,
+          video.videoCodec,
+          video.qualityLabel,
+          video.videoQuality,
+          video.videoResolution,
+          video.framerate,
+          video.fragments,
+          video.codec);
+    } on FatalFailureException {
+      rethrow;
+    } catch (_) {
+      fail('timeout-or-transport');
+    } finally {
+      if (!abort.isCompleted) abort.complete();
+      try {
+        final cancel = body?.cancel() ??
+            response?.stream.listen(null, onError: (Object _) {}).cancel();
+        if (cancel != null)
+          await cancel.timeout(timeout < const Duration(seconds: 2)
+              ? timeout
+              : const Duration(seconds: 2));
+      } catch (_) {
+        fail('cancellation-timeout');
+      }
+    }
   }
 
   /// Gets the HTTP Live Stream (HLS) manifest URL
@@ -222,21 +386,25 @@ class StreamClient {
   /// For HLS streams all the fragments are concatenated into a single stream.
   Stream<List<int>> get(StreamInfo streamInfo) =>
       _httpClient.getStream(streamInfo,
-          streamClient: this, headers: requestHeadersFor(streamInfo) ?? const {});
+          streamClient: this,
+          headers: requestHeadersFor(streamInfo) ?? const {});
 
   Stream<StreamInfo> _getStreams(VideoId videoId,
       {required YoutubeApiClient ytClient,
-      bool requireWatchPage = true}) async* {
+      bool requireWatchPage = true,
+      bool selectedLengthDiscovery = false}) async* {
     // Use await for instead of yield* to catch exceptions
-    await for (final stream
-        in _getStream(videoId, ytClient, requireWatchPage: requireWatchPage)) {
+    await for (final stream in _getStream(videoId, ytClient,
+        requireWatchPage: requireWatchPage,
+        selectedLengthDiscovery: selectedLengthDiscovery)) {
       _requestHeaders[stream] = _mediaHeaders(ytClient);
       yield stream;
     }
   }
 
   Stream<StreamInfo> _getStream(VideoId videoId, YoutubeApiClient ytClient,
-      {bool requireWatchPage = true}) async* {
+      {bool requireWatchPage = true,
+      bool selectedLengthDiscovery = false}) async* {
     WatchPage? watchPage;
     if (requireWatchPage) {
       watchPage = await WatchPage.get(_httpClient, videoId.value);
@@ -262,25 +430,36 @@ class StreamClient {
       );
     }
     yield* _parseStreamInfo(playerResponse.streams,
-        watchPage: watchPage, videoId: videoId, headers: _mediaHeaders(ytClient));
+        watchPage: watchPage,
+        videoId: videoId,
+        headers: _mediaHeaders(ytClient),
+        selectedLengthDiscovery: selectedLengthDiscovery);
 
     if (!playerResponse.dashManifestUrl.isNullOrWhiteSpace) {
       final dashManifest =
           await _controller.getDashManifest(playerResponse.dashManifestUrl!);
       yield* _parseStreamInfo(dashManifest.streams,
-          watchPage: watchPage, videoId: videoId, headers: _mediaHeaders(ytClient));
+          watchPage: watchPage,
+          videoId: videoId,
+          headers: _mediaHeaders(ytClient),
+          selectedLengthDiscovery: selectedLengthDiscovery);
     }
     if (!playerResponse.hlsManifestUrl.isNullOrWhiteSpace) {
       final hlsManifest =
           await _controller.getHlsManifest(playerResponse.hlsManifestUrl!);
       yield* _parseStreamInfo(hlsManifest.streams,
-          watchPage: watchPage, videoId: videoId, headers: _mediaHeaders(ytClient));
+          watchPage: watchPage,
+          videoId: videoId,
+          headers: _mediaHeaders(ytClient),
+          selectedLengthDiscovery: selectedLengthDiscovery);
     }
   }
 
   Stream<StreamInfo> _parseStreamInfo(Iterable<StreamInfoProvider> streams,
-      {WatchPage? watchPage, VideoId? videoId,
-      Map<String, String> headers = const {}}) async* {
+      {WatchPage? watchPage,
+      VideoId? videoId,
+      Map<String, String> headers = const {},
+      bool selectedLengthDiscovery = false}) async* {
     // First pass: collect all unique challenges
     final nChallenges = <String>{};
     final sigChallenges = <String>{};
@@ -380,10 +559,16 @@ class StreamClient {
       }
 
       final contentLength = stream.contentLength ??
-          (await _httpClient.getContentLength(url, headers: headers, validate: false)) ??
+          (selectedLengthDiscovery
+              ? 0
+              : await _httpClient.getContentLength(url,
+                  headers: headers, validate: false)) ??
           0;
 
-      if (contentLength <= 0) {
+      if (contentLength <= 0 &&
+          !(selectedLengthDiscovery &&
+              (stream.source == StreamSource.muxed ||
+                  stream.source == StreamSource.adaptive))) {
         continue;
       }
 

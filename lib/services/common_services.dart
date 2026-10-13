@@ -96,10 +96,9 @@ Future<StreamManifest?> _fetchStreamManifest(
   }
 
   return ytClient.videos.streams
-      .getManifest(
+      .getManifestWithSelectedLength(
         songId,
         ytClients: [YoutubeApiClient.androidSdkless],
-        requireWatchPage: false,
         streamForValidation: (streams) => selectPlaybackStreamForQuality(
           StreamManifest(streams),
           songId,
@@ -132,6 +131,12 @@ Future<String?> _getCachedSongUrl(
       )) {
     // Retain legacy/partial cache data, but do not guess its resolving identity
     // or send a media validation request with unknown provenance.
+    return null;
+  }
+  if (StreamRequestContexts.supports(cachedUrl) &&
+      streamRequestContexts.lengthForUrl(cachedUrl) == null &&
+      (int.tryParse(Uri.parse(cachedUrl).queryParameters['clen'] ?? '') ?? 0) <= 0) {
+    // Keep old cache bytes intact; obtain selected-format length before reuse.
     return null;
   }
   final cacheDate = cacheBox.get('${cacheKey}_date') as DateTime?;
@@ -629,7 +634,11 @@ Future<String?> fetchSongStreamUrl(
       selectedStream,
     );
     if (StreamRequestContexts.supports(url) && requestHeaders != null) {
-      streamRequestContexts.remember(url, requestHeaders);
+      streamRequestContexts.remember(
+        url,
+        requestHeaders,
+        sourceLength: selectedStream.size.totalBytes,
+      );
       final context = streamRequestContexts.snapshot(url);
       if (context != null) {
         try {

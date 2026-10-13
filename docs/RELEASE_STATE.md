@@ -1,5 +1,38 @@
 # Musify Personalized current state
 
+## Selected-format length discovery and host delivery, 2026-10-13
+
+Candidate repair selects the offered recording/format before one bounded GET
+range probe; unknown progressive lengths no longer force HEAD requests or
+silently discard an eligible muxed format. The validated format remains pinned
+through selection. HTTP denial, ignored ranges, malformed lengths/types and
+probe timeouts are terminal. Derived cache length is optional; legacy cache and
+library data remain intact and no durable schema migration is introduced.
+
+Guarded local analysis and439 tests PASS, including18 new selected-discovery/
+context tests. Both strict Windows suites remain FAIL16+24; all40 actual images
+are byte-exact to the existing Windows control, references unchanged. Reviewed
+actual/reference/diff retain the known font rasterization difference.
+
+One newly authorized non-denied recording selected muxed MP4/AAC itag18 before
+probing. Metadata supplied no length; GET206 learned3,961,198bytes, then all16
+finite production download ranges returned206 and makeSongOffline saved the
+complete file. Saved SHA256:
+41f0b95163cbfdb3881972564f78931c016d3f74356154af20386365328c8e1b.
+One metadata request, one probe, one logical download; no retry, alternate client,
+credentials or replay of denied resources. This is host delivery proof. Native
+214-second saved-file seek/background/completion/restart acceptance is pending;
+the isolated generic fixture is included, private input/media remain outside Git.
+External canonical receipt: host-provider-diagnostic/
+selected-live-20261013T124149916/selected-muxed-proof.json in the established
+continuing-acceptance-20261012 evidence root. Earlier312-second provider native
+proof is a distinct recording; audio-only later-range403 reliability remains open.
+
+Default Windows build admission still refuses its32GiB commit forecast. No
+forecast, heap setting or80% threshold was weakened. An explicit separately
+measured constrained profile is being investigated; normal emulator data/APK
+remain preserved, emulator stopped, Samsung reserved for final acceptance.
+
 ## Offline playback investigation and justified repair, 2026-10-13
 
 Storage-adoption tip57661cf391da4b6902c529577fb2e1f5cb65156e passes

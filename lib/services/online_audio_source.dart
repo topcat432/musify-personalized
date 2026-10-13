@@ -32,7 +32,9 @@ AudioSource onlineAudioSource(
       (!kIsWeb &&
           defaultTargetPlatform == TargetPlatform.android &&
           appFlavor == 'github');
-  final length = int.tryParse(uri.queryParameters['clen'] ?? '');
+  final length =
+      streamRequestContexts.lengthForUrl(url) ??
+      int.tryParse(uri.queryParameters['clen'] ?? '');
   if (enabled && GoogleVideoByteSource.accepts(uri, length)) {
     return GoogleVideoByteSource(
       uri,

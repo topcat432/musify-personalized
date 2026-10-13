@@ -119,6 +119,13 @@ StreamInfo? selectPlaybackStreamForQuality(
   String selectedVideoId, {
   bool preferMuxed = false,
 }) {
+  final validated = manifest.validatedStream;
+  if (validated != null &&
+      validated.videoId.value == selectedVideoId &&
+      validated.size.totalBytes > 0 &&
+      validated is AudioStreamInfo) {
+    return validated;
+  }
   final audio = manifest.audioOnly
       .where((stream) => stream.videoId.value == selectedVideoId)
       .toList();
