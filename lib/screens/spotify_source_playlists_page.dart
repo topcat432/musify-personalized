@@ -65,7 +65,9 @@ class _SpotifySourcePlaylistsPageState
         snapshot: snapshot,
       );
       if (!mounted) return;
-      final status = result.created
+      final status = result.verificationFailedAfterWrite
+          ? 'Playlist "${result.destinationTitle}" was saved. Later verification is incomplete. 0 songs transferred.'
+          : result.created
           ? 'Created empty playlist "${result.destinationTitle}". 0 songs transferred.'
           : 'Reused "${result.destinationTitle}" without changes. 0 songs transferred.';
       setState(() {

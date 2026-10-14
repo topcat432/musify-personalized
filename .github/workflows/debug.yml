@@ -207,6 +207,33 @@ jobs:
           name: empty-staging-control-${{ github.run_number }}
           path: empty-staging-control.log
           if-no-files-found: error
+      - name: Reproduce committed empty-source reporting defect on exact prior source
+        shell: bash
+        run: |
+          set -euo pipefail
+          original="$GITHUB_WORKSPACE"
+          control="$RUNNER_TEMP/musify-empty-reporting-control-050f00e7"
+          git fetch --no-tags --depth=1 origin 050f00e72f3f812a236c589a926799c6a2180954
+          git worktree add --detach "$control" 050f00e72f3f812a236c589a926799c6a2180954
+          cp test/services/spotify_empty_source_playlist_test.dart "$control/test/services/"
+          cd "$control"
+          flutter pub get --offline
+          if flutter test --no-pub -j 1 --reporter expanded --name 'committed-source change' test/services/spotify_empty_source_playlist_test.dart > "$original/empty-reporting-control.log" 2>&1; then
+            echo "Prior source unexpectedly reported committed/unverified creation truthfully"
+            exit 1
+          fi
+          grep -Fq 'Committed destination must return saved/unverified feedback, not unchanged failure' "$original/empty-reporting-control.log"
+          grep -Fq 'no playlist was changed' "$original/empty-reporting-control.log"
+          echo "Exact050f00e7 control reproduced incorrect unchanged feedback after a committed destination write."
+          test "$(git -C "$original" rev-parse HEAD)" = "$SOURCE_SHA"
+
+      - name: Upload exact prior-source committed reporting control log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: empty-reporting-control-${{ github.run_number }}
+          path: empty-reporting-control.log
+          if-no-files-found: error
       - name: Prepare read-only empty-source formatting suggestions
         shell: bash
         run: |

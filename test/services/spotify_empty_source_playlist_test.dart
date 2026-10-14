@@ -183,6 +183,29 @@ void main() {
     expect(playlists().last['title'],'Owner renamed during failure');await reopen();
     expect((await create()).created,isFalse);expect(playlists().last['title'],'Owner renamed during failure');
   });
+  test('committed-source change returns honest unverified outcome and reconciles without duplicate creation',() async {
+    final baseline=copy(metadata()[importRoutingBaselineKey]);
+    final writer=SpotifyImportDestinationService(destinationWriter:(box,key,value) async {
+      await box.put(key,value);
+      final changed=metadata();final sources=changed['sourcePlaylists']['playlists'] as List;
+      sources[0]['members']=copy(sources[1]['members']);changed['totalDataRows']=2;await putMetadata(changed);
+    });
+    SpotifyEmptySourcePlaylistResult? result;Object? failure;
+    try {result=await create(using:writer);} catch(error) {failure=error;}
+    expect(failure,isNull,reason:'Committed destination must return saved/unverified feedback, not unchanged failure');
+    expect(result!.created,isTrue);expect(result!.trackingRecorded,isFalse);
+    expect(playlists().length,2);expect(playlists().last['list'],isEmpty);
+    expect(metadata()['sourcePlaylists']['playlists'][0]['members'],isNotEmpty);
+    expect(metadata()['totalDataRows'],2);expect(metadata().containsKey(importRoutingPendingKey),isTrue);
+    expect(metadata()[importRoutingBaselineKey],baseline);
+    await reopen();await expectLater(create(),throwsStateError);expect(playlists().length,2);
+    final snapshot=await service.loadSourcePlaylistSnapshot(1);
+    final transferred=await service.route(snapshot:snapshot,requestedCount:1,destinationKind:SpotifyImportDestinationKind.existingPlaylist,existingPlaylistId:result!.destinationId,selectionKind:SpotifyImportSelectionKind.all);
+    expect(transferred.addedCount,1);expect(playlists().length,2);expect(playlists().last['list'].single['ytid'],'owned-choice');
+    expect(metadata()[importRoutingUnverifiedHistoryKey].last['attempt']['action'],'create_empty_source_playlist');
+    expect((metadata()['routingHistory'] as List).where((row)=>row['action']=='create_empty_source_playlist'),isEmpty);
+    expect((await service.route(snapshot:await service.loadSourcePlaylistSnapshot(1),requestedCount:1,destinationKind:SpotifyImportDestinationKind.existingPlaylist,existingPlaylistId:result!.destinationId,selectionKind:SpotifyImportSelectionKind.all)).addedCount,0);
+  });
   test('audit failure retains actual creation and pending uncertainty; retry creates no duplicate',() async {
     var writes=0;
     final writer=SpotifyImportDestinationService(metadataWriter:(box,value) async {writes++;await box.put('spotifyImportMetadata',value);if(writes==2) throw StateError('Owned audit failure');});

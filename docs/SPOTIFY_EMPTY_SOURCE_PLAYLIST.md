@@ -85,3 +85,14 @@ and failed subprocess finalization. The successor carries real-IO errors back
 as values and rethrows them in the caller's test zone. Live empty verification
 also precedes projection of an obsolete scoped snapshot. No failure is relabelled
 as a pass; strict visuals and builds remain pending for the successor.
+
+
+050f00e7 exactCI38654623831 is terminal technical PASS; independent review
+identified incorrect precommit wording after a committed destination write.
+The successor returns an explicit committed-but-unverified result when source
+verification changes after the saved playlist write. UI states that the playlist
+was saved and its audit is unverified. Destination, newer membership/totals and
+pending marker remain intact. A normal explicit song transfer can reconcile into
+that same destination, archiving the uncertain zero-song attempt without creating
+a duplicate or calling it a completed empty transfer. Pure/service/widget/reopen
+regressions and an exact050f00e7 control qualify this correction; pending CI.

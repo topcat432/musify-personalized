@@ -41,7 +41,21 @@ void main() {
   testWidgets('source becoming nonempty during confirmation fails without creating destination',(tester) async {
     final service=_IoEmptyService();await open(tester,service:service);await review(tester);
     await tester.runAsync(() async {final metadata=Map<String,dynamic>.from(Hive.box('user').get('spotifyImportMetadata'));final sources=metadata['sourcePlaylists']['playlists'] as List;sources[0]['members']=sources[1]['members'];metadata['totalDataRows']=2;await Hive.box('user').put('spotifyImportMetadata',metadata);});
-    await confirm(tester,service);expect(playlists().length,1);expect(find.textContaining('changed'),findsWidgets);expect(tester.takeException(),isNull);
+    await confirm(tester,service);expect(playlists().length,1);expect(find.textContaining('verifiably empty'),findsOneWidget);expect(tester.takeException(),isNull);
+  });
+  testWidgets('late source change reports saved destination and unverified audit instead of no change',(tester) async {
+    final service=_IoEmptyService(destinationWriter:(box,key,value) async {
+      await box.put(key,value);final metadata=Map<String,dynamic>.from(box.get('spotifyImportMetadata'));
+      final sources=metadata['sourcePlaylists']['playlists'] as List;
+      sources[0]['members']=jsonDecode(jsonEncode(sources[1]['members']));metadata['totalDataRows']=2;
+      await box.put('spotifyImportMetadata',metadata);
+    });
+    await open(tester,service:service);await review(tester);await confirm(tester,service);
+    expect(playlists().length,2);expect(playlists().last['list'],isEmpty);
+    expect(find.textContaining('was saved'),findsOneWidget);
+    expect(find.textContaining('Audit unverified'),findsOneWidget);
+    expect(find.textContaining('no playlist was changed'),findsNothing);
+    expect(tester.takeException(),isNull);
   });
   testWidgets('preview-only empty source never exposes a create or transfer action',(tester) async {
     await tester.pumpWidget(MaterialApp(home:SpotifySourcePlaylistsPage(preview:SpotifyEmptySourceFixture.preview(song:false).sourcePlaylists)));
@@ -73,6 +87,7 @@ Future<_IoOutcome<T>> _realIo<T>(Future<T> Function() action) => Zone.root.run((
   catch (error,stack) {return (value:null,error:error,stack:stack);}
 });
 class _IoEmptyService extends SpotifyImportDestinationService {
+  _IoEmptyService({super.destinationWriter});
   Future<void>? lastCompletion;
   @override
   Future<SpotifyEmptySourcePlaylistResult> createEmptySourcePlaylist({required SpotifyImportDestinationSnapshot snapshot}) async {

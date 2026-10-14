@@ -109,9 +109,10 @@ class SpotifyEmptySourcePlaylistResult {
     required this.destinationTitle,
     required this.created,
     this.trackingRecorded = true,
+    this.verificationFailedAfterWrite = false,
   });
   final String destinationId, destinationTitle;
-  final bool created, trackingRecorded;
+  final bool created, trackingRecorded, verificationFailedAfterWrite;
 }
 class SpotifyImportDestinationService {
   const SpotifyImportDestinationService({
@@ -355,7 +356,7 @@ class SpotifyImportDestinationService {
         snapshot.wholeSourceReadiness?.verifiedEmpty != true ||
         !live.verifiedEmpty ||
         live.fingerprint != snapshot.wholeSourceReadiness?.fingerprint) {
-      throw StateError('The source is not verifiably empty. Reload its membership; no playlist was changed.');
+      throw StateError('The source is not verifiably empty. Reload and review its membership.');
     }
     _validateCurrentSnapshot(snapshot);
   }
@@ -449,6 +450,22 @@ class SpotifyImportDestinationService {
         }
         _validateEmptySource(snapshot);
       } catch (_) {
+        if (destinationWritten) {
+          try {
+            final saved = _currentCustomPlaylists().where((playlist) =>
+                playlist['ytid'] == id && playlist['importSourcePlaylistKey'] == sourceKey).toList();
+            if (saved.length == 1) {
+              return SpotifyEmptySourcePlaylistResult(
+                destinationId: id,
+                destinationTitle: saved.single['title']?.toString() ?? snapshot.sourceName,
+                created: true,
+                trackingRecorded: false,
+                verificationFailedAfterWrite: true,
+              );
+            }
+          } catch (_) {}
+          throw StateError('The destination write completed, but its current state could not be verified. Its audit is unverified; review the saved library before retrying.');
+        }
         final restored = box.containsKey('customPlaylists') == hadPlaylists &&
             jsonEncode(box.get('customPlaylists')) == jsonEncode(beforePlaylists);
         if (!destinationWritten && restored) {
