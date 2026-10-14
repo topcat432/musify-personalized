@@ -120,6 +120,35 @@ class SpotifyWholeSourceReadiness {
         metadata[SpotifySourcePlaylistCodec.metadataKey],
         rawTracks,
       );
+      // Counts are integrity declarations, not evidence that missing rows were
+      // completed. Older imports lacking a total remain explicitly partial.
+      final total = metadata['totalDataRows'];
+      final rejected = metadata['rejectedRowCount'];
+      final hasMembership = metadata.containsKey(
+        SpotifySourcePlaylistCodec.metadataKey,
+      );
+      final retained = hasMembership
+          ? sources.fold<int>(
+              0,
+              (count, source) => count + source.members.length,
+            )
+          : rawTracks is List
+          ? rawTracks.length
+          : -1;
+      final unsupportedTotal = sources.fold<int>(
+        0,
+        (count, source) =>
+            count +
+            source.members.where((member) => member.sourceRow == null).length,
+      );
+      if (total is! int ||
+          total < 0 ||
+          rejected is! int ||
+          rejected < 0 ||
+          retained < 0 ||
+          total != retained + (hasMembership ? 0 : rejected) ||
+          (hasMembership && rejected != unsupportedTotal))
+        unknown++;
       final Iterable<SpotifySourcePlaylist> selected;
       if (sourcePlaylistPosition == null) {
         selected = sources;
@@ -234,6 +263,7 @@ class SpotifyWholeSourceReadiness {
                     'fileName': metadata['fileName'],
                     'format': metadata['format'],
                     'validTrackCount': metadata['validTrackCount'],
+                    'totalDataRows': metadata['totalDataRows'],
                     'rejectedRowCount': metadata['rejectedRowCount'],
                     'tracks': rawTracks,
                     'results': rawResults,

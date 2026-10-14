@@ -45,6 +45,7 @@ void main() {
         'importSessionId': 'whole-ui',
         'fileName': 'owned.csv',
         'validTrackCount': 3,
+        'totalDataRows': 3,
         'rejectedRowCount': 0,
       },
     });

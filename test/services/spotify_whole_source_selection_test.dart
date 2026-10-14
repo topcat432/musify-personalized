@@ -107,6 +107,7 @@ void main() {
         'importSessionId': 'whole-session',
         'fileName': 'owned.csv',
         'validTrackCount': 3,
+        'totalDataRows': 3,
         'rejectedRowCount': 0,
         if (memberships) SpotifySourcePlaylistCodec.metadataKey: source(),
       },

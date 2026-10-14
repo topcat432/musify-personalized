@@ -152,6 +152,34 @@ jobs:
           name: whole-exclusion-control-${{ github.run_number }}
           path: whole-exclusion-control.log
           if-no-files-found: error
+      - name: Reproduce total and deleted-collection defects on exact prior source
+        shell: bash
+        run: |
+          set -euo pipefail
+          original="$GITHUB_WORKSPACE"
+          control="$RUNNER_TEMP/musify-completeness-control-ce6bf615"
+          git fetch --no-tags --depth=1 origin ce6bf615e13caccd6726c56ac19379661c1e6cbd
+          git worktree add --detach "$control" ce6bf615e13caccd6726c56ac19379661c1e6cbd
+          cp test/services/spotify_source_completeness_contract_test.dart "$control/test/services/"
+          cd "$control"
+          flutter pub get --offline
+          if flutter test --no-pub -j 1 --reporter expanded test/services/spotify_source_completeness_contract_test.dart > "$original/whole-completeness-control.log" 2>&1; then
+            echo "Prior source unexpectedly protected totals and deleted collections"
+            exit 1
+          fi
+          grep -Fq 'Inconsistent declared total must not certify whole source' "$original/whole-completeness-control.log"
+          grep -Fq 'Deleted stored likes must never resurrect from stale cache' "$original/whole-completeness-control.log"
+          grep -Fq 'Deleted playlist collections must never resurrect from stale cache' "$original/whole-completeness-control.log"
+          echo "Exactce6bf615 control reproduced declared-total and deleted-collection defects."
+          test "$(git -C "$original" rev-parse HEAD)" = "$SOURCE_SHA"
+
+      - name: Upload exact prior-source completeness control log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: whole-completeness-control-${{ github.run_number }}
+          path: whole-completeness-control.log
+          if-no-files-found: error
       - name: Analyze Dart code
         id: analyze
         shell: bash

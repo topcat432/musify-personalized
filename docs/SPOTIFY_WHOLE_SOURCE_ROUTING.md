@@ -59,7 +59,7 @@ Final targeted51 PASS covers source completeness, all existing selectors,
 permanent index interruption, owner alternative/order, duplicates, late source
 changes, retry, existing destination protection, saved-file restore/reopen,
 compact412x915 at2x text, visible errors and retained decisions. Analysis and
-722 aggregate tests PASS. Windows strict suites FAIL16+24; all40 actual images
+730 aggregate tests PASS after the eight independent-review regressions. Windows strict suites FAIL16+24; all40 actual images
 match the preserved F02 control byte for byte; no reference images changed.
 Exact Linux CI qualification remains pending for this milestone.
 An exact8ff4297f control is included to reproduce the old exclusion omission.
@@ -70,3 +70,25 @@ Cold semantic audit28208 is completed PASS. Corrected About/Back, cold-start
 reliability, empty-library/rollback, picker and provider runtime remain open.
 Fresh21:52:32Z unchanged26GiB/80% admission refused99.65%; nothing launched.
 No phone, signing, publication, merge or unrelated emulator operation occurred.
+
+## Declared totals and authoritative absence
+
+Whole readiness requires an exact nonnegative integer totalDataRows and an exact
+nonnegative rejectedRowCount. A flat import total must equal retained raw tracks
+plus rejected rows. Named-source totals describe every saved membership across
+all source playlists, including repeated and unsupported entries; rejected count
+must equal unsupported memberships. A selected source does not compare the
+whole-file total against its unique recording count. Declared total is included
+in the preview fingerprint and revalidated before writes.
+
+Legacy imports without verifiable totals remain available for explicit partial
+routing; no completion claim is inferred or written back. CSV totals that include
+unrepresented blank rows remain unknown rather than guessing which rows were
+ignored. No source rows, counts or metadata are repaired.
+
+Missing Hive destination keys mean an empty saved collection, including normal
+first use and deletion or empty restore. Display caches never supply missing
+likes, playlists or folders. Malformed present values fail closed. This prevents
+stale display state from resurrecting removed data before or during a transfer.
+Existing-target deletion during the pending checkpoint rejects without recreating
+that target. Reopen regressions and an exact ce6bf615 failing control cover this.

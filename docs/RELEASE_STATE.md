@@ -2111,3 +2111,21 @@ reference updates. Exact Linux CI remains pending for this source.
 Normal3GiB host admission is available (last67.12%). Fresh21:52:32Z26GiB native
 admission refused99.65%; nothing launched. c249 cold semantic audit28208 remains
 completed PASS, with About/Back/reliability/provider gates separate and open.
+## Whole-source integrity review correction, 2026-10-14
+
+The ce6bf615 candidate was independently reviewed before release acceptance.
+Eight new contract regressions reproduce declared-total omission and revival of
+missing stored destinations from stale display caches. The retained exact source
+control fails8/8; correction passes8/8, clean analysis and730 aggregate tests.
+Missing or malformed declared total leaves legacy completeness unknown; explicit
+partial selectors remain available. Named totals count every source membership,
+including repetitions and unsupported rows, rather than unique recordings. Total
+changes are fingerprinted and revalidated. Absent Hive collection keys now mean
+empty, including first use, deletion and empty restore; newer saved values remain
+authoritative. No schema, adapter, migration or backup format changes.
+
+The predecessor exactCI38646404403 result is recorded separately; its technical
+checks do not resolve these reproduced review defects. Successor exact Linux CI
+is pending. Windows strict rerun FAIL16+24; all40 actuals again match the F02
+control byte for byte, with no reference updates. Signed c249 and cold audit28208 are unchanged;
+native and phone gates are not inferred from host proof.

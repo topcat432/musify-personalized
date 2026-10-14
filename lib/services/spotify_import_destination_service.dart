@@ -639,9 +639,9 @@ class SpotifyImportDestinationService {
     }
   }
 
-  List<Map<String, dynamic>> _storedPlaylists(String key, List<Map> fallback) {
+  List<Map<String, dynamic>> _storedPlaylists(String key) {
     final box = Hive.box('user');
-    final raw = box.containsKey(key) ? box.get(key) : fallback;
+    final raw = box.containsKey(key) ? box.get(key) : const [];
     if (raw is! List || raw.any((item) => item is! Map)) {
       throw StateError(
         'Saved playlist data could not be verified. Existing library data was retained.',
@@ -667,20 +667,15 @@ class SpotifyImportDestinationService {
   List<Map<String, dynamic>> _currentCustomPlaylists() => [
     ..._storedPlaylists(
       'customPlaylists',
-      userCustomPlaylists.value,
     ).where((playlist) => playlist['source'] == 'user-created'),
-    for (final folder in _storedPlaylists(
-      'playlistFolders',
-      userPlaylistFolders.value,
-    ))
+    for (final folder in _storedPlaylists('playlistFolders'))
       ..._folderPlaylists(
         folder,
       ).where((playlist) => playlist['source'] == 'user-created'),
   ];
   List<dynamic> _currentLikedSongs() {
     final box = Hive.box('user');
-    if (!box.containsKey('likedSongs'))
-      return List<dynamic>.from(userLikedSongsList.value);
+    if (!box.containsKey('likedSongs')) return <dynamic>[];
     final raw = box.get('likedSongs');
     if (raw is! List)
       throw StateError(
@@ -739,15 +734,9 @@ class SpotifyImportDestinationService {
       'list': selected,
       'createdAt': DateTime.now().millisecondsSinceEpoch,
     };
-    final updated = <Map>[
-      ..._storedPlaylists('customPlaylists', userCustomPlaylists.value),
-      playlist,
-    ];
+    final updated = <Map>[..._storedPlaylists('customPlaylists'), playlist];
     await _writeDestination('customPlaylists', updated);
-    userCustomPlaylists.value = _storedPlaylists(
-      'customPlaylists',
-      userCustomPlaylists.value,
-    );
+    userCustomPlaylists.value = _storedPlaylists('customPlaylists');
     return SpotifyImportRouteResult(
       destinationTitle: title,
       selectedCount: selected.length,
@@ -765,7 +754,6 @@ class SpotifyImportDestinationService {
 
     final root = _storedPlaylists(
       'customPlaylists',
-      userCustomPlaylists.value,
     ).map(Map<String, dynamic>.from).toList(growable: true);
     final rootIndex = root.indexWhere(
       (playlist) => playlist['ytid']?.toString() == id,
@@ -774,16 +762,12 @@ class SpotifyImportDestinationService {
       final outcome = _appendSongs(root[rootIndex], selected);
       root[rootIndex] = outcome.playlist;
       await _writeDestination('customPlaylists', root);
-      userCustomPlaylists.value = _storedPlaylists(
-        'customPlaylists',
-        userCustomPlaylists.value,
-      );
+      userCustomPlaylists.value = _storedPlaylists('customPlaylists');
       return outcome.result;
     }
 
     final folders = _storedPlaylists(
       'playlistFolders',
-      userPlaylistFolders.value,
     ).map(Map<String, dynamic>.from).toList(growable: true);
     for (var folderIndex = 0; folderIndex < folders.length; folderIndex++) {
       final folder = Map<String, dynamic>.from(folders[folderIndex]);
@@ -797,10 +781,7 @@ class SpotifyImportDestinationService {
       folder['playlists'] = playlists;
       folders[folderIndex] = folder;
       await _writeDestination('playlistFolders', folders);
-      userPlaylistFolders.value = _storedPlaylists(
-        'playlistFolders',
-        userPlaylistFolders.value,
-      );
+      userPlaylistFolders.value = _storedPlaylists('playlistFolders');
       return outcome.result;
     }
     throw StateError('The selected playlist no longer exists.');
