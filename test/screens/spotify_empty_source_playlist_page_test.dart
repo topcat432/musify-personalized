@@ -69,7 +69,7 @@ class _IoEmptyService extends SpotifyImportDestinationService {
   Future<SpotifyEmptySourcePlaylistResult>? lastCreation;
   @override
   Future<SpotifyEmptySourcePlaylistResult> createEmptySourcePlaylist({required SpotifyImportDestinationSnapshot snapshot}) {
-    final completed=Completer<SpotifyEmptySourcePlaylistResult>();
+    final completed=Zone.root.run(() => Completer<SpotifyEmptySourcePlaylistResult>());
     Zone.root.run(()=>super.createEmptySourcePlaylist(snapshot:snapshot).then<void>(completed.complete,onError:(Object error,StackTrace stack)=>completed.completeError(error,stack)));
     return lastCreation=completed.future;
   }
@@ -78,7 +78,7 @@ class _IoSessionService extends SpotifyImportSessionService {
   Future<void>? lastSave;
   @override
   Future<void> saveNewImport(SpotifyImportPreview preview,{DateTime? importedAt}) {
-    final completed=Completer<void>();
+    final completed=Zone.root.run(() => Completer<void>());
     Zone.root.run(()=>super.saveNewImport(preview,importedAt:importedAt).then<void>((_)=>completed.complete(),onError:(Object error,StackTrace stack)=>completed.completeError(error,stack)));
     return lastSave=completed.future;
   }
