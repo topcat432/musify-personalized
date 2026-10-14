@@ -4,6 +4,24 @@ import 'dart:typed_data';
 
 import 'package:musify/services/spotify_csv_importer.dart';
 
+class SpotifyDeflateResult {
+  const SpotifyDeflateResult({
+    required this.bytes,
+    required this.consumedBytes,
+    required this.finished,
+  });
+  final Uint8List bytes;
+  final int consumedBytes;
+  final bool finished;
+}
+
+typedef SpotifyDeflateDecoder =
+    Future<SpotifyDeflateResult> Function(
+      Uint8List bytes,
+      int expectedSize,
+      Future<void>? cancelled,
+    );
+
 /// A deliberately narrow, in-memory single song-list ZIP adapter.
 /// Never extracts files, chooses among entries or infers memberships.
 class SpotifyZipImporter {
@@ -14,6 +32,7 @@ class SpotifyZipImporter {
     Uint8List bytes, {
     required String fileName,
     Future<void>? cancelled,
+    SpotifyDeflateDecoder? decodeDeflate,
   }) async {
     var stopped = false;
     if (cancelled != null) unawaited(cancelled.then((_) => stopped = true));
@@ -55,8 +74,10 @@ class SpotifyZipImporter {
     final flags = u16(central + 8);
     final method = u16(central + 10);
     // No encryption, data descriptors or other optional flag semantics.
-    require(flags == 0 || flags == 0x800);
-    if (method != 0) {
+    require((flags & ~0x806) == 0);
+    require(method == 0 || method == 8);
+    require(method == 8 || (flags & 6) == 0);
+    if (method == 8 && decodeDeflate == null) {
       _fail(
         'This ZIP uses compressed entries. Choose an uncompressed (stored) ZIP or select its CSV, TSV or JSON file directly.',
       );
@@ -95,8 +116,16 @@ class SpotifyZipImporter {
       require(bytes[30 + i] == nameBytes[i]);
     }
     final payload = Uint8List.sublistView(bytes, start, central);
-    require(compressedSize == size);
-    final decoded = payload;
+    Uint8List decoded;
+    if (method == 0) {
+      require(compressedSize == size);
+      decoded = payload;
+    } else {
+      final result = await decodeDeflate!(payload, size, cancelled);
+      require(result.finished && result.consumedBytes == payload.length);
+      decoded = result.bytes;
+      require(decoded.length <= maxBytes);
+    }
     // Let an already queued Back/cancel event run before bounded CRC/parsing.
     await Future<void>.delayed(Duration.zero);
     checkCancelled();

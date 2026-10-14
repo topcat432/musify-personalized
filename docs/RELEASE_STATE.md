@@ -1,5 +1,19 @@
 # Musify Personalized current state
 
+## F03 PARTIAL: strict Android inflater route,2026-10-14
+
+Bounded review found a trusted existing Android/JDK standard-library route;
+[API/source findings](STRICT_DEFLATE_FEASIBILITY.md). A thin adapter requires
+verified end-of-stream, exact consumed bytes, no unused input, capped output,
+owned cancellation/deadline and finally cleanup. No dependency/codec download
+or custom DEFLATE implementation was added. Host3310 inflater checks and
+analysis/113 focused Dart tests PASS; exact CI/real Android bridge compile pending.
+F03 remains PARTIAL for practical compressed/account archives: Android runtime,
+picker/lifecycle/data proof and full multi-file membership semantics are open.
+Other platforms/missing channel fail closed for compression.87704dd6 remains the
+safe stored checkpoint; f7d150b1 must not be signed; c249 signed APK is unchanged.
+No device/signing/other-workload changes occurred in this review.
+
 ## F03 integrity correction,2026-10-14
 
 Post-CI adversarial tests exposed a real decoder limitation: truncated or trailing

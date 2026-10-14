@@ -81,3 +81,10 @@ Bounded offline ZIP wrapping exactly one existing flat CSV/TSV or saved-track JS
 is now an additive implementation; [contract and acceptance](SPOTIFY_SINGLE_FILE_ZIP_IMPORT.md).
 This does not fulfill multi-file account archives, full playlist membership or
 synchronization. Analysis/91 focused host tests PASS; exact Linux CI and signed/native gates remain.
+
+## F03 status clarification,2026-10-14
+
+PARTIAL.87704dd6 preserves safe stored-only support. The strict Android platform
+inflater route now has host proof, but native qualification and full practical
+multi-file account archives/memberships are not complete. [Feasibility and later
+portable dependency choices](STRICT_DEFLATE_FEASIBILITY.md). No dependency added.

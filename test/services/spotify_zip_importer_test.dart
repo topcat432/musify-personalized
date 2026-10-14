@@ -261,4 +261,43 @@ void main() {
     final b = stored(payload, 1527270452);
     await expectLater(parse(b), rejected);
   });
+  Uint8List compressedEnvelope() => base64Decode(
+    'UEsDBBQAAAAIACAKTl1mdiMFLAAAADMAAAAJAAAAc29uZ3MuY3N2CylKTM5W8EvMTdVxLCrJLC4BszWKNbncMouKS3T8y/NSi7iCU5Pz81KgHABQSwECFAAUAAAACAAgCk5dZnYjBSwAAAAzAAAACQAAAAAAAAAAAAAAgAEAAAAAc29uZ3MuY3N2UEsFBgAAAAABAAEANwAAAFMAAAAAAA==',
+  );
+  Uint8List csvPayload() => Uint8List.fromList(
+    utf8.encode('Track Name,Artist Name(s)\nFirst,Owner\nSecond,Owner\n'),
+  );
+  test('verified decoder response reuses CSV order and CRC policy', () async {
+    final p = await SpotifyZipImporter.parseBytes(
+      compressedEnvelope(),
+      fileName: 'owned.zip',
+      decodeDeflate: (bytes, size, cancelled) async => SpotifyDeflateResult(
+        bytes: csvPayload(),
+        consumedBytes: bytes.length,
+        finished: true,
+      ),
+    );
+    expect(p.tracks.map((t) => t.title), ['First', 'Second']);
+    expect(p.tracks.map((t) => t.sourceRow), [2, 3]);
+  });
+  for (final corruption in ['unfinished', 'unused', 'wrongCRC', 'oversize']) {
+    test('ZIP verifies $corruption even after native returns', () async {
+      await expectLater(
+        SpotifyZipImporter.parseBytes(
+          compressedEnvelope(),
+          fileName: 'owned.zip',
+          decodeDeflate: (bytes, size, cancelled) async => SpotifyDeflateResult(
+            bytes: corruption == 'wrongCRC'
+                ? Uint8List(size)
+                : corruption == 'oversize'
+                ? Uint8List(SpotifyZipImporter.maxBytes + 1)
+                : csvPayload(),
+            consumedBytes: bytes.length - (corruption == 'unused' ? 1 : 0),
+            finished: corruption != 'unfinished',
+          ),
+        ),
+        rejected,
+      );
+    });
+  }
 }

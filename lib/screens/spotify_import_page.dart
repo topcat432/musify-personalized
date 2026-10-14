@@ -13,6 +13,7 @@ import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
+import 'package:musify/services/spotify_android_deflate_decoder.dart';
 import 'package:musify/services/spotify_csv_importer.dart';
 import 'package:musify/services/spotify_import_file_reader.dart';
 import 'package:musify/services/spotify_import_session_service.dart';
@@ -27,10 +28,12 @@ class SpotifyImportPage extends StatefulWidget {
     super.key,
     this.sessionService = const SpotifyImportSessionService(),
     this.readFile = SpotifyImportFileReader.read,
+    this.decodeDeflate = SpotifyAndroidDeflateDecoder.decode,
   });
 
   final SpotifyImportSessionService sessionService;
   final SpotifyImportReader readFile;
+  final SpotifyDeflateDecoder decodeDeflate;
 
   @override
   State<SpotifyImportPage> createState() => _SpotifyImportPageState();
@@ -79,6 +82,7 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
               bytes,
               fileName: selectedFile.name,
               cancelled: cancellation.future,
+              decodeDeflate: widget.decodeDeflate,
             )
           : SpotifyCsvImporter.parseBytes(bytes, fileName: selectedFile.name);
 
@@ -146,7 +150,7 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
             icon: Icons.file_upload_outlined,
             title: 'Start with your song list',
             description:
-                'Choose a flat CSV, TSV, Spotify YourLibrary JSON, or an uncompressed ZIP containing one song list. Musify checks every row before anything is saved.',
+                'Choose a flat CSV, TSV, Spotify YourLibrary JSON, or a ZIP containing one song list. Musify checks every row before anything is saved.',
           ),
           const SizedBox(height: 24),
           PersonalizedReveal(
@@ -157,7 +161,7 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
                 const PersonalizedSectionHeading(
                   title: 'Source file',
                   description:
-                      'CSV/TSV need title and artist columns. JSON imports saved tracks from YourLibrary. ZIP accepts one uncompressed flat file, up to 8 MiB.',
+                      'CSV/TSV need title and artist columns. JSON imports saved tracks from YourLibrary. ZIP accepts one flat file, up to 8 MiB. Compressed ZIP requires Android.',
                 ),
                 const SizedBox(height: 12),
                 _CsvPickerSurface(

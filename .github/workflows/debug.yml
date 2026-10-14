@@ -88,6 +88,15 @@ jobs:
             fi
           done
 
+      - name: Verify bounded strict platform DEFLATE helper
+        shell: bash
+        run: |
+          set -euo pipefail
+          output="$RUNNER_TEMP/musify-strict-deflate-host"
+          mkdir -p "$output"
+          javac --release 8 -d "$output" android/app/src/main/java/com/gokadzev/musify/StrictDeflate.java tool/StrictDeflateHostTest.java
+          java -Xmx128m -XX:MaxMetaspaceSize=64m -cp "$output" com.gokadzev.musify.StrictDeflateHostTest
+
       - name: Analyze Dart code
         id: analyze
         shell: bash

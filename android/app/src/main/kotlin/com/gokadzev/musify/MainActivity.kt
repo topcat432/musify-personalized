@@ -17,6 +17,7 @@ import java.io.File
 import java.security.MessageDigest
 
 class MainActivity : AudioServiceActivity() {
+  private var strictDeflateChannel: StrictDeflateChannel? = null
   companion object {
     private const val UPDATE_CHANNEL = "com.topcat432.musifypersonalized/updater"
   }
@@ -31,6 +32,8 @@ class MainActivity : AudioServiceActivity() {
 
   override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
     super.configureFlutterEngine(flutterEngine)
+    strictDeflateChannel?.close()
+    strictDeflateChannel = StrictDeflateChannel(flutterEngine.dartExecutor.binaryMessenger)
     MethodChannel(flutterEngine.dartExecutor.binaryMessenger, UPDATE_CHANNEL)
       .setMethodCallHandler { call, result ->
         try {
@@ -47,6 +50,12 @@ class MainActivity : AudioServiceActivity() {
           result.error("UPDATE_VERIFICATION_FAILED", error.message, null)
         }
       }
+  }
+
+  override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+    strictDeflateChannel?.close()
+    strictDeflateChannel = null
+    super.cleanUpFlutterEngine(flutterEngine)
   }
 
   private fun installedIdentity(): Map<String, Any> {

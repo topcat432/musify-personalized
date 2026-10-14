@@ -1,8 +1,16 @@
 # Single-file ZIP song-list import (F03), 2026-10-14
 
+## Status: PARTIAL
+
+87704dd6 remains the independently qualified stored-only checkpoint. The Android
+strict platform inflater route is now implemented and host-tested, but Android
+runtime/picker/cancellation/backup/restart qualification is pending. Full account
+archives and ordinary multi-file exports remain unsupported. Do not treat F03 as
+complete practical ZIP/account importing.
+
 ## Supported behavior
 
-Choose a local `.zip` / `.ZIP` using stored (uncompressed) entries containing exactly one root-level ordinary CSV,
+Choose a local `.zip` / `.ZIP` containing exactly one root-level ordinary CSV,
 TSV or JSON song-list file. CSV/TSV use the established title/artist parser and
 row order; JSON uses the existing YourLibrary saved-track contract. The outer
 filename and original logical source rows are preserved. Preview discloses the
@@ -23,21 +31,28 @@ retryable error; Musify never silently chooses or flattens an entry.
 - Exactly one local file and one matching central record; offsets, names,
   compression method, CRC and sizes agree. No leading/trailing archive records,
   multi-disk, ZIP64, extra fields, archive/entry comments or data descriptors.
-- Stored (0) only. All compressed modes, including valid fixed/dynamic raw
-  DEFLATE (8), reject with guidance to choose an uncompressed ZIP or select the
-  inner supported file directly. No encrypted entries or optional flags
-  except UTF-8-name indication. Ordinary-file attributes only; no symlink or
+- Stored (0), and raw DEFLATE (8) when the strict Android channel is available.
+  Other platforms / a missing channel fail closed for compressed entries. No
+  encrypted entries or flags except UTF-8-name indication and DEFLATE level hints. Ordinary-file attributes only; no symlink or
   directory. Safe ASCII basename up to 128 bytes; no separators or `..`.
 - Data stays in memory. No extraction, temporary entry file, arbitrary path,
   network resolution, credential, new runtime dependency or schema change.
-- Compressed size equals uncompressed size and exactly covers the bytes between
-  the local header/name and matching central record. Final size and CRC32 cover
-  the entire stored payload; no decoder, decompression or unused input exists.
-- Reader uses the existing cancellation and monotonic 20-second deadline. The
-  stored adapter yields before CRC/parsing for event-loop cancellation and checks
-  its own deadline before/after CRC. Existing JSON depth/10,000-track limits
-  remain; ZIP CSV/TSV cap total rows at 10,000 and reject playlist-prefixed and
-  recognized membership columns.
+- Stored payload covers its exact declared range and has equal stored/decoded
+  sizes. Android DEFLATE uses the standard platform Inflater, not Dart raw
+  decoding: finished must be true, bytes consumed must equal the ZIP payload,
+  and exactly its one documented dummy byte must remain unused/unfed. Final
+  decoded length and CRC32 must also match in Dart before preview.
+- Native input feeds and output buffers are at most16 KiB. Both declared/actual
+  output are capped at8 MiB; overrun is detected before excess is retained.
+  One engine-owned worker runs off the UI thread, rejects overlapping jobs,
+  observes owned request cancellation/interruption and20-second monotonic
+  deadline, and calls Inflater.end in finally. Engine cleanup cancels only its
+  worker. Dart checks the response proof and never falls back to permissive raw
+  decoding; stale cancellation IDs cannot cancel the successor.
+- Existing streamed reader cancellation/deadline and JSON depth/10,000-row
+  limits remain. ZIP CSV/TSV cap total rows at10,000 and reject playlist-prefixed
+  and recognized membership columns. No new durable session fields.
+
 
 
 The picker may cache a native copy before Dart receives it. These limits do not
@@ -69,13 +84,18 @@ all40 actual PNGs remain byte-exact to the retained F02 control; representative
 expected/actual/isolated diff inspected. No reference/comparator updates. Exact
 Linux CI is required; no native feature proof or new signing is claimed.
 
-## Decoder limitation and fail-closed correction
+## Decoder feasibility and strict Android route
 
-The pinned Dart3.12.2 `ZLibDecoder` / `RawZLibFilter` API exposes output chunks,
-not consumed-input bytes or a verified stream-ended indicator. The existing
-archive4.0.9 cache is transitive; its inflater likewise does not expose the
-required completion proof. No new dependency or custom DEFLATE implementation
-is introduced. Compressed ZIP support remains deferred until a trustworthy
-bounded decoder can prove complete consumption/end-of-stream on supported
-platforms. The known-defective f7d150b1 must not be signed. Only a separately authorized
-corrected source/artifact can enter later native qualification.
+The pinned Dart3.12.2 and installed archive4.0.9 APIs cannot supply the required
+completion proof. The existing Android/JDK java.util.zip.Inflater does supply
+finished, consumed input and remaining input, with caller-sized buffers. This
+route adds no dependency, downloaded codec or custom compression implementation.
+[Bounded source/API review and alternatives](STRICT_DEFLATE_FEASIBILITY.md).
+The known-defective f7d150b1 must not be signed; c249 remains independently sealed.
+
+Host result: analysis/113 focused Dart tests and3310 standard-inflater checks
+PASS, including independent fixed/dynamic fixtures, every truncation prefix,
+trailing/concatenated streams, absent BFINAL, output/input/size limits, empty
+blocks, cancellation and deadline boundaries. Method-channel tests are simulated
+transport; host JDK proof is not Android runtime proof. CI must compile the real
+Android bridge and rerun these gates. No signing/device qualification claimed.
