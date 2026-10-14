@@ -1,5 +1,22 @@
 # Musify Personalized current state
 
+## Additive single-file ZIP implementation (F03),2026-10-14
+
+Owner renewed bounded host engineering while emulator admission remains blocked.
+F03 adds an in-memory single-root CSV/TSV/YourLibrary JSON ZIP adapter with strict
+8 MiB input/output, CRC/header/attribute checks and no extraction or schema change.
+See [supported contract and separate acceptance](SPOTIFY_SINGLE_FILE_ZIP_IMPORT.md).
+Analysis and 91 focused serial host tests PASS, including actual inflation limits,
+event-loop cancellation, explicit Save and Hive rollback/close/reopen. Windows
+strict remains FAIL16+24; all40 actuals match retained control. Exact Linux CI
+will qualify this additive source before Android results are attributed.
+Immutable c249395a/version300000015 APK remains independently preserved, checksum
+fed354d5c8594826135863d14fbdc0248d9c54565687934219ffcd1fcd1ef469;
+CI38488825088 PASS527/40 and sign-only38489764474 PASS/Publish skipped.
+Owned5558 emulator checks are reauthorized; fresh04:54:30Z admission projects96.68%
+against80% (26GiB allowance), both disks pass. No emulator launched. Samsung remains
+held. The previous dated all-device hold below is superseded only for owned5558.
+
 ## Stable optional batch and host-only qualification,2026-10-14
 
 F01 source811bc222e22678d45d3c6f6330c3ccca25436679 passes CI38479895933

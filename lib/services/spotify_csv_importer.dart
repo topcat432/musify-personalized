@@ -89,6 +89,7 @@ class SpotifyCsvImporter {
   static SpotifyImportPreview parseBytes(
     Uint8List bytes, {
     required String fileName,
+    bool rejectPlaylistMembership = false,
   }) {
     if (fileName.toLowerCase().endsWith('.json')) {
       return _parseLibraryJson(bytes, fileName);
@@ -111,23 +112,25 @@ class SpotifyCsvImporter {
     }
 
     final headers = rows.first.map(_normalizeHeader).toList(growable: false);
-    if (isTsv &&
-        headers.any(
-          (header) => const {
-            'playlist',
-            'playlist name',
-            'playlist names',
-            'playlist id',
-            'playlist uri',
-            'playlist membership',
-            'playlists',
-            'playlist_name',
-            'playlist_id',
-            'playlist_uri',
-          }.contains(header),
-        )) {
+    if ((rejectPlaylistMembership &&
+            headers.any((header) => header.startsWith('playlist'))) ||
+        ((isTsv || rejectPlaylistMembership) &&
+            headers.any(
+              (header) => const {
+                'playlist',
+                'playlist name',
+                'playlist names',
+                'playlist id',
+                'playlist uri',
+                'playlist membership',
+                'playlists',
+                'playlist_name',
+                'playlist_id',
+                'playlist_uri',
+              }.contains(header),
+            ))) {
       throw const SpotifyImportException(
-        'This TSV includes playlist membership. Use a flat song list; playlist-aware imports are not supported yet.',
+        'This song list includes playlist membership. Use a flat song list; playlist-aware imports are not supported yet.',
       );
     }
     final titleIndex = _findHeader(headers, const [

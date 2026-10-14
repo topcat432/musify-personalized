@@ -8,6 +8,37 @@ import 'package:musify/services/spotify_csv_importer.dart';
 import 'package:musify/services/spotify_import_file_reader.dart';
 
 void main() {
+  test('ZIP declared and actual limits apply before any preview', () async {
+    var listened = false;
+    final stream = Stream<List<int>>.multi((c) {
+      listened = true;
+      c.close();
+    });
+    await expectLater(
+      SpotifyImportFileReader.read(
+        PlatformFile(
+          name: 'owned.ZIP',
+          size: SpotifyCsvImporter.maxJsonBytes + 1,
+          readStream: stream,
+        ),
+      ),
+      throwsA(isA<SpotifyImportException>()),
+    );
+    expect(listened, isFalse);
+    await expectLater(
+      SpotifyImportFileReader.read(
+        PlatformFile(
+          name: 'owned.zip',
+          size: 0,
+          readStream: Stream.fromIterable([
+            Uint8List(SpotifyCsvImporter.maxJsonBytes),
+            [1],
+          ]),
+        ),
+      ),
+      throwsA(isA<SpotifyImportException>()),
+    );
+  });
   test('declared oversize JSON refuses a stream before reading', () async {
     var listened = false;
     final stream = Stream<List<int>>.multi((c) {

@@ -1,5 +1,18 @@
 # Dependency-ordered Musify verification queue
 
+## Renewed emulator scope,2026-10-14
+
+Owner reauthorized the previously planned owned5558 emulator dependency queue;
+Samsung remains held. This supersedes the earlier all-device hold only for that
+isolated target. Fresh04:54:30Z26GiB/80% admission refused at96.68%; disks pass.
+No runtime action occurred. Start with installed018 diagnosis, then exact signed
+c249395a/version300000015 in-place preservation/export/cold restart and F01/F02
+acceptance. Preserve baseline24a/d12f lineage independently; no need to install
+intermediate uninstalled artifacts to advance the consolidated candidate queue.
+F03 single-file ZIP is additive source work and [has separate acceptance rows](SPOTIFY_SINGLE_FILE_ZIP_IMPORT.md).
+Its Android/native gates remain after baseline gates and independently pinned
+artifact provenance. Samsung connectivity cannot substitute for emulator admission.
+
 ## Current owner hold,2026-10-14
 
 No device testing is authorized in this turn. The owner now holds device testing

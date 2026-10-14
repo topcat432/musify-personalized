@@ -79,6 +79,45 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  testWidgets(
+    'ZIP preview discloses entry and saves only after explicit action',
+    (tester) async {
+      await pumpPage(
+        tester,
+        _IoSessionService(sessionWriter: (box, values) => box.putAll(values)),
+      );
+      final bytes = base64Decode(
+        'UEsDBBQAAAAIAOQATl1mdiMFLAAAADMAAAAJAAAAc29uZ3MuY3N2CylKTM5W8EvMTdVxLCrJLC4BszWKNbncMouKS3T8y/NSi7iCU5Pz81KgHABQSwECFAAUAAAACADkAE5dZnYjBSwAAAAzAAAACQAAAAAAAAAAAAAAgAEAAAAAc29uZ3MuY3N2UEsFBgAAAAABAAEANwAAAFMAAAAAAA==',
+      );
+      picker.results.add(
+        Future.value(
+          FilePickerResult([
+            PlatformFile(name: 'owned.ZIP', size: bytes.length, bytes: bytes),
+          ]),
+        ),
+      );
+      await tester.tap(button('Choose song list file'));
+      await tester.pumpAndSettle();
+      expect(picker.extensions, ['csv', 'tsv', 'json', 'zip']);
+      expect(find.textContaining('ZIP entry: songs.csv'), findsOneWidget);
+      expect(Hive.box('user').get('spotifyImportTracks'), isNull);
+      await tester.tap(button('Save and continue'));
+      await tester.pump();
+      await settleSave(tester);
+      expect(find.text('Ready for matching'), findsOneWidget);
+      expect(
+        (Hive.box('user').get('spotifyImportTracks') as List).map(
+          (t) => t['title'],
+        ),
+        ['First', 'Second'],
+      );
+      expect(
+        Hive.box('user').get('spotifyImportMetadata')['fileName'],
+        'owned.ZIP',
+      );
+    },
+  );
+
   testWidgets('saved picker cancellation retains ready and outcomes', (
     tester,
   ) async {
@@ -309,7 +348,7 @@ void main() {
       await pumpPage(tester, const _IoSessionService());
       await tester.tap(button('Choose song list file'));
       await tester.pumpAndSettle();
-      expect(picker.extensions, ['csv', 'tsv', 'json']);
+      expect(picker.extensions, ['csv', 'tsv', 'json', 'zip']);
       expect(find.text('Generic music TSV'), findsOneWidget);
       expect(find.text('First, original'), findsOneWidget);
       expect(Hive.box('user').containsKey('spotifyImportTracks'), isFalse);
@@ -410,7 +449,7 @@ void main() {
       await pumpPage(tester, const _IoSessionService());
       await tester.tap(button('Choose song list file'));
       await tester.pumpAndSettle();
-      expect(picker.extensions, ['csv', 'tsv', 'json']);
+      expect(picker.extensions, ['csv', 'tsv', 'json', 'zip']);
       expect(picker.streamed, isTrue);
       expect(picker.inMemory, isFalse);
       expect(find.text('Spotify saved tracks JSON'), findsOneWidget);

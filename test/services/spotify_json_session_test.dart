@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:musify/services/spotify_csv_importer.dart';
+import 'package:musify/services/spotify_zip_importer.dart';
 import 'package:musify/services/spotify_import_session_service.dart';
 
 void main() {
@@ -93,6 +94,55 @@ void main() {
       );
       expect(box.get('spotifyImportMetadata')['version'], 1);
       expect(box.get('likedSongs'), ['keep-liked']);
+    },
+  );
+  test(
+    'ZIP partial save rolls back then ordinary retry survives Hive reopen',
+    () async {
+      var box = Hive.box('user');
+      await box.putAll({
+        'likedSongs': ['keep'],
+        'spotifyImportTracks': [
+          {'title': 'Old'},
+        ],
+        'spotifyMatchResults': [
+          {'status': 'accepted'},
+        ],
+        'spotifyExcludedImportRows': [7],
+      });
+      final before = Map<dynamic, dynamic>.from(box.toMap());
+      final preview = await SpotifyZipImporter.parseBytes(
+        base64Decode(
+          'UEsDBBQAAAAIAOQATl1mdiMFLAAAADMAAAAJAAAAc29uZ3MuY3N2CylKTM5W8EvMTdVxLCrJLC4BszWKNbncMouKS3T8y/NSi7iCU5Pz81KgHABQSwECFAAUAAAACADkAE5dZnYjBSwAAAAzAAAACQAAAAAAAAAAAAAAgAEAAAAAc29uZ3MuY3N2UEsFBgAAAAABAAEANwAAAFMAAAAAAA==',
+        ),
+        fileName: 'owned.zip',
+      );
+      final failed = SpotifyImportSessionService(
+        sessionWriter: (target, values) async {
+          await target.put(
+            'spotifyImportTracks',
+            values['spotifyImportTracks'],
+          );
+          throw StateError('Owned ZIP failure');
+        },
+      );
+      await expectLater(failed.saveNewImport(preview), throwsStateError);
+      await Hive.close();
+      box = await Hive.openBox('user');
+      expect(box.toMap(), before);
+      await const SpotifyImportSessionService().saveNewImport(preview);
+      await Hive.close();
+      box = await Hive.openBox('user');
+      expect((box.get('spotifyImportTracks') as List).map((t) => t['title']), [
+        'First',
+        'Second',
+      ]);
+      expect(
+        (box.get('spotifyImportTracks') as List).map((t) => t['sourceRow']),
+        [2, 3],
+      );
+      expect(box.get('likedSongs'), ['keep']);
+      expect(box.get('spotifyImportMetadata')['fileName'], 'owned.zip');
     },
   );
 }

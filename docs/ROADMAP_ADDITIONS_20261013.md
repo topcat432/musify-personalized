@@ -75,3 +75,9 @@ commit and baseline24a/d12f stay preserved. Native admission was checked once
 2026-10-13T22:54:37Z:33760817152 committed/72846569472 limit plus26GiB =>84.67%;
 no baseline launch. Existing file-picker/native cached-file stream support was
 inspected; actual Android picker and full data/restart acceptance remain queued.
+## F03 single-file ZIP slice,2026-10-14
+
+Bounded offline ZIP wrapping exactly one existing flat CSV/TSV or saved-track JSON
+is now an additive implementation; [contract and acceptance](SPOTIFY_SINGLE_FILE_ZIP_IMPORT.md).
+This does not fulfill multi-file account archives, full playlist membership or
+synchronization. Analysis/91 focused host tests PASS; exact Linux CI and signed/native gates remain.
