@@ -113,7 +113,7 @@ void main() {
       final before = Map<dynamic, dynamic>.from(box.toMap());
       final preview = await SpotifyZipImporter.parseBytes(
         base64Decode(
-          'UEsDBBQAAAAIAOQATl1mdiMFLAAAADMAAAAJAAAAc29uZ3MuY3N2CylKTM5W8EvMTdVxLCrJLC4BszWKNbncMouKS3T8y/NSi7iCU5Pz81KgHABQSwECFAAUAAAACADkAE5dZnYjBSwAAAAzAAAACQAAAAAAAAAAAAAAgAEAAAAAc29uZ3MuY3N2UEsFBgAAAAABAAEANwAAAFMAAAAAAA==',
+          'UEsDBBQAAAAAALwETl1mdiMFMwAAADMAAAAJAAAAc29uZ3MuY3N2VHJhY2sgTmFtZSxBcnRpc3QgTmFtZShzKQpGaXJzdCxPd25lcgpTZWNvbmQsT3duZXIKUEsBAhQAFAAAAAAAvAROXWZ2IwUzAAAAMwAAAAkAAAAAAAAAAAAAAIABAAAAAHNvbmdzLmNzdlBLBQYAAAAAAQABADcAAABaAAAAAAA=',
         ),
         fileName: 'owned.zip',
       );
@@ -143,6 +143,35 @@ void main() {
       );
       expect(box.get('likedSongs'), ['keep']);
       expect(box.get('spotifyImportMetadata')['fileName'], 'owned.zip');
+    },
+  );
+  test(
+    'unsupported compressed ZIP leaves completed Hive session unchanged after reopen',
+    () async {
+      var box = Hive.box('user');
+      await box.putAll({
+        'likedSongs': ['keep'],
+        'spotifyImportTracks': [
+          {'title': 'Old'},
+        ],
+        'spotifyMatchResults': [
+          {'status': 'accepted'},
+        ],
+        'spotifyExcludedImportRows': [7],
+      });
+      final before = Map<dynamic, dynamic>.from(box.toMap());
+      await expectLater(
+        SpotifyZipImporter.parseBytes(
+          base64Decode(
+            'UEsDBBQAAAAIAAEETl20IWK1LgAAABkAAAAJAAAAc29uZ3MuY3N2C8ksyUnVcSwqySwu4XLLLCou0fEvz0st4gIAb3duZWQgdHJhaWxpbmcgZGF0YVBLAQIUABQAAAAIAAEETl20IWK1LgAAABkAAAAJAAAAAAAAAAAAAACAAQAAAABzb25ncy5jc3ZQSwUGAAAAAAEAAQA3AAAAVQAAAAAA',
+          ),
+          fileName: 'owned.zip',
+        ),
+        throwsA(isA<SpotifyImportException>()),
+      );
+      await Hive.close();
+      box = await Hive.openBox('user');
+      expect(box.toMap(), before);
     },
   );
 }

@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:musify/services/spotify_csv_importer.dart';
@@ -57,7 +56,11 @@ class SpotifyZipImporter {
     final method = u16(central + 10);
     // No encryption, data descriptors or other optional flag semantics.
     require(flags == 0 || flags == 0x800);
-    require(method == 0 || method == 8);
+    if (method != 0) {
+      _fail(
+        'This ZIP uses compressed entries. Choose an uncompressed (stored) ZIP or select its CSV, TSV or JSON file directly.',
+      );
+    }
     final crc = u32(central + 16);
     final compressedSize = u32(central + 20);
     final size = u32(central + 24);
@@ -92,44 +95,13 @@ class SpotifyZipImporter {
       require(bytes[30 + i] == nameBytes[i]);
     }
     final payload = Uint8List.sublistView(bytes, start, central);
-    Uint8List decoded;
-    if (method == 0) {
-      require(compressedSize == size);
-      decoded = payload;
-    } else {
-      final output = BytesBuilder(copy: false);
-      // Small input chunks bound individual decoder output allocations too;
-      // advertised lengths are never trusted to limit inflation.
-      Stream<List<int>> chunks() async* {
-        for (var p = 0; p < payload.length; p += 256) {
-          if (p % 4096 == 0) await Future<void>.delayed(Duration.zero);
-          checkCancelled();
-          yield Uint8List.sublistView(
-            payload,
-            p,
-            (p + 256).clamp(0, payload.length),
-          );
-        }
-      }
-
-      try {
-        await for (final chunk in chunks().transform(ZLibDecoder(raw: true))) {
-          checkCancelled();
-          if (output.length + chunk.length > maxBytes ||
-              output.length + chunk.length > size) {
-            _fail('The decoded ZIP song list exceeds its allowed size.');
-          }
-          output.add(chunk);
-        }
-        decoded = output.takeBytes();
-      } on SpotifyImportException {
-        rethrow;
-      } catch (_) {
-        _fail('The ZIP compressed song list is damaged.');
-      }
-    }
+    require(compressedSize == size);
+    final decoded = payload;
+    // Let an already queued Back/cancel event run before bounded CRC/parsing.
+    await Future<void>.delayed(Duration.zero);
     checkCancelled();
     require(decoded.length == size && _crc32(decoded) == crc);
+    checkCancelled();
     final preview = SpotifyCsvImporter.parseBytes(
       decoded,
       fileName: name,

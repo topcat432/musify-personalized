@@ -146,7 +146,7 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
             icon: Icons.file_upload_outlined,
             title: 'Start with your song list',
             description:
-                'Choose a flat CSV, TSV, Spotify YourLibrary JSON, or a ZIP containing one song list. Musify checks every row before anything is saved.',
+                'Choose a flat CSV, TSV, Spotify YourLibrary JSON, or an uncompressed ZIP containing one song list. Musify checks every row before anything is saved.',
           ),
           const SizedBox(height: 24),
           PersonalizedReveal(
@@ -157,7 +157,7 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
                 const PersonalizedSectionHeading(
                   title: 'Source file',
                   description:
-                      'CSV/TSV need title and artist columns. JSON imports saved tracks from YourLibrary. ZIP accepts one flat file, up to 8 MiB.',
+                      'CSV/TSV need title and artist columns. JSON imports saved tracks from YourLibrary. ZIP accepts one uncompressed flat file, up to 8 MiB.',
                 ),
                 const SizedBox(height: 12),
                 _CsvPickerSurface(

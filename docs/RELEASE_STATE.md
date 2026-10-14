@@ -1,5 +1,18 @@
 # Musify Personalized current state
 
+## F03 integrity correction,2026-10-14
+
+Post-CI adversarial tests exposed a real decoder limitation: truncated or trailing
+DEFLATE payloads can pass Dart raw decoding with valid output CRC/length. Existing
+APIs expose no verified consumed-input/end marker. F03 now fails closed for all
+compressed ZIP methods, including valid fixed/dynamic DEFLATE; only uncompressed
+stored entries are supported, with exact envelope/size/CRC and cancellation.
+Initial f7d150b1 CI38515969269 PASS566/40 does not qualify this gap and must not
+be signed. Corrective analysis and96 focused serial tests PASS; exact-source CI is pending.
+[Actual supported contract](SPOTIFY_SINGLE_FILE_ZIP_IMPORT.md). Preserved signed
+c249 remains independent and contains no F03. Latest05:31:18Z emulator admission
+refused105.54% projected commit; no device command occurred. Samsung remains held.
+
 ## Additive single-file ZIP implementation (F03),2026-10-14
 
 Owner renewed bounded host engineering while emulator admission remains blocked.
