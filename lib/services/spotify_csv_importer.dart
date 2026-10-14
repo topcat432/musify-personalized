@@ -60,6 +60,7 @@ class SpotifyImportPreview {
     required this.tracks,
     required this.rejectedRows,
     this.notices = const [],
+    this.sourceEntryName,
   });
 
   final String fileName;
@@ -68,6 +69,7 @@ class SpotifyImportPreview {
   final List<SpotifyImportTrack> tracks;
   final List<SpotifyRejectedRow> rejectedRows;
   final List<String> notices;
+  final String? sourceEntryName;
 }
 
 class SpotifyImportException implements Exception {

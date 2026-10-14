@@ -23,6 +23,52 @@ void main() {
     if (await hiveRoot.exists()) await hiveRoot.delete(recursive: true);
   });
 
+  test(
+    'selected archive provenance survives saved-file inspection, restore and reopen',
+    () async {
+      final user = await Hive.openBox('user');
+      final settings = await Hive.openBox('settings');
+      await user.putAll({
+        'spotifyImportMetadata': {
+          'version': 1,
+          'fileName': 'account.zip',
+          'sourceEntryName': 'second.tsv',
+        },
+        'spotifyImportTracks': <dynamic>[],
+        'likedSongs': ['keep'],
+      });
+      await settings.put('wrappedEnabled', true);
+      await user.flush();
+      await settings.flush();
+      final before = jsonDecode(jsonEncode(user.toMap()));
+      final payloads = <String, Uint8List>{
+        'user': await File(user.path!).readAsBytes(),
+        'settings': await File(settings.path!).readAsBytes(),
+      };
+      final saved =
+          await MusifyBackupService.createStreamedBundleFileForTesting(
+            payloads,
+            hiveRoot,
+          );
+      final inspected = await MusifyBackupService.inspectBundleFileForTesting(
+        saved,
+      );
+      await user.clear();
+      await user.put('sentinel', 'replace only on verified restore');
+      final result = await MusifyBackupService.restoreValidatedBackup(
+        inspected,
+      );
+      expect(result.success, isTrue, reason: result.message);
+      await Hive.close();
+      final reopened = await Hive.openBox('user');
+      expect(reopened.toMap(), before);
+      expect(
+        reopened.get('spotifyImportMetadata')['sourceEntryName'],
+        'second.tsv',
+      );
+    },
+  );
+
   Future<ValidatedBackup> candidate() async {
     final payloads = await _createMatchingPayloads(
       importedTracks: 3,

@@ -7,6 +7,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:musify/services/spotify_csv_importer.dart';
 import 'package:musify/services/spotify_import_session_service.dart';
+import 'package:musify/services/spotify_zip_archive.dart';
+import '../support/spotify_zip_fixtures.dart';
 
 void main() {
   late Directory hiveRoot;
@@ -21,6 +23,59 @@ void main() {
     await Hive.close();
     if (await hiveRoot.exists()) await hiveRoot.delete(recursive: true);
   });
+
+  for (final prior in [
+    <String, dynamic>{'fileName': 'legacy.csv'},
+    <String, dynamic>{'fileName': 'old.zip', 'sourceEntryName': 'old.csv'},
+  ]) {
+    test(
+      'entry provenance rollback, old state and restart ${prior['fileName']}',
+      () async {
+        final box = Hive.box('user');
+        await box.putAll({
+          'spotifyImportMetadata': prior,
+          'likedSongs': ['keep'],
+        });
+        final before = jsonDecode(jsonEncode(box.toMap()));
+        final preview = await SpotifyZipArchive.inspect(
+          SpotifyZipFixtures.selectedLists(),
+        ).parseEntry('second.tsv', fileName: 'account.zip');
+        await expectLater(
+          SpotifyImportSessionService(
+            sessionWriter: (target, values) async {
+              await target.putAll(values);
+              throw StateError('Owned partial write');
+            },
+          ).saveNewImport(preview),
+          throwsStateError,
+        );
+        expect(box.toMap(), before);
+        await Hive.close();
+        await Hive.openBox('user');
+        expect(Hive.box('user').toMap(), before);
+        await const SpotifyImportSessionService().saveNewImport(preview);
+        await Hive.close();
+        await Hive.openBox('user');
+        expect(
+          Hive.box('user').get('spotifyImportMetadata')['sourceEntryName'],
+          'second.tsv',
+        );
+        expect(Hive.box('user').get('likedSongs'), ['keep']);
+        await const SpotifyImportSessionService().saveNewImport(
+          SpotifyCsvImporter.parseBytes(
+            Uint8List.fromList(utf8.encode('Title,Artist\nNext,Owner\n')),
+            fileName: 'next.csv',
+          ),
+        );
+        expect(
+          (Hive.box('user').get('spotifyImportMetadata') as Map).containsKey(
+            'sourceEntryName',
+          ),
+          isFalse,
+        );
+      },
+    );
+  }
 
   for (final failFirst in [false, true]) {
     test(

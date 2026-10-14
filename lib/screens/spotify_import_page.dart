@@ -17,6 +17,7 @@ import 'package:musify/services/spotify_android_deflate_decoder.dart';
 import 'package:musify/services/spotify_csv_importer.dart';
 import 'package:musify/services/spotify_import_file_reader.dart';
 import 'package:musify/services/spotify_import_session_service.dart';
+import 'package:musify/services/spotify_zip_archive.dart';
 import 'package:musify/services/spotify_zip_importer.dart';
 import 'package:musify/widgets/personalized_ui.dart';
 
@@ -77,14 +78,50 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
       );
       if (!mounted) return;
 
-      final preview = selectedFile.name.toLowerCase().endsWith('.zip')
-          ? await SpotifyZipImporter.parseBytes(
-              bytes,
-              fileName: selectedFile.name,
-              cancelled: cancellation.future,
-              decodeDeflate: widget.decodeDeflate,
-            )
-          : SpotifyCsvImporter.parseBytes(bytes, fileName: selectedFile.name);
+      SpotifyImportPreview preview;
+      if (selectedFile.name.toLowerCase().endsWith('.zip')) {
+        final archive = SpotifyZipArchive.inspect(bytes);
+        final name = archive.entries.length == 1
+            ? archive.entries.single.name
+            : await showDialog<String>(
+                context: context,
+                builder: (context) => SimpleDialog(
+                  title: const Text('Choose a song list from this ZIP'),
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 8,
+                      ),
+                      child: Text(
+                        'Only the selected file will be previewed. Playlist membership and synchronization are not supported.',
+                      ),
+                    ),
+                    for (final entry in archive.entries)
+                      SimpleDialogOption(
+                        onPressed: () => Navigator.pop(context, entry.name),
+                        child: Text(entry.name),
+                      ),
+                    SimpleDialogOption(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Cancel'),
+                    ),
+                  ],
+                ),
+              );
+        if (!mounted || name == null) return;
+        preview = await archive.parseEntry(
+          name,
+          fileName: selectedFile.name,
+          cancelled: cancellation.future,
+          decodeDeflate: widget.decodeDeflate,
+        );
+      } else {
+        preview = SpotifyCsvImporter.parseBytes(
+          bytes,
+          fileName: selectedFile.name,
+        );
+      }
 
       if (!mounted) return;
       setState(() {
@@ -150,7 +187,7 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
             icon: Icons.file_upload_outlined,
             title: 'Start with your song list',
             description:
-                'Choose a flat CSV, TSV, Spotify YourLibrary JSON, or a ZIP containing one song list. Musify checks every row before anything is saved.',
+                'Choose a flat CSV, TSV, Spotify YourLibrary JSON, or select a song list from a ZIP. Musify checks every row before anything is saved.',
           ),
           const SizedBox(height: 24),
           PersonalizedReveal(
@@ -161,7 +198,7 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
                 const PersonalizedSectionHeading(
                   title: 'Source file',
                   description:
-                      'CSV/TSV need title and artist columns. JSON imports saved tracks from YourLibrary. ZIP accepts one flat file, up to 8 MiB. Compressed ZIP requires Android.',
+                      'CSV/TSV need title and artist columns. JSON imports saved tracks from YourLibrary. ZIP supports explicit file selection, up to 8 MiB. Compressed ZIP requires Android.',
                 ),
                 const SizedBox(height: 12),
                 _CsvPickerSurface(

@@ -13,6 +13,7 @@ import 'package:musify/screens/spotify_import_page.dart';
 import 'package:musify/services/spotify_import_session_service.dart';
 import 'package:musify/services/spotify_csv_importer.dart';
 import 'package:musify/services/spotify_import_file_reader.dart';
+import '../support/spotify_zip_fixtures.dart';
 
 void main() {
   late Directory root;
@@ -642,6 +643,86 @@ void main() {
         final box = await Hive.openBox('user');
         expect(box.get('spotifyImportTracks')[0]['title'], 'Next');
         expect(box.get('likedSongs'), ['keep']);
+      });
+      expect(tester.takeException(), isNull);
+    },
+  );
+  testWidgets(
+    'archive choice cancel and unsupported membership retain prior work before selected save and reopen',
+    (tester) async {
+      await pumpPage(
+        tester,
+        _IoSessionService(sessionWriter: (box, values) => box.putAll(values)),
+      );
+      await choose(tester, 'Old');
+      await tester.tap(button('Save and continue'));
+      await tester.pump();
+      await settleSave(tester);
+      await tester.runAsync(
+        () => Hive.box('user').putAll({
+          'likedSongs': ['keep'],
+          'spotifyMatchResults': [
+            {'status': 'accepted', 'ytid': 'selected-old'},
+          ],
+          'spotifyExcludedImportRows': [7],
+        }),
+      );
+      final before = jsonDecode(jsonEncode(Hive.box('user').toMap()));
+      Future<void> openArchive() async {
+        final bytes = SpotifyZipFixtures.selectedLists();
+        picker.results.add(
+          Future.value(
+            FilePickerResult([
+              PlatformFile(
+                name: 'account.zip',
+                size: bytes.length,
+                bytes: bytes,
+              ),
+            ]),
+          ),
+        );
+        await tester.tap(button('Choose song list file'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+        expect(find.text('Choose a song list from this ZIP'), findsOneWidget);
+        expect(Hive.box('user').toMap(), before);
+      }
+
+      await openArchive();
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(find.text('Ready for matching'), findsOneWidget);
+      expect(Hive.box('user').toMap(), before);
+      await openArchive();
+      await tester.tap(find.text('Playlist.json'));
+      await tester.pumpAndSettle();
+      expect(find.text('This file could not be read'), findsOneWidget);
+      expect(Hive.box('user').toMap(), before);
+      await openArchive();
+      await tester.tap(find.text('second.tsv'));
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining('2 other archive files were not imported'),
+        findsOneWidget,
+      );
+      expect(find.text('Second'), findsWidgets);
+      expect(Hive.box('user').toMap(), before);
+      await tester.tap(button('Save and continue'));
+      await tester.pump();
+      await settleSave(tester);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+      await tester.runAsync(() async {
+        await Hive.close();
+        final box = await Hive.openBox('user');
+        expect(box.get('spotifyImportTracks')[0]['title'], 'Second');
+        expect(box.get('spotifyImportTracks')[0]['sourceRow'], 2);
+        expect(box.get('likedSongs'), ['keep']);
+        expect(box.get('spotifyImportMetadata')['fileName'], 'account.zip');
+        expect(
+          box.get('spotifyImportMetadata')['sourceEntryName'],
+          'second.tsv',
+        );
       });
       expect(tester.takeException(), isNull);
     },

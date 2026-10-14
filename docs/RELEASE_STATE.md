@@ -1,5 +1,18 @@
 # Musify Personalized current state
 
+## F04-A explicit archive selection,2026-10-14
+
+Expanded owner direction authorizes continuous planned host milestones while
+native admission is blocked. Explicit bounded multi-entry ZIP choice is now
+implemented; [contract](SPOTIFY_ARCHIVE_SELECTION.md). Selected source entry
+provenance survives the existing controlled metadata write; memberships still
+reject instead of flattening.89 focused tests/analysis and the saved-file
+backup restore/reopen regression PASS. Windows strict FAIL16+24, all40 actual
+images unchanged from control. Exact-source CI pending. No new codec/dependency/permission/adapter. This is
+not full Spotify account archive fulfillment. Immutable signed c249 and its
+native queue remain separate; no device/signing action. Next is membership-aware
+JSON source modeling with precise producer compatibility and preservation.
+
 ## File cleanup and early ZIP row-budget correction,2026-10-14
 
 A controlled-clock regression reproduced an indefinitely pending streamed read
@@ -13,7 +26,7 @@ logical positions and ignored trailing blank records retain their semantics.
 Real Hive widget regressions cover old session/decisions/exclusions/favorites,
 close/reopen, late cleanup failure, successor preview and explicit Save/reopen.
 Analysis and86 focused tests PASS; Windows strict FAIL16+24, with all40 actual
-images byte-identical to retained control. Exact-source Linux CI is pending. No schema/dependency,
+images byte-identical to retained control. Exact2371f1b6 CI38583443183 PASS598/40,3310 inflater checks and all required Android builds. No schema/dependency,
 reference-image, signing or device change; F03 remains PARTIAL.
 
 ## F03 stalled transport correction,2026-10-14

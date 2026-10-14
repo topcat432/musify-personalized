@@ -143,6 +143,7 @@ class SpotifyZipImporter {
     return SpotifyImportPreview(
       fileName: fileName,
       format: '${preview.format} in ZIP',
+      sourceEntryName: name,
       totalDataRows: preview.totalDataRows,
       tracks: preview.tracks,
       rejectedRows: preview.rejectedRows,

@@ -59,6 +59,8 @@ class SpotifyImportSessionService {
       'spotifyImportMetadata': <String, dynamic>{
         'version': 1,
         'fileName': preview.fileName,
+        if (preview.sourceEntryName != null)
+          'sourceEntryName': preview.sourceEntryName,
         'format': preview.format,
         'validTrackCount': preview.tracks.length,
         'rejectedRowCount': preview.rejectedRows.length,
