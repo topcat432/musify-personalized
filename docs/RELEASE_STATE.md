@@ -1,5 +1,17 @@
 # Musify Personalized current state
 
+## F04-B membership draft model,2026-10-14
+
+A separate transient named-playlist JSON source model now preserves ordered
+memberships, repeated recording references and unavailable/local/non-song gaps,
+including available source labels and original added-date strings. Same-URI
+conflicts reject; distinct recording URIs never merge merely by title/artist.
+[Precise producer contract and next durable gate](SPOTIFY_PLAYLIST_DRAFT.md).
+Analysis/88 focused tests PASS; Windows strict FAIL16+24/all40 actuals unchanged.
+Exact-source CI pending. UI still rejects playlist JSON until controlled durable
+membership/review/routing/backup/restart support is connected. No schema or
+installed baseline change; signed c249 native acceptance remains separate.
+
 ## F04-A explicit archive selection,2026-10-14
 
 Expanded owner direction authorizes continuous planned host milestones while
@@ -8,7 +20,7 @@ implemented; [contract](SPOTIFY_ARCHIVE_SELECTION.md). Selected source entry
 provenance survives the existing controlled metadata write; memberships still
 reject instead of flattening.89 focused tests/analysis and the saved-file
 backup restore/reopen regression PASS. Windows strict FAIL16+24, all40 actual
-images unchanged from control. Exact-source CI pending. No new codec/dependency/permission/adapter. This is
+images unchanged from control. Exact597cd242 CI38589804406 PASS624/40,3310 inflater checks and all required builds. No new codec/dependency/permission/adapter. This is
 not full Spotify account archive fulfillment. Immutable signed c249 and its
 native queue remain separate; no device/signing action. Next is membership-aware
 JSON source modeling with precise producer compatibility and preservation.

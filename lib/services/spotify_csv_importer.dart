@@ -312,25 +312,29 @@ class SpotifyCsvImporter {
     }
   }
 
-  static SpotifyImportPreview _parseLibraryJson(
-    Uint8List bytes,
-    String fileName,
-  ) {
+  /// Shared bounded JSON envelope; individual adapters validate their schema.
+  static Object? decodeBoundedJson(Uint8List bytes) {
     if (bytes.length > maxJsonBytes) {
       throw const SpotifyImportException(
         'JSON song lists must be 8 MiB or smaller.',
       );
     }
-    dynamic document;
     try {
       final text = utf8.decode(bytes).replaceFirst('\ufeff', '');
       _validateJsonStructure(text);
-      document = jsonDecode(text);
+      return jsonDecode(text);
     } on FormatException {
       throw const SpotifyImportException(
         'The selected JSON is malformed or is not valid UTF-8.',
       );
     }
+  }
+
+  static SpotifyImportPreview _parseLibraryJson(
+    Uint8List bytes,
+    String fileName,
+  ) {
+    final document = decodeBoundedJson(bytes);
     const sections = [
       'albums',
       'shows',
