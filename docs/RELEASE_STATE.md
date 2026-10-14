@@ -1,5 +1,21 @@
 # Musify Personalized current state
 
+## F04-C durable named-playlist intake/review,2026-10-14
+
+Direct JSON and selected ZIP payloads now connect the precise named-playlist
+producer model to explicit preview/Save, version1 membership metadata and retained
+source review from the hub. Ordered/repeated memberships, unsupported item labels
+and dates survive checkpoint, routing retry, backup restore and restart. Missing
+reference rows reject before writes; old absence is readable, and malformed or
+forward-version data is retained with an error. Same-URI artist lists compare
+structurally, and supplied track-ID conflicts retain an unsupported member at its
+original position. [Contract](SPOTIFY_PLAYLIST_MEMBERSHIP.md). No global adapter,
+backup format, dependency or permission change. Analysis and651 aggregate tests
+PASS; final targeted suites and both strict Windows suites ran. Windows remains
+FAIL16+24/all40 actuals unchanged. Exact-source CI pending. Native/signing/phone
+qualification is separate; c249 unchanged. Source-playlist recreation and repeat
+synchronization are not implemented and are the next roadmap milestones.
+
 ## F04-B membership draft model,2026-10-14
 
 A separate transient named-playlist JSON source model now preserves ordered
@@ -8,7 +24,7 @@ including available source labels and original added-date strings. Same-URI
 conflicts reject; distinct recording URIs never merge merely by title/artist.
 [Precise producer contract and next durable gate](SPOTIFY_PLAYLIST_DRAFT.md).
 Analysis/88 focused tests PASS; Windows strict FAIL16+24/all40 actuals unchanged.
-Exact-source CI pending. UI still rejects playlist JSON until controlled durable
+Exacte9379828 CI38591350970 PASS636/40,3310 inflater checks and all builds. This source-model checkpoint still rejected playlist JSON until controlled durable
 membership/review/routing/backup/restart support is connected. No schema or
 installed baseline change; signed c249 native acceptance remains separate.
 

@@ -1,5 +1,7 @@
 # F04-B playlist membership draft model,2026-10-14
 
+Current successor: [F04-C membership intake/review](SPOTIFY_PLAYLIST_MEMBERSHIP.md) connects compatible named-playlist JSON to controlled Save and retained source review. Earlier statements below describe their checkpoint scope. Full account schemas, playlist recreation, synchronization and native qualification remain unfulfilled.
+
 Status: source-model milestone only. No UI Save, durable membership or playlist
 recreation is claimed. Existing YourLibrary/ZIP UI still rejects playlist JSON
 instead of discarding its membership. Signed c249 remains independently sealed.

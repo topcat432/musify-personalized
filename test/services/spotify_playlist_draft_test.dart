@@ -132,6 +132,85 @@ void main() {
       expect(draft.playlists.last.members, isEmpty);
     },
   );
+  test(
+    'same-URI comma-joined artist collision rejects structurally distinct lists',
+    () {
+      final one = song('C' * 22);
+      (one['track'] as Map)['artists'] = [
+        {'name': 'Earth, Wind & Fire'},
+      ];
+      final two = song('C' * 22);
+      (two['track'] as Map)['artists'] = [
+        {'name': 'Earth'},
+        {'name': 'Wind & Fire'},
+      ];
+      final oneOnly = SpotifyPlaylistDraft.parseBytes(
+        bytes({
+          'playlists': [
+            {
+              'name': 'One',
+              'tracks': [one],
+            },
+          ],
+        }),
+      );
+      expect(oneOnly.tracks.single.artist, 'Earth, Wind & Fire');
+      expect(
+        () => SpotifyPlaylistDraft.parseBytes(
+          bytes({
+            'playlists': [
+              {
+                'name': 'One',
+                'tracks': [one, two],
+              },
+            ],
+          }),
+        ),
+        rejected,
+      );
+      final same = song('C' * 22);
+      (same['track'] as Map)['artists'] = [
+        {'name': ' Earth, Wind & Fire '},
+      ];
+      expect(
+        SpotifyPlaylistDraft.parseBytes(
+          bytes({
+            'playlists': [
+              {
+                'name': 'One',
+                'tracks': [one, same],
+              },
+            ],
+          }),
+        ).tracks,
+        hasLength(1),
+      );
+    },
+  );
+  test('nested explicit ID mismatch retains unsupported member position', () {
+    final mismatch = song('A' * 22);
+    (mismatch['track'] as Map)['id'] = 'B' * 22;
+    final good = song('A' * 22);
+    (good['track'] as Map)['id'] = 'A' * 22;
+    final draft = SpotifyPlaylistDraft.parseBytes(
+      bytes({
+        'playlists': [
+          {
+            'name': 'One',
+            'tracks': [mismatch, good, song('C' * 22)],
+          },
+        ],
+      }),
+    );
+    expect(draft.playlists.single.members.map((m) => m.position), [1, 2, 3]);
+    expect(draft.playlists.single.members.first.sourceRow, isNull);
+    expect(
+      draft.playlists.single.members.first.issue,
+      'Conflicting Spotify track ID and URI',
+    );
+    expect(draft.tracks.map((t) => t.sourceRow), [2, 3]);
+    expect(draft.tracks.first.spotifyTrackId, 'A' * 22);
+  });
   test('conflicting same-URI metadata fails without merging recordings', () {
     expect(
       () => SpotifyPlaylistDraft.parseBytes(

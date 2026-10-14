@@ -1,31 +1,7 @@
 import 'dart:typed_data';
 import 'package:musify/services/spotify_csv_importer.dart';
-
-class SpotifyPlaylistMember {
-  const SpotifyPlaylistMember({
-    required this.position,
-    required this.sourceRow,
-    required this.issue,
-    this.sourceMetadata = const {},
-  });
-  final int position;
-  final int? sourceRow;
-  final String? issue;
-  final Map<String, String> sourceMetadata;
-}
-
-class SpotifySourcePlaylist {
-  const SpotifySourcePlaylist({
-    required this.position,
-    required this.name,
-    required this.spotifyUri,
-    required this.members,
-  });
-  final int position;
-  final String name;
-  final String? spotifyUri;
-  final List<SpotifyPlaylistMember> members;
-}
+import 'package:musify/services/spotify_source_playlist.dart';
+export 'package:musify/services/spotify_source_playlist.dart';
 
 /// Transient membership model only: no save or routing adapter may flatten it.
 /// Compatibility: caseychu/spotify-backup named playlists with Web API tracks.
@@ -34,6 +10,40 @@ class SpotifyPlaylistDraft {
   final List<SpotifyImportTrack> tracks;
   final List<SpotifySourcePlaylist> playlists;
   final int ignoredAlbums;
+  SpotifyImportPreview toPreview({required String fileName}) {
+    if (tracks.isEmpty)
+      throw const SpotifyImportException(
+        'This playlist backup has no supported songs to match. Its source items were not changed.',
+      );
+    final rejected = <SpotifyRejectedRow>[];
+    var row = 0;
+    for (final source in playlists) {
+      for (final member in source.members) {
+        row++;
+        if (member.issue != null)
+          rejected.add(
+            SpotifyRejectedRow(
+              sourceRow: row,
+              reason:
+                  '${source.name}, item ${member.position}: ${member.issue}',
+            ),
+          );
+      }
+    }
+    return SpotifyImportPreview(
+      fileName: fileName,
+      format: 'Named Spotify playlist backup',
+      totalDataRows: row,
+      tracks: tracks,
+      rejectedRows: List.unmodifiable(rejected),
+      sourcePlaylists: playlists,
+      notices: [
+        '${playlists.length} source playlists and $row ordered memberships will be retained. ${tracks.length} unique Spotify recordings will be matched once. Unsupported items stay in source review; playlist recreation and repeat synchronization are not implemented.',
+        if (ignoredAlbums > 0) '$ignoredAlbums saved albums were not imported.',
+      ],
+    );
+  }
+
   static const maxPlaylists = 200;
   static const maxMemberships = 10000;
 
@@ -70,6 +80,7 @@ class SpotifyPlaylistDraft {
     final tracks = <SpotifyImportTrack>[];
     final playlists = <SpotifySourcePlaylist>[];
     final identities = <String, SpotifyImportTrack>{};
+    final artistIdentities = <String, List<String>>{};
     var row = 0;
     for (final (index, source) in sources.indexed) {
       final members = <SpotifyPlaylistMember>[];
@@ -146,9 +157,17 @@ class SpotifyPlaylistDraft {
           members.add(unsupported('Incomplete song identity or metadata'));
           continue;
         }
-        final artist = artists
+        final suppliedId = track['id'];
+        if (suppliedId != null &&
+            (suppliedId is! String ||
+                suppliedId != identity.substring('spotify:track:'.length))) {
+          members.add(unsupported('Conflicting Spotify track ID and URI'));
+          continue;
+        }
+        final artistNames = artists
             .map((a) => (a['name'] as String).trim())
-            .join(', ');
+            .toList(growable: false);
+        final artist = artistNames.join(', ');
         final albumName = album == null ? '' : (album['name'] as String).trim();
         final duration = track['duration_ms'];
         if (duration != null &&
@@ -157,9 +176,14 @@ class SpotifyPlaylistDraft {
           continue;
         }
         final previous = identities[identity];
+        final previousArtists = artistIdentities[identity];
         if (previous != null &&
             (previous.title != title.trim() ||
-                previous.artist != artist ||
+                previousArtists == null ||
+                previousArtists.length != artistNames.length ||
+                artistNames.indexed.any(
+                  (entry) => entry.$2 != previousArtists[entry.$1],
+                ) ||
                 previous.album != albumName ||
                 previous.durationMs != duration)) {
           throw const SpotifyImportException(
@@ -181,6 +205,7 @@ class SpotifyPlaylistDraft {
             );
         if (previous == null) {
           identities[identity] = selected;
+          artistIdentities[identity] = artistNames;
           tracks.add(selected);
         }
         members.add(
@@ -195,7 +220,7 @@ class SpotifyPlaylistDraft {
       playlists.add(
         SpotifySourcePlaylist(
           position: index + 1,
-          name: (source['name'] as String).trim(),
+          name: source['name'] as String,
           spotifyUri: uri as String?,
           members: List.unmodifiable(members),
         ),

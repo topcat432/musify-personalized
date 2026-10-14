@@ -13,10 +13,12 @@ import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
+import 'package:musify/screens/spotify_source_playlists_page.dart';
 import 'package:musify/services/spotify_android_deflate_decoder.dart';
 import 'package:musify/services/spotify_csv_importer.dart';
 import 'package:musify/services/spotify_import_file_reader.dart';
 import 'package:musify/services/spotify_import_session_service.dart';
+import 'package:musify/services/spotify_song_list_importer.dart';
 import 'package:musify/services/spotify_zip_archive.dart';
 import 'package:musify/services/spotify_zip_importer.dart';
 import 'package:musify/widgets/personalized_ui.dart';
@@ -94,7 +96,7 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
                         vertical: 8,
                       ),
                       child: Text(
-                        'Only the selected file will be previewed. Playlist membership and synchronization are not supported.',
+                        'Only the selected file will be previewed. Compatible named-playlist JSON retains memberships; other files, playlist recreation and synchronization are not included.',
                       ),
                     ),
                     for (final entry in archive.entries)
@@ -117,7 +119,7 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
           decodeDeflate: widget.decodeDeflate,
         );
       } else {
-        preview = SpotifyCsvImporter.parseBytes(
+        preview = SpotifySongListImporter.parseBytes(
           bytes,
           fileName: selectedFile.name,
         );
@@ -187,7 +189,7 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
             icon: Icons.file_upload_outlined,
             title: 'Start with your song list',
             description:
-                'Choose a flat CSV, TSV, Spotify YourLibrary JSON, or select a song list from a ZIP. Musify checks every row before anything is saved.',
+                'Choose CSV, TSV, YourLibrary JSON, a compatible named-playlist backup, or a song list from a ZIP. Musify checks every row before anything is saved.',
           ),
           const SizedBox(height: 24),
           PersonalizedReveal(
@@ -198,7 +200,7 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
                 const PersonalizedSectionHeading(
                   title: 'Source file',
                   description:
-                      'CSV/TSV need title and artist columns. JSON imports saved tracks from YourLibrary. ZIP supports explicit file selection, up to 8 MiB. Compressed ZIP requires Android.',
+                      'CSV/TSV need title and artist columns. JSON imports YourLibrary saved tracks or compatible named-playlist backups. ZIP supports explicit file selection, up to 8 MiB. Compressed ZIP requires Android.',
                 ),
                 const SizedBox(height: 12),
                 _CsvPickerSurface(
@@ -218,6 +220,19 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
             ),
           ],
           if (preview != null) ...[
+            if (preview.sourcePlaylists.isNotEmpty)
+              OutlinedButton(
+                onPressed: _isReading || _isSaving
+                    ? null
+                    : () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => SpotifySourcePlaylistsPage(
+                            preview: preview.sourcePlaylists,
+                          ),
+                        ),
+                      ),
+                child: const Text('Review source playlists'),
+              ),
             const SizedBox(height: 18),
             PersonalizedReveal(
               delay: const Duration(milliseconds: 110),

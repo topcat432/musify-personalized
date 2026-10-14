@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:musify/services/spotify_csv_importer.dart';
+import 'package:musify/services/spotify_song_list_importer.dart';
 
 class SpotifyDeflateResult {
   const SpotifyDeflateResult({
@@ -131,7 +132,7 @@ class SpotifyZipImporter {
     checkCancelled();
     require(decoded.length == size && _crc32(decoded) == crc);
     checkCancelled();
-    final preview = SpotifyCsvImporter.parseBytes(
+    final preview = SpotifySongListImporter.parseBytes(
       decoded,
       fileName: name,
       rejectPlaylistMembership: true,
@@ -144,6 +145,7 @@ class SpotifyZipImporter {
       fileName: fileName,
       format: '${preview.format} in ZIP',
       sourceEntryName: name,
+      sourcePlaylists: preview.sourcePlaylists,
       totalDataRows: preview.totalDataRows,
       tracks: preview.tracks,
       rejectedRows: preview.rejectedRows,

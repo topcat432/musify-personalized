@@ -1,5 +1,7 @@
 # F04-A: explicit bounded archive entry selection,2026-10-14
 
+Current successor: [F04-C membership intake/review](SPOTIFY_PLAYLIST_MEMBERSHIP.md) connects compatible named-playlist JSON to controlled Save and retained source review. Earlier statements below describe their checkpoint scope. Full account schemas, playlist recreation, synchronization and native qualification remain unfulfilled.
+
 Roadmap5 calls for account ZIP/playlist import. This milestone extends intake to
 multiple candidate files with explicit selection, before membership support.
 It does not claim full account archives, playlists or repeat synchronization.

@@ -179,6 +179,7 @@ class SpotifyZipArchive {
       fileName: preview.fileName,
       format: preview.format,
       sourceEntryName: entry.name,
+      sourcePlaylists: preview.sourcePlaylists,
       totalDataRows: preview.totalDataRows,
       tracks: preview.tracks,
       rejectedRows: preview.rejectedRows,

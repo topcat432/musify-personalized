@@ -9,6 +9,7 @@
 
 import 'dart:convert';
 import 'dart:typed_data';
+import 'package:musify/services/spotify_source_playlist.dart';
 
 class SpotifyImportTrack {
   const SpotifyImportTrack({
@@ -61,6 +62,7 @@ class SpotifyImportPreview {
     required this.rejectedRows,
     this.notices = const [],
     this.sourceEntryName,
+    this.sourcePlaylists = const [],
   });
 
   final String fileName;
@@ -70,6 +72,7 @@ class SpotifyImportPreview {
   final List<SpotifyRejectedRow> rejectedRows;
   final List<String> notices;
   final String? sourceEntryName;
+  final List<SpotifySourcePlaylist> sourcePlaylists;
 }
 
 class SpotifyImportException implements Exception {

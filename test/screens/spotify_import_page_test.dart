@@ -14,6 +14,8 @@ import 'package:musify/services/spotify_import_session_service.dart';
 import 'package:musify/services/spotify_csv_importer.dart';
 import 'package:musify/services/spotify_import_file_reader.dart';
 import '../support/spotify_zip_fixtures.dart';
+import '../support/spotify_playlist_fixture.dart';
+import 'package:musify/screens/spotify_source_playlists_page.dart';
 
 void main() {
   late Directory root;
@@ -513,7 +515,7 @@ void main() {
       await pumpPage(tester, const _IoSessionService());
       await tester.tap(button('Choose song list file'));
       await tester.pumpAndSettle();
-      expect(find.textContaining('Only Spotify YourLibrary'), findsOneWidget);
+      expect(find.textContaining('Unsupported playlist JSON'), findsOneWidget);
       expect(box.toMap(), before);
       expect(button('Save and continue'), findsNothing);
     },
@@ -648,6 +650,64 @@ void main() {
     },
   );
   testWidgets(
+    'named playlist preview saves memberships only explicitly and reopens source review',
+    (tester) async {
+      await pumpPage(
+        tester,
+        _IoSessionService(sessionWriter: (box, values) => box.putAll(values)),
+      );
+      await choose(tester, 'Old');
+      await tester.tap(button('Save and continue'));
+      await tester.pump();
+      await settleSave(tester);
+      await tester.runAsync(() => Hive.box('user').put('likedSongs', ['keep']));
+      final before = jsonDecode(jsonEncode(Hive.box('user').toMap()));
+      final bytes = SpotifyPlaylistFixture.bytes();
+      picker.results.add(
+        Future.value(
+          FilePickerResult([
+            PlatformFile(
+              name: 'playlists.json',
+              size: bytes.length,
+              bytes: bytes,
+            ),
+          ]),
+        ),
+      );
+      await tester.tap(button('Choose song list file'));
+      await tester.pumpAndSettle();
+      expect(find.text('Review source playlists'), findsOneWidget);
+      expect(Hive.box('user').toMap(), before);
+      await tester.tap(find.text('Review source playlists'));
+      await tester.pumpAndSettle();
+      expect(find.text('Preview only; nothing saved'), findsOneWidget);
+      expect(find.text('Unavailable item'), findsOneWidget);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(Hive.box('user').toMap(), before);
+      await tester.ensureVisible(button('Save and continue'));
+      await tester.tap(button('Save and continue'));
+      await tester.pump();
+      await settleSave(tester);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+      await tester.runAsync(() async {
+        await Hive.close();
+        await Hive.openBox('user');
+      });
+      await tester.binding.setSurfaceSize(const Size(412, 915));
+      await tester.pumpWidget(
+        const MaterialApp(home: SpotifySourcePlaylistsPage()),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Saved source membership'), findsOneWidget);
+      expect(find.text('Unavailable item'), findsOneWidget);
+      expect(Hive.box('user').get('likedSongs'), ['keep']);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'archive choice cancel and unsupported membership retain prior work before selected save and reopen',
     (tester) async {
       await pumpPage(
@@ -725,6 +785,56 @@ void main() {
         );
       });
       expect(tester.takeException(), isNull);
+    },
+  );
+  testWidgets(
+    'selected archive membership is preview-only until explicit save',
+    (tester) async {
+      await pumpPage(
+        tester,
+        _IoSessionService(sessionWriter: (box, values) => box.putAll(values)),
+      );
+      await tester.runAsync(() => Hive.box('user').put('likedSongs', ['keep']));
+      final before = jsonDecode(jsonEncode(Hive.box('user').toMap()));
+      final bytes = SpotifyZipFixtures.membershipLists();
+      picker.results.add(
+        Future.value(
+          FilePickerResult([
+            PlatformFile(name: 'account.zip', size: bytes.length, bytes: bytes),
+          ]),
+        ),
+      );
+      await tester.tap(button('Choose song list file'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.tap(find.text('Playlist.json'));
+      await tester.pumpAndSettle();
+      expect(find.text('Review source playlists'), findsOneWidget);
+      expect(Hive.box('user').toMap(), before);
+      await tester.ensureVisible(button('Save and continue'));
+      await tester.tap(button('Save and continue'));
+      await tester.pump();
+      await settleSave(tester);
+      final metadata = Hive.box('user').get('spotifyImportMetadata');
+      expect(metadata['fileName'], 'account.zip');
+      expect(metadata['sourceEntryName'], 'Playlist.json');
+      expect(
+        metadata['sourcePlaylists']['playlists'][0]['members'],
+        hasLength(2),
+      );
+      expect(Hive.box('user').get('likedSongs'), ['keep']);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+      await tester.runAsync(() async {
+        await Hive.close();
+        final box = await Hive.openBox('user');
+        expect(
+          box.get(
+            'spotifyImportMetadata',
+          )['sourcePlaylists']['playlists'][0]['members'][1]['issue'],
+          'Missing or unavailable track',
+        );
+      });
     },
   );
   for (final failure in ['stalled cleanup', 'ZIP row budget']) {

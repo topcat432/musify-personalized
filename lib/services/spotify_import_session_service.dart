@@ -10,6 +10,7 @@
 import 'package:hive/hive.dart';
 import 'package:musify/services/spotify_csv_importer.dart';
 import 'package:musify/services/spotify_import_routing_state.dart';
+import 'package:musify/services/spotify_source_playlist.dart';
 
 typedef SpotifyImportSessionWriter =
     Future<void> Function(Box<dynamic> box, Map<String, dynamic> values);
@@ -46,6 +47,21 @@ class SpotifyImportSessionService {
     SpotifyImportPreview preview, {
     DateTime? importedAt,
   }) async {
+    final tracksByRow = {
+      for (final track in preview.tracks) track.sourceRow: track,
+    };
+    for (final source in preview.sourcePlaylists) {
+      for (final member in source.members) {
+        if (member.sourceRow != null &&
+            (tracksByRow[member.sourceRow] == null ||
+                member.sourceMetadata['uri'] !=
+                    tracksByRow[member.sourceRow]!.spotifyTrackUri)) {
+          throw const FormatException(
+            'Playlist membership refers to a missing or different recording.',
+          );
+        }
+      }
+    }
     final box = Hive.box('user');
     final savedAt = (importedAt ?? DateTime.now()).toUtc();
     final previousValues = <String, dynamic>{
@@ -62,6 +78,9 @@ class SpotifyImportSessionService {
         if (preview.sourceEntryName != null)
           'sourceEntryName': preview.sourceEntryName,
         'format': preview.format,
+        if (preview.sourcePlaylists.isNotEmpty)
+          SpotifySourcePlaylistCodec.metadataKey:
+              SpotifySourcePlaylistCodec.encode(preview.sourcePlaylists),
         'validTrackCount': preview.tracks.length,
         'rejectedRowCount': preview.rejectedRows.length,
         'totalDataRows': preview.totalDataRows,

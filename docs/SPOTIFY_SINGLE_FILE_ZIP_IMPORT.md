@@ -1,5 +1,7 @@
 # Single-file ZIP song-list import (F03), 2026-10-14
 
+Current successor: [F04-C membership intake/review](SPOTIFY_PLAYLIST_MEMBERSHIP.md) connects compatible named-playlist JSON to controlled Save and retained source review. Earlier statements below describe their checkpoint scope. Full account schemas, playlist recreation, synchronization and native qualification remain unfulfilled.
+
 ## Status: PARTIAL
 
 87704dd6 remains the independently qualified stored-only checkpoint. The Android

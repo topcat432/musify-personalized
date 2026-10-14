@@ -7,6 +7,34 @@ import 'package:musify/services/spotify_zip_importer.dart';
 import '../support/spotify_zip_fixtures.dart';
 
 void main() {
+  test(
+    'selected named playlist JSON retains ordered membership rather than flattening',
+    () async {
+      final archive = SpotifyZipArchive.inspect(
+        SpotifyZipFixtures.membershipLists(),
+      );
+      final selected = await archive.parseEntry(
+        'Playlist.json',
+        fileName: 'account.zip',
+      );
+      expect(selected.sourceEntryName, 'Playlist.json');
+      expect(selected.sourcePlaylists.single.name, 'One');
+      expect(selected.sourcePlaylists.single.members.map((m) => m.position), [
+        1,
+        2,
+      ]);
+      expect(selected.sourcePlaylists.single.members.map((m) => m.sourceRow), [
+        1,
+        null,
+      ]);
+      final flat = await archive.parseEntry(
+        'YourLibrary.json',
+        fileName: 'account.zip',
+      );
+      expect(flat.tracks.single.title, 'Flat');
+      expect(flat.sourcePlaylists, isEmpty);
+    },
+  );
   final rejected = throwsA(isA<SpotifyImportException>());
   test(
     'archive choice preserves central order and selected source rows',
