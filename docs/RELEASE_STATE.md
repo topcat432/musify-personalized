@@ -1,5 +1,28 @@
 # Musify Personalized current state
 
+## Signed c249 owned5558 update/data checkpoint,2026-10-14
+
+Immutable signed c249395a4dc0a151a73f8402afdfc444eb140261 installed in place on
+emulator-5558,300000012→300000015,UID10210 retained. Installed APK SHA256
+fed354d5c8594826135863d14fbdc0248d9c54565687934219ffcd1fcd1ef469 matches the
+independently verified artifact. Actual post-update and fresh cold-boot exports
+were checksum-validated and independently reopened as typed Hive. Both complete
+user/settings semantic inventories match the pre-update baseline exactly:4 imports,
+4 results,1 exclusion,5 favorites,2 playlists,8 user keys and6 settings keys; list
+order and selected identities are covered by full comparison. A changed kernel
+boot ID and visible-frame gate support the successful cold cycle; it needed no
+System UI Wait action. Four normal-debug Hives restore byte-exact/mode600.
+
+Earlier cold cycles failed with black rendering and a captured Android System UI
+ANR; retained failures prevent a blanket reliability pass. About correctly shows
+v0.1.300000015(300000015) in accessibility description; a text-only probe falsely
+failed. Corrected About/Back, empty/rollback, F01/F02 picker and playback work remain
+queued. The About/Back launch was refused at88.91% projected host commit; subsequent
+read-only measurement19:09:26Z was93.97%, with unchanged26GiB/80% planning.
+No Samsung, new signing/publication or merge. Dirty intake bridge was preserved,
+uncommitted and uninstalled; newer F03/F04/F05 host evidence is separate. Private
+canonical milestone: host-provider-diagnostic/c249-native-update-restart-milestone.json.
+
 ## F05-A incoming-file preview foundation,2026-10-14
 
 The approved Android share/open roadmap now has bounded in-memory intake and a

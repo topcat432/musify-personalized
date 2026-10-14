@@ -97,6 +97,15 @@ jobs:
           javac --release 8 -d "$output" android/app/src/main/java/com/gokadzev/musify/StrictDeflate.java tool/StrictDeflateHostTest.java
           java -Xmx128m -XX:MaxMetaspaceSize=64m -cp "$output" com.gokadzev.musify.StrictDeflateHostTest
 
+      - name: Verify incoming-file policy and bounded reader
+        shell: bash
+        run: |
+          set -euo pipefail
+          output="$RUNNER_TEMP/musify-incoming-host"
+          mkdir -p "$output"
+          javac --release 8 -d "$output" packages/receive_sharing_intent/android/src/main/java/com/kasem/receive_sharing_intent/ImportFileIntentPolicy.java android/app/src/main/java/com/gokadzev/musify/IncomingFileReader.java tool/IncomingFileHostTest.java
+          java -Xmx128m -XX:MaxMetaspaceSize=64m -cp "$output" com.gokadzev.musify.IncomingFileHostTest
+
       - name: Analyze Dart code
         id: analyze
         shell: bash

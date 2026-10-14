@@ -32,6 +32,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:musify/extensions/l10n.dart';
 import 'package:musify/localization/app_localizations.dart';
+import 'package:musify/screens/spotify_incoming_files_page.dart';
 import 'package:musify/services/audio_service.dart';
 import 'package:musify/services/data_manager.dart';
 import 'package:musify/services/io_service.dart';
@@ -42,6 +43,7 @@ import 'package:musify/services/playlist_sharing.dart';
 import 'package:musify/services/playlists_manager.dart';
 import 'package:musify/services/router_service.dart';
 import 'package:musify/services/settings_manager.dart';
+import 'package:musify/services/spotify_incoming_file_service.dart';
 import 'package:musify/services/update_manager.dart';
 import 'package:musify/theme/app_themes.dart';
 import 'package:musify/utilities/flutter_toast.dart';
@@ -117,6 +119,7 @@ class _MusifyState extends State<Musify> with WidgetsBindingObserver {
     super.initState();
 
     WidgetsBinding.instance.addObserver(this);
+    unawaited(SpotifyIncomingFileService.instance.start());
 
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
 
@@ -218,6 +221,7 @@ class _MusifyState extends State<Musify> with WidgetsBindingObserver {
 
     Hive.close();
     sharingIntentSubscription.cancel();
+    SpotifyIncomingFileService.instance.dispose();
     super.dispose();
   }
 
@@ -263,14 +267,40 @@ class _MusifyState extends State<Musify> with WidgetsBindingObserver {
             supportedLocales: appSupportedLocales,
             locale: languageSetting,
             routerConfig: NavigationManager.router,
-            builder: (context, child) => kDebugMode
-                ? Banner(
-                    message: 'DEBUG',
-                    location: BannerLocation.topEnd,
-                    color: Colors.red.shade800,
-                    child: child ?? const SizedBox.shrink(),
-                  )
-                : child ?? const SizedBox.shrink(),
+            builder: (context, child) {
+              final display = kDebugMode
+                  ? Banner(
+                      message: 'DEBUG',
+                      location: BannerLocation.topEnd,
+                      color: Colors.red.shade800,
+                      child: child ?? const SizedBox.shrink(),
+                    )
+                  : child ?? const SizedBox.shrink();
+              return Stack(
+                fit: StackFit.expand,
+                children: [
+                  display,
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    child: SpotifyIncomingFileNotice(
+                      service: SpotifyIncomingFileService.instance,
+                      onReview: () => NavigationManager
+                          .parentNavigatorKey
+                          .currentState
+                          ?.push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => SpotifyIncomingFilesPage(
+                                service: SpotifyIncomingFileService.instance,
+                              ),
+                            ),
+                          ),
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
         );
       },

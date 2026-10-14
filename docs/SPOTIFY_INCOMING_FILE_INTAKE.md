@@ -38,3 +38,28 @@ No adapter/schema, dependency, manifest, security or permission change in this
 stage. Native worker cancellation/close, cold/warm intents, revoked grants,
 background arrivals, actual picker preview/save/backup/restart and signed-source
 qualification remain separate acceptance requirements.
+
+## F05-B bridge work in progress
+
+The dirty bridge now wires a bounded native descriptor catalog to a non-interrupting
+arrival notice and explicit inbox Preview. Native supports only the registered
+import MIME types and actual content URI read grants; it never persists grants,
+converts URIs to filesystem paths or caches source files. A targeted vendored-plugin
+predicate excludes supported import streams from its eager media-copy path while
+leaving original image/video and text-only branches intact. Native metadata types,
+names and sizes are checked; raw data is capped independently of advertised size.
+
+One native worker owns inspection/read and remains BUSY until its actual finally
+exit. One cancellation worker has no queued tasks; a stuck provider cannot spawn
+unbounded replacements. The local Dart deadline starts synchronously on stream
+subscription, observes late replies, and cancellation addresses the exact request.
+Failed previews retain an active lease for Retry or Cancel; older callbacks cannot
+publish or release a successor. Widget cancellation/retry regressions are prepared.
+
+This work is uncommitted and uninstalled. Earlier Java policy/reader49 checks and
+Android/Flutter Java API compilation passed; earlier Dart analysis passed. The
+first transport run passed17 and failed one missing-reply deadline case. Subsequent
+stream-boundary changes and new widget tests are unverified: normal3GiB host-test
+admission was refused at97.21% on2026-10-14T19:32:50Z. Do not treat bridge runtime,
+Kotlin/APK compilation, aggregate tests, strict visuals or exact-source CI as passed.
+Actual URI grants/cold/warm intents/native cleanup remain acceptance gates.

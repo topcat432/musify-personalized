@@ -18,6 +18,7 @@ import java.security.MessageDigest
 
 class MainActivity : AudioServiceActivity() {
   private var strictDeflateChannel: StrictDeflateChannel? = null
+  private var incomingFileChannel: IncomingFileChannel? = null
   companion object {
     private const val UPDATE_CHANNEL = "com.topcat432.musifypersonalized/updater"
   }
@@ -28,12 +29,21 @@ class MainActivity : AudioServiceActivity() {
       splashScreen.setOnExitAnimationListener { splashScreenView -> splashScreenView.remove() }
     }
     super.onCreate(savedInstanceState)
+    incomingFileChannel?.offer(intent)
+  }
+
+  override fun onNewIntent(intent: Intent) {
+    super.onNewIntent(intent)
+    setIntent(intent)
+    incomingFileChannel?.offer(intent)
   }
 
   override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
     super.configureFlutterEngine(flutterEngine)
     strictDeflateChannel?.close()
     strictDeflateChannel = StrictDeflateChannel(flutterEngine.dartExecutor.binaryMessenger)
+    incomingFileChannel?.close()
+    incomingFileChannel = IncomingFileChannel(this, flutterEngine.dartExecutor.binaryMessenger)
     MethodChannel(flutterEngine.dartExecutor.binaryMessenger, UPDATE_CHANNEL)
       .setMethodCallHandler { call, result ->
         try {
@@ -55,6 +65,8 @@ class MainActivity : AudioServiceActivity() {
   override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
     strictDeflateChannel?.close()
     strictDeflateChannel = null
+    incomingFileChannel?.close()
+    incomingFileChannel = null
     super.cleanUpFlutterEngine(flutterEngine)
   }
 
