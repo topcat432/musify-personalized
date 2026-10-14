@@ -127,7 +127,7 @@ class SpotifyIncomingFileInbox {
           );
         } on SpotifyImportException catch (error) {
           if (error.message.startsWith('ZIP song lists must contain at most ')) {
-            throw SpotifyImportException('Incoming song lists must contain at most ${SpotifyCsvImporter.maxJsonTracks} data rows.');
+            throw const SpotifyImportException('Incoming song lists must contain at most ${SpotifyCsvImporter.maxJsonTracks} data rows.');
           }
           rethrow;
         }
