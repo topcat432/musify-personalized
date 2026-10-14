@@ -5,6 +5,8 @@ import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:file_picker/src/platform/file_picker_platform_interface.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:musify/services/spotify_android_deflate_decoder.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:musify/screens/spotify_import_page.dart';
@@ -543,6 +545,107 @@ void main() {
     expect(Hive.box('user').containsKey('spotifyImportTracks'), isFalse);
     expect(tester.takeException(), isNull);
   });
+  testWidgets(
+    'stalled decoder timeout and late success preserve prior state until the next explicit save',
+    (tester) async {
+      await pumpPage(
+        tester,
+        _IoSessionService(sessionWriter: (box, values) => box.putAll(values)),
+      );
+      await choose(tester, 'Old');
+      await tester.tap(button('Save and continue'));
+      await tester.pump();
+      await settleSave(tester);
+      await tester.runAsync(
+        () => Hive.box('user').putAll({
+          'likedSongs': ['keep'],
+          'spotifyMatchResults': [
+            {'status': 'accepted', 'ytid': 'selected-old'},
+          ],
+          'spotifyExcludedImportRows': [7],
+        }),
+      );
+      final before = Map<dynamic, dynamic>.from(
+        jsonDecode(jsonEncode(Hive.box('user').toMap())) as Map,
+      );
+      final reply = Completer<Map<String, Object>>();
+      final acknowledgment = Completer<void>();
+      var cancels = 0;
+      String? oldId;
+      String? cancelId;
+      int? compressedLength;
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(SpotifyAndroidDeflateDecoder.channel, (
+        call,
+      ) async {
+        if (call.method == 'cancel') {
+          cancels++;
+          cancelId = call.arguments['id'];
+          await acknowledgment.future;
+          return null;
+        }
+        oldId = call.arguments['id'];
+        compressedLength = (call.arguments['bytes'] as Uint8List).length;
+        return reply.future;
+      });
+      addTearDown(
+        () => messenger.setMockMethodCallHandler(
+          SpotifyAndroidDeflateDecoder.channel,
+          null,
+        ),
+      );
+      final bytes = base64Decode(
+        'UEsDBBQAAAAIALwETl20IWK1GwAAABkAAAAJAAAAc29uZ3MuY3N2C8ksyUnVcSwqySwu4XLLLCou0fEvz0st4gIAUEsBAhQAFAAAAAgAvAROXbQhYrUbAAAAGQAAAAkAAAAAAAAAAAAAAIABAAAAAHNvbmdzLmNzdlBLBQYAAAAAAQABADcAAABCAAAAAAA=',
+      );
+      picker.results.add(
+        Future.value(
+          FilePickerResult([
+            PlatformFile(name: 'owned.zip', size: bytes.length, bytes: bytes),
+          ]),
+        ),
+      );
+      await tester.tap(button('Choose song list file'));
+      for (var i = 0; i < 10 && oldId == null; i++) {
+        await tester.pump(const Duration(milliseconds: 10));
+      }
+      expect(oldId, isNotNull);
+      await tester.pump(const Duration(seconds: 20));
+      await tester.pump();
+      expect(find.textContaining('timed out'), findsWidgets);
+      expect(Hive.box('user').toMap(), before);
+      expect(cancels, 1);
+      expect(cancelId, oldId);
+      await choose(tester, 'Next');
+      expect(Hive.box('user').toMap(), before);
+      await tester.pump(const Duration(seconds: 2));
+      acknowledgment.complete();
+      reply.complete({
+        'bytes': Uint8List.fromList(utf8.encode('Title,Artist\nFirst,Owner\n')),
+        'finished': true,
+        'consumedBytes': compressedLength!,
+      });
+      await tester.pump();
+      await tester.pumpAndSettle();
+      expect(Hive.box('user').toMap(), before);
+      expect(find.text('Next.csv'), findsWidgets);
+      expect(cancels, 1);
+      await tester.tap(button('Save and continue'));
+      await tester.pump();
+      await settleSave(tester);
+      expect(Hive.box('user').get('spotifyImportTracks')[0]['title'], 'Next');
+      expect(Hive.box('user').get('likedSongs'), ['keep']);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+      await tester.runAsync(() async {
+        await Hive.close();
+        final box = await Hive.openBox('user');
+        expect(box.get('spotifyImportTracks')[0]['title'], 'Next');
+        expect(box.get('likedSongs'), ['keep']);
+      });
+      expect(tester.takeException(), isNull);
+    },
+  );
 }
 
 class _Picker extends FilePickerPlatform {

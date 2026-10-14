@@ -1,5 +1,19 @@
 # Musify Personalized current state
 
+## F03 stalled transport correction,2026-10-14
+
+Deterministic regressions at the exact d06f24b6 CI checkpoint exposed delayed
+caller completion when cancellation acknowledgments/replies were absent. The
+Dart adapter now owns a cancellable20-second local timer, settles disposal/
+request cancellation promptly, sends at most one targeted cancellation attempt
+with1-second acknowledgment bound, and ignores late reply/error/acknowledgment.
+The native worker remains separately engine-owned with its existing deadline;
+this is not native lifecycle proof. Analysis and27 focused transport/widget
+tests PASS; Windows strict FAIL16+24 and all40 actuals match retained control.
+Exact-source CI will qualify the correction before native results are attributed.
+Exact d06f CI38522644850 PASS588/40 and its3310 standard-inflater proof remain
+preserved; c249 signed and87704 stored checkpoints are unchanged. F03 PARTIAL.
+
 ## F03 PARTIAL: strict Android inflater route,2026-10-14
 
 Bounded review found a trusted existing Android/JDK standard-library route;

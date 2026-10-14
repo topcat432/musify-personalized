@@ -26,16 +26,26 @@ class SpotifyAndroidDeflateDecoder {
         '${DateTime.now().microsecondsSinceEpoch}-${_nextId++}-${Random.secure().nextInt(0x7fffffff)}';
     var done = false;
     var stopped = false;
-    Future<void> cancel() async {
-      if (done) return;
-      stopped = true;
+    var cancelSent = false;
+    Timer? deadline;
+    final response = Completer<Map<String, dynamic>?>();
+    Future<void> requestCancel() async {
+      if (cancelSent) return;
+      cancelSent = true;
       try {
         await channel
             .invokeMethod<void>('cancel', {'id': id})
             .timeout(const Duration(seconds: 1));
       } on Exception {
-        /* Cancellation may race engine teardown; native deadline/cleanup remain mandatory. */
+        // Engine cleanup/native deadline remain required if acknowledgment is lost.
       }
+    }
+
+    void endLocally(SpotifyImportException error) {
+      if (done || response.isCompleted) return;
+      stopped = true;
+      unawaited(requestCancel());
+      response.completeError(error);
     }
 
     try {
@@ -44,8 +54,37 @@ class SpotifyAndroidDeflateDecoder {
         'bytes': bytes,
         'size': size,
       });
-      if (cancelled != null) unawaited(cancelled.then((_) => cancel()));
-      final result = await pending.timeout(const Duration(seconds: 20));
+      // Both paths remain observed after local completion. A late reply/error
+      // belongs to the old engine request and cannot resume the import.
+      unawaited(
+        pending.then<void>(
+          (value) {
+            if (!done && !response.isCompleted) response.complete(value);
+          },
+          onError: (Object error, StackTrace stack) {
+            if (!done && !response.isCompleted)
+              response.completeError(error, stack);
+          },
+        ),
+      );
+      if (cancelled != null) {
+        unawaited(
+          cancelled.then(
+            (_) => endLocally(
+              const SpotifyImportException('File selection was cancelled.'),
+            ),
+          ),
+        );
+      }
+      deadline = Timer(
+        const Duration(seconds: 20),
+        () => endLocally(
+          const SpotifyImportException(
+            'ZIP decoding timed out. Choose the song-list file directly and try again.',
+          ),
+        ),
+      );
+      final result = await response.future;
       if (stopped)
         throw const SpotifyImportException('File selection was cancelled.');
       if (result == null ||
@@ -68,11 +107,6 @@ class SpotifyAndroidDeflateDecoder {
         consumedBytes: bytes.length,
         finished: true,
       );
-    } on TimeoutException {
-      await cancel();
-      throw const SpotifyImportException(
-        'ZIP decoding timed out. Choose the song-list file directly and try again.',
-      );
     } on MissingPluginException {
       throw const SpotifyImportException(
         'Compressed ZIP is unavailable on this platform. Choose an uncompressed (stored) ZIP or select its CSV, TSV or JSON file directly.',
@@ -83,6 +117,7 @@ class SpotifyAndroidDeflateDecoder {
       );
     } finally {
       done = true;
+      deadline?.cancel();
     }
   }
 }

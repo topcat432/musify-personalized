@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:typed_data';
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:musify/services/spotify_android_deflate_decoder.dart';
@@ -167,4 +168,144 @@ void main() {
     expect(cancels, 0);
     expect(ids.toSet().length, 2);
   });
+  test(
+    'missing reply times out at 20 seconds despite stalled cancel acknowledgment',
+    () {
+      fakeAsync((clock) {
+        final pending = Completer<Map<String, Object>>();
+        final acknowledgment = Completer<void>();
+        final cancelledIds = <String>[];
+        String? oldId;
+        var ended = false;
+        Object? error;
+        messenger.setMockMethodCallHandler(channel, (call) async {
+          if (call.method == 'cancel') {
+            cancelledIds.add(call.arguments['id']);
+            await acknowledgment.future;
+            return null;
+          }
+          oldId = call.arguments['id'];
+          return pending.future;
+        });
+        SpotifyAndroidDeflateDecoder.decode(input, 3, null).then<void>(
+          (_) => ended = true,
+          onError: (Object e) {
+            ended = true;
+            error = e;
+          },
+        );
+        clock.flushMicrotasks();
+        clock.elapse(const Duration(seconds: 19));
+        expect(ended, isFalse);
+        clock.elapse(const Duration(seconds: 1));
+        clock.flushMicrotasks();
+        expect(ended, isTrue);
+        expect(error, isA<SpotifyImportException>());
+        expect(cancelledIds, [oldId]);
+        clock.elapse(const Duration(seconds: 2));
+        clock.flushMicrotasks();
+        pending.complete(proof());
+        acknowledgment.complete();
+        clock.flushMicrotasks();
+        expect(cancelledIds, [oldId]);
+      });
+    },
+  );
+  test(
+    'disposal cancellation settles without waiting for platform reply or acknowledgment',
+    () {
+      fakeAsync((clock) {
+        final pending = Completer<Map<String, Object>>();
+        final acknowledgment = Completer<void>();
+        final disposed = Completer<void>();
+        var ended = false;
+        Object? error;
+        var cancellations = 0;
+        messenger.setMockMethodCallHandler(channel, (call) async {
+          if (call.method == 'cancel') {
+            cancellations++;
+            await acknowledgment.future;
+            return null;
+          }
+          return pending.future;
+        });
+        SpotifyAndroidDeflateDecoder.decode(
+          input,
+          3,
+          disposed.future,
+        ).then<void>(
+          (_) => ended = true,
+          onError: (Object e) {
+            ended = true;
+            error = e;
+          },
+        );
+        clock.flushMicrotasks();
+        disposed.complete();
+        clock.flushMicrotasks();
+        expect(ended, isTrue);
+        expect(error, isA<SpotifyImportException>());
+        expect(cancellations, 1);
+        clock.elapse(const Duration(seconds: 2));
+        clock.flushMicrotasks();
+        pending.complete(proof());
+        acknowledgment.complete();
+        clock.flushMicrotasks();
+        expect(cancellations, 1);
+      });
+    },
+  );
+  test(
+    'timeout ownership ends before a successor and ignores delayed acknowledgments and errors',
+    () {
+      fakeAsync((clock) {
+        final oldReply = Completer<Map<String, Object>>();
+        final oldAck = Completer<void>();
+        final oldCancel = Completer<void>();
+        final ids = <String>[];
+        final cancellations = <String>[];
+        Object? oldError;
+        var nextSucceeded = false;
+        messenger.setMockMethodCallHandler(channel, (call) async {
+          if (call.method == 'cancel') {
+            cancellations.add(call.arguments['id']);
+            await oldAck.future;
+            return null;
+          }
+          ids.add(call.arguments['id']);
+          return ids.length == 1 ? oldReply.future : proof();
+        });
+        SpotifyAndroidDeflateDecoder.decode(
+          input,
+          3,
+          oldCancel.future,
+        ).then<void>(
+          (_) => fail('Expired reply accepted'),
+          onError: (Object error) {
+            oldError = error;
+          },
+        );
+        clock.flushMicrotasks();
+        clock.elapse(const Duration(seconds: 20));
+        clock.flushMicrotasks();
+        expect(oldError, isA<SpotifyImportException>());
+        SpotifyAndroidDeflateDecoder.decode(
+          input,
+          3,
+          null,
+        ).then<void>((_) => nextSucceeded = true);
+        clock.flushMicrotasks();
+        expect(nextSucceeded, isTrue);
+        expect(ids.toSet().length, 2);
+        clock.elapse(const Duration(seconds: 2));
+        oldReply.completeError(PlatformException(code: 'OLD_ERROR'));
+        oldAck.complete();
+        oldCancel.complete();
+        clock.flushMicrotasks();
+        expect(cancellations, [ids.first]);
+        expect(nextSucceeded, isTrue);
+        expect(clock.pendingTimers, isEmpty);
+      });
+    },
+  );
 }

@@ -99,3 +99,19 @@ trailing/concatenated streams, absent BFINAL, output/input/size limits, empty
 blocks, cancellation and deadline boundaries. Method-channel tests are simulated
 transport; host JDK proof is not Android runtime proof. CI must compile the real
 Android bridge and rerun these gates. No signing/device qualification claimed.
+
+## Stalled transport ownership
+
+Caller timeout completes locally at20 seconds, without waiting for a platform
+reply or cancellation acknowledgment. Disposal cancellation also completes
+locally. At most one cancellation message targets that request ID; its reply
+wait is independently bounded to1 second. The local timer is cancelled on all
+completion paths. Late success/error/acknowledgment cannot resume the old import
+or cancel a successor. A subsequent native request can still receive ZIP_BUSY
+until the engine-owned native worker exits; no native ownership is adopted or
+force-cleared. Engine/worker lifecycle remains runtime-pending.
+
+Controlled-clock regressions cover missing replies, stalled/delayed cancellation
+acknowledgment, disposal, late response/error and a successor. A real-Hive widget
+fixture retains an independent prior session snapshot through timeout and late
+success, then saves only the next explicitly approved preview and reopens it.
