@@ -30,9 +30,12 @@ class _SpotifySourcePlaylistsPageState
           : null;
       sources =
           widget.preview ??
-          SpotifySourcePlaylistCodec.decode(
+          SpotifySourcePlaylistCodec.readSaved(
             metadata is Map
                 ? metadata[SpotifySourcePlaylistCodec.metadataKey]
+                : null,
+            Hive.isBoxOpen('user')
+                ? Hive.box('user').get('spotifyImportTracks')
                 : null,
           );
     } on FormatException catch (error) {

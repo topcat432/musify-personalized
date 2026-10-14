@@ -167,8 +167,9 @@ class SpotifyImportDestinationService {
     final box = Hive.box('user');
     final metadata = _readMap(box.get('spotifyImportMetadata'));
     return SpotifySourcePlaylistProjection.project(
-      sources: SpotifySourcePlaylistCodec.decode(
+      sources: SpotifySourcePlaylistCodec.readSaved(
         metadata[SpotifySourcePlaylistCodec.metadataKey],
+        box.get('spotifyImportTracks'),
       ),
       position: position,
       tracks: _readMaps(box.get('spotifyImportTracks')),

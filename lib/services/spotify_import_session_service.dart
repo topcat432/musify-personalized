@@ -47,21 +47,10 @@ class SpotifyImportSessionService {
     SpotifyImportPreview preview, {
     DateTime? importedAt,
   }) async {
-    final tracksByRow = {
-      for (final track in preview.tracks) track.sourceRow: track,
-    };
-    for (final source in preview.sourcePlaylists) {
-      for (final member in source.members) {
-        if (member.sourceRow != null &&
-            (tracksByRow[member.sourceRow] == null ||
-                member.sourceMetadata['uri'] !=
-                    tracksByRow[member.sourceRow]!.spotifyTrackUri)) {
-          throw const FormatException(
-            'Playlist membership refers to a missing or different recording.',
-          );
-        }
-      }
-    }
+    SpotifySourcePlaylistCodec.validateReferences(
+      preview.sourcePlaylists,
+      preview.tracks.map((track) => track.toJson()).toList(growable: false),
+    );
     final box = Hive.box('user');
     final savedAt = (importedAt ?? DateTime.now()).toUtc();
     final previousValues = <String, dynamic>{

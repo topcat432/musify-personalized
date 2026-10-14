@@ -1,5 +1,24 @@
 # Musify Personalized current state
 
+## Saved membership read integrity correction,2026-10-14
+
+An independent review found that saved source review decoded membership without
+checking its import-row references. Four reopen regressions reproduced false
+retained-song display for missing rows, changed recording URIs and missing URIs.
+Saved review and destination loading now validate the raw stored track list and
+exact row/Spotify-track-URI references before projecting any membership. Invalid
+references show the retained-data error; no damaged values are repaired or written.
+Structural decoding also rejects missing/invalid URIs for supported memberships.
+Save and direct destination projection share the same reference validation. Legacy
+absence, unsupported memberships and valid saved membership retain their behavior.
+Analysis and25 focused checks PASS. Guarded aggregate PASS681, including seven
+uncommitted inbox tests; the source-only correction adds eight tests to666.
+Both strict Windows suites FAIL16+24; all40 actual images match the unchanged
+control byte-for-byte. Exact-source Linux CI is pending. The incoming-file inbox
+prototype remains outside this correction.
+No adapter, backup format, dependency or permission change. Native/signing/phone
+acceptance remains separate; immutable signed c249 is unchanged.
+
 ## F04-D source-specific resolved-song routing,2026-10-14
 
 Saved source review now opens the existing explicit destination preview/Apply
@@ -11,7 +30,7 @@ reject stale membership before writes; a late membership change leaves actual
 writes intact with unverified tracking. Failed destination writes roll back only
 the exact owned staged value, never a newer independent edit. [Contract](SPOTIFY_SOURCE_PLAYLIST_ROUTING.md).
 The playlist-ID/URI conflict guard prevents assigning a contradictory source key.
-Targeted service/widget and identity tests, aggregate analysis and666 tests PASS; exact-source CI pending. Windows strict FAIL16+24/all40 actuals unchanged. Test-only root-zone
+Targeted service/widget and identity tests, aggregate analysis and666 tests PASS; exactfe49a732 CI38605348118 PASS666/40,3310 inflater checks and all required builds. Windows strict FAIL16+24/all40 actuals unchanged. Test-only root-zone
 I/O adapters resolve the Flutter fake-clock fixture; production defaults remain.
 No global adapter/backup format/dependency/permission change. Exact repetition
 recreation, empty-only sources, account schemas and repeat synchronization remain

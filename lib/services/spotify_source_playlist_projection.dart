@@ -35,6 +35,11 @@ class SpotifySourcePlaylistProjection {
     }
 
     require(snapshot.importSessionId.isNotEmpty && snapshot.sourceRowsReliable);
+    try {
+      SpotifySourcePlaylistCodec.validateReferences(sources, tracks);
+    } on FormatException {
+      require(false);
+    }
     final payload = SpotifySourcePlaylistCodec.encode(sources);
     require(position >= 1 && position <= sources.length);
     final source = sources[position - 1];

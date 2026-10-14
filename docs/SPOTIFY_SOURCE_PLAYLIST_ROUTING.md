@@ -41,3 +41,11 @@ saved-file backup restore/reopen and explicit widget confirmation/Cancel.
 Strict visual references/comparators remain unchanged; exact-source CI and native
 picker/transfer/backup/cold-restart proof are required separately. The immutable
 signed c249 baseline is unchanged and contains none of F03/F04.
+
+Saved-data reads validate membership against the raw stored import tracks before
+review or destination projection. Supported members require a valid Spotify track
+URI and an existing unique source row with exactly the same URI. Missing rows,
+conflicting recordings, missing/invalid URIs and malformed or duplicate stored rows
+fail closed. The retained import is never rewritten by validation. Structural
+encoding/decoding rejects supported members without a valid URI; unsupported item
+metadata remains available for review. Legacy absence needs no membership check.

@@ -27,6 +27,52 @@ class SpotifySourcePlaylist {
 class SpotifySourcePlaylistCodec {
   const SpotifySourcePlaylistCodec._();
   static const metadataKey = 'sourcePlaylists';
+  static Never _fail() => throw const FormatException(
+    'Stored playlist membership is unsupported or damaged. The original import was retained.',
+  );
+  static bool _trackUri(Object? value) =>
+      value is String &&
+      RegExp(r'^spotify:track:[A-Za-z0-9]{22}$').hasMatch(value);
+
+  /// Validate references at every saved-data read; never repair stored data.
+  /// Legacy imports without source membership need no membership validation.
+  static List<SpotifySourcePlaylist> readSaved(
+    Object? value,
+    Object? storedTracks,
+  ) {
+    final sources = decode(value);
+    validateReferences(sources, storedTracks);
+    return sources;
+  }
+
+  static void validateReferences(
+    List<SpotifySourcePlaylist> sources,
+    Object? storedTracks,
+  ) {
+    final members = sources
+        .expand((source) => source.members)
+        .where((member) => member.sourceRow != null);
+    if (members.isEmpty) return;
+    if (storedTracks is! List) _fail();
+    final tracksByRow = <int, Map>{};
+    for (final track in storedTracks) {
+      if (track is! Map) _fail();
+      final row = track['sourceRow'];
+      if (row is! int || row < 1 || row > 10000 || tracksByRow.containsKey(row))
+        _fail();
+      tracksByRow[row] = track;
+    }
+    for (final member in members) {
+      final uri = member.sourceMetadata['uri'];
+      final track = tracksByRow[member.sourceRow];
+      if (!_trackUri(uri) ||
+          track == null ||
+          !_trackUri(track['spotifyTrackUri']) ||
+          track['spotifyTrackUri'] != uri)
+        _fail();
+    }
+  }
+
   static Map<String, dynamic> encode(List<SpotifySourcePlaylist> playlists) {
     final value = <String, dynamic>{
       'version': 1,
@@ -107,7 +153,8 @@ class SpotifySourcePlaylistCodec {
                 'addedAt',
               ].contains(key),
             ) ||
-            metadata.values.any((entry) => entry is! String)) {
+            metadata.values.any((entry) => entry is! String) ||
+            (row != null && !_trackUri(metadata['uri']))) {
           fail();
         }
         members.add(

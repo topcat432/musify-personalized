@@ -152,4 +152,62 @@ void main() {
       );
     },
   );
+  test('missing or invalid URI cannot match an equally damaged stored row', () {
+    for (final uri in [null, '', 'spotify:track:bad']) {
+      final damaged = SpotifySourcePlaylist(
+        position: 1,
+        name: 'Retained',
+        spotifyUri: null,
+        members: [
+          SpotifyPlaylistMember(
+            position: 1,
+            sourceRow: 1,
+            issue: null,
+            sourceMetadata: {if (uri != null) 'uri': uri},
+          ),
+        ],
+      );
+      expect(
+        () => SpotifySourcePlaylistProjection.project(
+          sources: [damaged],
+          position: 1,
+          tracks: [
+            {'sourceRow': 1, if (uri != null) 'spotifyTrackUri': uri},
+          ],
+          snapshot: snapshot(),
+        ),
+        throwsStateError,
+      );
+      expect(
+        () => SpotifySourcePlaylistCodec.encode([damaged]),
+        throwsFormatException,
+      );
+    }
+  });
+  test('saved read validates raw rows and preserves legacy absence', () {
+    final payload = SpotifySourcePlaylistCodec.encode([source(1)]);
+    expect(
+      SpotifySourcePlaylistCodec.readSaved(payload, tracks).single.name,
+      'Same name',
+    );
+    expect(SpotifySourcePlaylistCodec.readSaved(null, null), isEmpty);
+    for (final damaged in [
+      null,
+      [...tracks, 'damaged row'],
+      [...tracks, tracks.first],
+      [
+        {'sourceRow': 1, 'spotifyTrackUri': 'spotify:track:bad'},
+        tracks.last,
+      ],
+      [
+        tracks.first,
+        {'sourceRow': 4, 'spotifyTrackUri': tracks.first['spotifyTrackUri']},
+      ],
+    ]) {
+      expect(
+        () => SpotifySourcePlaylistCodec.readSaved(payload, damaged),
+        throwsFormatException,
+      );
+    }
+  });
 }
