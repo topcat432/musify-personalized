@@ -21,9 +21,9 @@ public final class IncomingFileChannelHostTest {
   throw new AssertionError("Owned worker did not finish within four seconds");
  }
  private static final class Reply implements MethodChannel.Result {
-  Object value;String error;boolean completed;
-  public void success(Object value){this.value=value;completed=true;}
-  public void error(String code,String message,Object details){error=code;completed=true;}
+  Object value;String error;boolean completed;int responses;
+  public void success(Object value){this.value=value;completed=true;responses++;}
+  public void error(String code,String message,Object details){error=code;completed=true;responses++;}
   public void notImplemented(){error="NOT_IMPLEMENTED";completed=true;}
  }
  private static Reply dispatch(String method,String id,String request){
@@ -46,6 +46,7 @@ public final class IncomingFileChannelHostTest {
   final CountDownLatch inspectingB=new CountDownLatch(1),releaseB=new CountDownLatch(1);
   volatile CancellationSignal signalB;final Set<String> threads=Collections.synchronizedSet(new HashSet<String>());
   volatile int opens;
+  final CountDownLatch readingG=new CountDownLatch(1),releaseG=new CountDownLatch(1);
   public Cursor query(Uri uri,String[] columns,String selection,String[] args,String order,CancellationSignal signal){
    threads.add(Thread.currentThread().getName());
    if(uri.toString().endsWith("/b")){
@@ -55,11 +56,27 @@ public final class IncomingFileChannelHostTest {
    }
    return new Metadata(uri.toString().substring(uri.toString().lastIndexOf('/')+1)+".csv");
   }
-  public AssetFileDescriptor openAssetFileDescriptor(Uri uri,String mode,CancellationSignal signal){opens++;threads.add(Thread.currentThread().getName());return new AssetFileDescriptor(new ByteArrayInputStream(new byte[]{1,2,3}));}
+  public AssetFileDescriptor openAssetFileDescriptor(Uri uri,String mode,CancellationSignal signal){
+   opens++;threads.add(Thread.currentThread().getName());
+   if(uri.toString().endsWith("/g"))return new AssetFileDescriptor(new InputStream(){
+    volatile boolean closed;boolean delivered;
+    public int read() throws IOException {return read(new byte[1],0,1);}
+    public int read(byte[] bytes,int offset,int length) throws IOException {
+     if(delivered)return -1;
+     readingG.countDown();
+     try {if(!releaseG.await(4,TimeUnit.SECONDS))throw new IOException("Owned read barrier expired");}
+     catch(InterruptedException interrupted){Thread.currentThread().interrupt();throw new IOException(interrupted);}
+     if(closed)throw new IOException("Owned stream closed");bytes[offset]=1;delivered=true;return 1;
+    }
+    public void close(){closed=true;releaseG.countDown();}
+   });
+   return new AssetFileDescriptor(new ByteArrayInputStream(new byte[]{1,2,3}));
+  }
  }
  public static void main(String[] ignored) throws Exception {
+  final java.util.concurrent.atomic.AtomicBoolean granted=new java.util.concurrent.atomic.AtomicBoolean(true);
   Provider provider=new Provider();Context context=new Context(){
-   public int checkUriPermission(Uri uri,int pid,int uid,int mode){return 0;}
+   public int checkUriPermission(Uri uri,int pid,int uid,int mode){return granted.get()?0:-1;}
    public ContentResolver getContentResolver(){return provider;}
   };
   IncomingFileChannel channel=new IncomingFileChannel(context,new BinaryMessenger(){});
@@ -83,6 +100,36 @@ public final class IncomingFileChannelHostTest {
    dispatch("finish",b,null);Reply stale=dispatch("read",b,"read-stale");check("INCOMING_INVALID".equals(stale.error),"Finished B cannot read again");
    check(provider.threads.size()==1,"Inspection and reads retain exactly one worker");
    check(Handler.deadlines()==0,"Completed/cancelled jobs remove owned deadlines");
+   channel.offer(new Intent(Uri.parse("content://owned/d")));waitFor(()->id("d.csv")!=null);String d=id("d.csv");
+   int beforeRevocation=provider.opens;granted.set(false);
+   Reply revoked=dispatch("read",d,"read-revoked");waitFor(()->revoked.completed);
+   check("INCOMING_REJECTED".equals(revoked.error),"Grant revoked after metadata must reject bytes");
+   check(provider.opens==beforeRevocation,"Revoked grant must never open provider stream");
+   granted.set(true);Reply restored=dispatch("read",d,"read-restored");waitFor(()->restored.completed);
+   check(restored.error==null,"Explicit retry may use the same recording after its grant is restored");
+   dispatch("finish",d,null);granted.set(false);
+   channel.offer(new Intent(Uri.parse("content://owned/no-grant")));
+   check(files().isEmpty(),"Unverified grant must not enter the catalog");granted.set(true);
+   channel.offer(new Intent(Uri.parse("content://owned/g")));waitFor(()->id("g.csv")!=null);String oldG=id("g.csv");
+   Reply interrupted=dispatch("read",oldG,"read-engine-close");check(provider.readingG.await(4,TimeUnit.SECONDS),"Owned provider read reached its barrier");
+   java.lang.reflect.Field field=IncomingFileChannel.class.getDeclaredField("worker");field.setAccessible(true);
+   ExecutorService ownedWorker=(ExecutorService)field.get(channel);
+   channel.close();provider.releaseG.countDown();
+   check("INCOMING_CLOSED".equals(interrupted.error),"Engine close settles its active request");
+   check(ownedWorker.awaitTermination(4,TimeUnit.SECONDS),"Closed engine worker exits gracefully after its owned stream stops");Handler.drain();
+   check(interrupted.responses==1,"Late read completion after engine close cannot reply twice");
+   check(Handler.deadlines()==0,"Engine close removes its owned deadline");
+   IncomingFileChannel restarted=new IncomingFileChannel(context,new BinaryMessenger(){});
+   try {
+    check(files().isEmpty(),"Fresh engine must not resurrect prior grants/catalog entries");
+    Reply staleEngine=dispatch("read",oldG,"read-old-engine");check("INCOMING_INVALID".equals(staleEngine.error),"Old engine ID is invalid after restart");
+    channel.offer(new Intent(Uri.parse("content://owned/closed")));check(files().isEmpty(),"Closed engine ignores late arrivals");
+    restarted.offer(new Intent(Uri.parse("content://owned/g")));waitFor(()->id("g.csv")!=null);String currentG=id("g.csv");
+    check(!oldG.equals(currentG),"Redelivered URI receives a fresh engine-scoped ID");
+    dispatch("finish",oldG,null);check(currentG.equals(id("g.csv")),"Old finish cannot remove the redelivered successor");
+    Reply fresh=dispatch("read",currentG,"read-new-engine");waitFor(()->fresh.completed);check(fresh.error==null&&((byte[])fresh.value).length==1,"Explicit fresh-engine read remains usable");
+    dispatch("finish",currentG,null);check(files().isEmpty(),"Fresh-engine completion releases only its own descriptor");
+   } finally {restarted.close();Handler.drain();}
    System.out.println("Production incoming channel contract: "+checks+" checks passed.");
   } finally {provider.releaseB.countDown();channel.close();Handler.drain();}
  }

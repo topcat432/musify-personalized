@@ -1,5 +1,40 @@
 # Dependency-ordered Musify verification queue
 
+## Current receipt-based queue, 2026-10-14
+
+Signed source c249395a4dc0a151a73f8402afdfc444eb140261/version300000015 is
+installed in place on owned musify_saved_acceptance_api35/emulator-5558. Installed
+APK SHA256 fed354d5c8594826135863d14fbdc0248d9c54565687934219ffcd1fcd1ef469
+matches the immutable sign-only artifact; UID is retained. Installed018 tab/input
+diagnosis, c249 in-place update and actual post-update export/reopen passed.
+
+**Cold semantic audit28208: COMPLETED PASS.** The actual cold-export saved file
+SHA256086508a0655a89d71f275354be331b0fa41eb00f40e2c295b8b850d4d39e9ba2
+was independently restored and typed Hive boxes reopened. Full user semantics
+SHA256613d80af091e58fa1dfc2dda0f4c4f79b440845d82943c5969e9de75e32c6527
+and settings SHA2568ab7c2035fa43c3799dec5c50b8bdfce470906fb3fc4cabed974f435548e5168
+match the preupdate baseline exactly. Canonical private receipt:
+host-provider-diagnostic/signed-inplace-c249395a/cold-semantic-preservation-proof.json.
+No duplicate cold semantic audit is queued.
+
+Next admitted action is corrected c249 About/Back verification. Empty-library
+restore/export/rollback, F01/F02 picker/cancel/Save, approved playback/StopPlay
+and subsequent native gates remain open. Intermittent black frames/System UI ANR
+prevent a clean cold-start reliability claim despite the successful cold cycle.
+Fresh20:30:38Z unchanged26GiB/80% admission refused135.07%; disks passed and
+nothing launched. Keep owned lease, exact serial and verified graceful finally
+shutdown; preserve the normal debug APK and four byte-exact private Hive files.
+
+Source544192c4b9a9ebef5c48d50c3e42c86af21e98b6 CI38630742666 PASS702
+aggregate/40 strict Linux visuals/analysis/49 policy-reader/14 channel/3310 inflater
+and all required Android builds. It is source-only and uninstalled. URI grants,
+cold/warm incoming intent lifecycle and provider behavior need actual Android
+acceptance on a separately coherent artifact. No new signing/install/publication
+or Samsung action is authorized by CI. Samsung remains a coordinated final gate;
+unrelated5582 and other projects are untouched. Historical queue entries below
+retain their original artifact lineage; this current status supersedes their
+unfinished installed018/c249 cold-audit descriptions.
+
 ## Renewed emulator scope,2026-10-14
 
 Owner reauthorized the previously planned owned5558 emulator dependency queue;
@@ -13,17 +48,13 @@ F03 single-file ZIP is additive source work and [has separate acceptance rows](S
 Its Android/native gates remain after baseline gates and independently pinned
 artifact provenance. Samsung connectivity cannot substitute for emulator admission.
 
-## Current owner hold,2026-10-14
+## Historical all-device hold, superseded for owned5558
 
-No device testing is authorized in this turn. The owner now holds device testing
-until explicit authorization; this includes both Samsung and disposable-emulator
-runtime activity here. Earlier target/lease instructions below are a resume plan,
-not permission overriding that hold. Before runtime, clarify whether new approval
-covers owned5558, Samsung, or both; keep their separate lease/data/installation
-and admission gates. Remote phone access never bypasses the emulator26GiB/80%
-resource rule. Host sign-only rehearsal with publication disabled is separately
-authorized and does not authorize install, launch, UI or device testing.
-
+The owner previously held both emulator and Samsung runtime work. The later
+renewed scope authorizes only the owned5558 dependency queue under its existing
+admission/lease/data controls. Samsung remains held for coordinated final
+acceptance. Remote phone access does not bypass emulator resource controls;
+sign-only source evidence never authorizes install or runtime by itself.
 ## Candidate provenance, 2026-10-13
 
 Sole branch/PR: agent/local-stable-consolidation / draft PR23. Protected master

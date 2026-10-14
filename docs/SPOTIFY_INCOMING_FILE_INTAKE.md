@@ -104,3 +104,20 @@ must reject at that budget first; the ordinary picker parser retains its existin
 policy. Actual Android parsing/allocation and intake lifecycle remain unqualified;
 no observed OOM is claimed. Cold semantic audit28208 remains completed PASS on
 signed c249; About/Back and subsequent native gates remain separate and pending.
+### Qualified ownership source and bounded engine-lifecycle follow-up
+
+Exact544192c4b9a9ebef5c48d50c3e42c86af21e98b6 CI38630742666 is terminal
+PASS:analysis/702 aggregate tests/16+24 strict Linux visuals/49 policy-reader/
+14 production-channel checks/3310 inflater checks/all required Android builds.
+The exacta24730c control fails on pending-request resurrection as intended.
+Current local Windows checks and actual native intake remain unverified.
+
+The follow-up extends that production-channel host harness with revoked grants
+before provider open, explicit grant-restored retry, rejected unverified arrivals,
+engine close during a blocked read, exactly one settled response, owned worker
+termination and deadline removal, fresh-engine empty catalog, stale prior IDs,
+redelivery under a fresh engine ID and stale-finish isolation. API doubles remain
+explicit: this does not prove real Android URI grants or cold/warm intents. No
+product behavior, dependency, schema, permission or data format changes. The
+expected failing-before assertion is checked quietly so its intentional error
+is not rendered as an unrelated failure annotation. Follow-up CI is pending.

@@ -123,7 +123,7 @@ jobs:
             echo "Defective channel unexpectedly passed the cancellation contract"
             exit 1
           fi
-          grep -F 'Finished pending request A must not resurrect after BUSY' "$output/control-result.txt"
+          grep -Fq 'Finished pending request A must not resurrect after BUSY' "$output/control-result.txt"
           echo "Exact a24730c channel control reproduced pending-request resurrection."
       - name: Analyze Dart code
         id: analyze

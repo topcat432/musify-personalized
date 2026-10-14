@@ -2088,3 +2088,12 @@ independent saved-file cold-export restore/reopen whole user/settings typed hash
 match the preupdate baseline. About/Back, empty-library/rollback, picker/cancel/Save
 and approved playback queue remain separate pending gates. Samsung and other
 workloads remain untouched; no new signing, release, install or publication.
+## CI-qualified incoming ownership source, 2026-10-14
+
+544192c4b9a9ebef5c48d50c3e42c86af21e98b6 exact CI38630742666 PASS:702
+aggregate/40 strict Linux visuals/analysis/49 policy-reader/14 actual channel/
+3310 inflater/all required Android builds. Exacta247 control reproduces the
+pending-cancellation defect. Source-only lifecycle contract tests are the next
+bounded follow-up; current Windows and native intake remain unverified. Signed
+c249/runtime/normal-clone receipts are preserved. Cold semantic audit28208 is
+completed PASS; About/Back and subsequent native gates remain pending.
