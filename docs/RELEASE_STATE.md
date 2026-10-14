@@ -2148,3 +2148,10 @@ StateError message conversion; tests/visuals/builds skipped. Separate-copy forma
 suggestions succeeded and source checkout remained exact. Correction is bundled
 with frozen staged-value rollback comparisons and two in-place owner-edit
 regressions; successor exact-source qualification remains pending.
+
+
+Empty-source5967a624 CI38651502558 passed analysis/staged-value control, then
+was cancelled for fake-clock IO harness correction. Actual saved-backup independent
+restore/reopen and owner-edit service cases passed. c88dc79a exactCI38652526860
+terminal FAIL757 passed/two failed: one miswired injection and one offscreen
+compact repeat tap. Successor corrects those fixtures without weakening checks.

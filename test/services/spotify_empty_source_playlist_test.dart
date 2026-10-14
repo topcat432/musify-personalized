@@ -200,7 +200,7 @@ void main() {
     final snapshot=await service.loadSourcePlaylistSnapshot(1);
     final owner={'ytid':'customId-owner-created','title':'Owner created','source':'user-created','importSourcePlaylistKey':snapshot.sourcePlaylistKey,'list':[{'ytid':'owner-added'}]};
     final writer=SpotifyImportDestinationService(metadataWriter:(box,value) async {await box.put('spotifyImportMetadata',value);if(value.containsKey(importRoutingPendingKey)) await box.put('customPlaylists',[...playlists(),owner]);});
-    await expectLater(service.createEmptySourcePlaylist(snapshot:snapshot),throwsStateError);
+    await expectLater(writer.createEmptySourcePlaylist(snapshot:snapshot),throwsStateError);
     expect(playlists().length,2);expect(playlists().last,owner);
   });
   test('silent pending write cannot permit destination mutation',() async {

@@ -25,7 +25,7 @@ void main() {
     await tester.scrollUntilVisible(find.text('Review empty playlist creation'),150,scrollable:find.byType(Scrollable).first);
     await tester.pumpAndSettle();
   }
-  Future<void> review(WidgetTester tester) async {await tester.tap(find.text('Review empty playlist creation'));await tester.pumpAndSettle();expect(find.text('Create empty source playlist?'),findsOneWidget);expect(find.textContaining('0 source items'),findsWidgets);}
+  Future<void> review(WidgetTester tester) async {await tester.pumpAndSettle();await tester.ensureVisible(find.text('Review empty playlist creation'));await tester.pumpAndSettle();expect(find.text('Review empty playlist creation').hitTestable(),findsOneWidget);await tester.tap(find.text('Review empty playlist creation'));await tester.pumpAndSettle();expect(find.text('Create empty source playlist?'),findsOneWidget);expect(find.textContaining('0 source items'),findsWidgets);}
   Future<void> confirm(WidgetTester tester,_IoEmptyService service) async {
     await tester.tap(find.text('Confirm empty playlist'));await tester.pump();
     await tester.runAsync(()=>service.lastCreation!.then<void>((_) {},onError:(Object _,StackTrace __) {}));await tester.pumpAndSettle();

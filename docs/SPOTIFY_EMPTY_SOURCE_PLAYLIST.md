@@ -67,3 +67,13 @@ that conversion and freezes serialized staged values before callbacks, preventin
 in-place owner edits from appearing equal to a mutated rollback comparison.
 Two new synthetic regressions and an exact3a6eb762 control cover metadata and
 destination mutation; successor qualification remains pending.
+
+
+5967a624 CI38651502558 passed analysis and the exact staged-mutation control;
+its aggregate was cancelled for the widget fake-clock harness correction, not
+qualified. Retained logs show the independent saved-backup restore/reopen and
+owner-edit cases pass. c88dc79a CI38652526860 completed FAIL757 passed/two failed:
+the destination-appearance fixture called the default service instead of its
+injected writer, and the compact repeated-confirmation tap occurred before a
+scrolled frame settled. Corrections retain both persistence and hit-test assertions.
+Successor exact-source qualification remains pending; no golden comparison changed.
