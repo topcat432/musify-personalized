@@ -63,3 +63,14 @@ stream-boundary changes and new widget tests are unverified: normal3GiB host-tes
 admission was refused at97.21% on2026-10-14T19:32:50Z. Do not treat bridge runtime,
 Kotlin/APK compilation, aggregate tests, strict visuals or exact-source CI as passed.
 Actual URI grants/cold/warm intents/native cleanup remain acceptance gates.
+
+### Bridge CI correction, 2026-10-14
+
+Source c3abefe71646299064cdf76f18480abe6fc1b91f exact CI38627270804
+passed Dart analysis and actual Java policy/reader checks, but aggregate tests
+failed (695 passed, four failed); visuals and Android builds were skipped.
+The fake-clock deadline assertion needs an explicit void Future continuation.
+Widget preview assertions must wait for stream cleanup and the observable
+review/error result; cancellation tests must settle the late owned stream before
+checking timer cleanup. The correction is pending exact-source CI and makes no
+native intake claim. Local updated tests remain admission-blocked.

@@ -142,7 +142,7 @@ void main() {
         service
             .openStream(lease.file)
             .first
-            .then(
+            .then<void>(
               (_) => fail('Late success was accepted'),
               onError: (Object error) {
                 rejected = error is SpotifyImportException;
