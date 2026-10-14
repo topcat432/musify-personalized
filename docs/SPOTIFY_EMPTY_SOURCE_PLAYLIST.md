@@ -59,3 +59,11 @@ to preserved F02 control. Fresh22:49:42Z unchanged3GiB host guard refused92.63%;
 no formatter, analyzer or test process launched for this milestone. Native c249
 and cold semantic audit28208 remain separate; no current-source runtime, signing,
 publication, merge, phone or unrelated-emulator operation is implied.
+
+Initial3a6eb762 exactCI38650766562 is terminal FAIL on one redundant StateError
+message conversion; aggregate/visual/build execution was skipped. Separate-copy
+formatting succeeded without modifying the exact checkout. The successor removes
+that conversion and freezes serialized staged values before callbacks, preventing
+in-place owner edits from appearing equal to a mutated rollback comparison.
+Two new synthetic regressions and an exact3a6eb762 control cover metadata and
+destination mutation; successor qualification remains pending.

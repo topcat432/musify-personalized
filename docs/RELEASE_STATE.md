@@ -2141,3 +2141,10 @@ Synthetic pure/widget/rollback/reopen/saved-file independent restore regressions
 are present but not yet qualified. Fresh22:49:42Z3GiB host guard refused92.63%;
 formatter, analyzer and tests did not launch. Nativec249/cold audit28208 PASS
 remain separate, with actual runtime/reliability/provider/phone gates open.
+
+
+Initial empty-source3a6eb762 exactCI38650766562 terminal FAIL on one redundant
+StateError message conversion; tests/visuals/builds skipped. Separate-copy format
+suggestions succeeded and source checkout remained exact. Correction is bundled
+with frozen staged-value rollback comparisons and two in-place owner-edit
+regressions; successor exact-source qualification remains pending.

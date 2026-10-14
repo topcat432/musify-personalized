@@ -162,6 +162,27 @@ void main() {
     expect(metadata().containsKey(importRoutingPendingKey),isTrue);await reopen();
     await expectLater(create(),throwsStateError);expect(playlists(),newer);
   });
+  test('mutable staged metadata cannot hide an independent owner edit from rollback',() async {
+    final writer=SpotifyImportDestinationService(metadataWriter:(box,value) async {
+      await box.put('spotifyImportMetadata',value);
+      value['ownedIndependentMetadata']='keep';await box.put('spotifyImportMetadata',value);
+      throw StateError('Owned metadata failure after independent mutation');
+    });
+    await expectLater(create(using:writer),throwsStateError);
+    expect(metadata()['ownedIndependentMetadata'],'keep',reason:'Owner metadata mutation must survive staged rollback');
+    expect(metadata().containsKey(importRoutingPendingKey),isTrue);expect(playlists().length,1);
+    await reopen();expect(metadata()['ownedIndependentMetadata'],'keep');
+  });
+  test('mutable staged destination cannot hide owner rename from rollback; retry preserves it',() async {
+    final writer=SpotifyImportDestinationService(destinationWriter:(box,key,value) async {
+      await box.put(key,value);value.last['title']='Owner renamed during failure';await box.put(key,value);
+      throw StateError('Owned destination failure after independent mutation');
+    });
+    await expectLater(create(using:writer),throwsStateError);
+    expect(playlists().length,2,reason:'Owner destination mutation must survive staged rollback');
+    expect(playlists().last['title'],'Owner renamed during failure');await reopen();
+    expect((await create()).created,isFalse);expect(playlists().last['title'],'Owner renamed during failure');
+  });
   test('audit failure retains actual creation and pending uncertainty; retry creates no duplicate',() async {
     var writes=0;
     final writer=SpotifyImportDestinationService(metadataWriter:(box,value) async {writes++;await box.put('spotifyImportMetadata',value);if(writes==2) throw StateError('Owned audit failure');});

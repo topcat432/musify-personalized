@@ -180,6 +180,33 @@ jobs:
           name: whole-completeness-control-${{ github.run_number }}
           path: whole-completeness-control.log
           if-no-files-found: error
+      - name: Reproduce mutable staged-value rollback defects on exact prior source
+        shell: bash
+        run: |
+          set -euo pipefail
+          original="$GITHUB_WORKSPACE"
+          control="$RUNNER_TEMP/musify-empty-staging-control-3a6eb762"
+          git fetch --no-tags --depth=1 origin 3a6eb7622f53e904de5873858a56e773bc096294
+          git worktree add --detach "$control" 3a6eb7622f53e904de5873858a56e773bc096294
+          cp test/services/spotify_empty_source_playlist_test.dart "$control/test/services/"
+          cd "$control"
+          flutter pub get --offline
+          if flutter test --no-pub -j 1 --reporter expanded --name 'mutable staged' test/services/spotify_empty_source_playlist_test.dart > "$original/empty-staging-control.log" 2>&1; then
+            echo "Prior source unexpectedly preserved mutated staged values"
+            exit 1
+          fi
+          grep -Fq 'Owner metadata mutation must survive staged rollback' "$original/empty-staging-control.log"
+          grep -Fq 'Owner destination mutation must survive staged rollback' "$original/empty-staging-control.log"
+          echo "Exact3a6eb762 control reproduced both mutable staged-value rollback defects."
+          test "$(git -C "$original" rev-parse HEAD)" = "$SOURCE_SHA"
+
+      - name: Upload exact prior-source mutable staging control log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: empty-staging-control-${{ github.run_number }}
+          path: empty-staging-control.log
+          if-no-files-found: error
       - name: Prepare read-only empty-source formatting suggestions
         shell: bash
         run: |

@@ -519,8 +519,9 @@ class SpotifyImportDestinationService {
   Future<void> _writeEmptyMetadata(Box<dynamic> box, Map<String, dynamic> values) async {
     final had = box.containsKey('spotifyImportMetadata');
     final before = copyImportRoutingValue(box.get('spotifyImportMetadata'));
+    final staged = jsonEncode(values);
     try {await _writeRoutingMetadata(box, values);} catch (_) {
-      if (jsonEncode(box.get('spotifyImportMetadata')) == jsonEncode(values)) {
+      if (jsonEncode(box.get('spotifyImportMetadata')) == staged) {
         if (had) {await box.put('spotifyImportMetadata', before);}
         else {await box.delete('spotifyImportMetadata');}
       }
@@ -825,6 +826,7 @@ class SpotifyImportDestinationService {
     final box = Hive.box('user');
     final had = box.containsKey(key);
     final before = copyImportRoutingValue(box.get(key));
+    final staged = jsonEncode(value);
     try {
       if (destinationWriter == null) {
         await addOrUpdateData<List>('user', key, value);
@@ -834,7 +836,7 @@ class SpotifyImportDestinationService {
     } catch (error, stack) {
       // Restore only this writer's exact staged value; never overwrite a newer
       // independent library edit. The pending audit retains uncertainty.
-      if (jsonEncode(box.get(key)) == jsonEncode(value)) {
+      if (jsonEncode(box.get(key)) == staged) {
         if (had) {
           await box.put(key, before);
         } else {

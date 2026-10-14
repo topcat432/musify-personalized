@@ -77,7 +77,7 @@ class _SpotifySourcePlaylistsPageState
       if (mounted) {
         setState(() {
           message = error is StateError
-              ? error.message.toString()
+              ? error.message
               : 'Empty playlist creation could not be verified. Existing data was retained.';
         });
       }
