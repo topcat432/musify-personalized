@@ -30,10 +30,13 @@ class SpotifyImportPage extends StatefulWidget {
   const SpotifyImportPage({
     super.key,
     this.sessionService = const SpotifyImportSessionService(),
+    this.initialPreview,
     this.readFile = SpotifyImportFileReader.read,
     this.decodeDeflate = SpotifyAndroidDeflateDecoder.decode,
   });
 
+  /// An already validated incoming preview. Construction never saves it.
+  final SpotifyImportPreview? initialPreview;
   final SpotifyImportSessionService sessionService;
   final SpotifyImportReader readFile;
   final SpotifyDeflateDecoder decodeDeflate;
@@ -49,6 +52,12 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
   bool _isSaving = false;
   bool _saved = false;
   Completer<void>? _readCancellation;
+
+  @override
+  void initState() {
+    super.initState();
+    _preview = widget.initialPreview;
+  }
 
   @override
   void dispose() {

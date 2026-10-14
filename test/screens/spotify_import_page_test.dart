@@ -85,6 +85,77 @@ void main() {
   }
 
   testWidgets(
+    'incoming validated preview retains prior import until explicit Save',
+    (tester) async {
+      await tester.runAsync(
+        () => Hive.box('user').putAll({
+          'spotifyImportTracks': [
+            {'sentinel': 'prior'},
+          ],
+          'spotifyImportMetadata': {'sentinel': 'prior'},
+          'spotifyMatchResults': [
+            {'sentinel': 'completed'},
+          ],
+          'favorites': [
+            {'ytid': 'existing'},
+          ],
+        }),
+      );
+      final before = jsonDecode(jsonEncode(Hive.box('user').toMap()));
+      final preview = SpotifyCsvImporter.parseBytes(
+        Uint8List.fromList(utf8.encode('Title,Artist\nIncoming,Owner\n')),
+        fileName: 'incoming.csv',
+      );
+      await tester.binding.setSurfaceSize(const Size(900, 1800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SpotifyImportPage(
+            initialPreview: preview,
+            sessionService: const _IoSessionService(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(Hive.box('user').toMap(), before);
+      expect(button('Save and continue'), findsOneWidget);
+      await tester.tap(button('Save and continue'));
+      await tester.pump();
+      await settleSave(tester);
+      expect(
+        (Hive.box('user').get('spotifyImportTracks') as List).single['title'],
+        'Incoming',
+      );
+      expect(Hive.box('user').get('favorites'), before['favorites']);
+      expect(button('Saved for matching'), findsOneWidget);
+    },
+  );
+  testWidgets('leaving an incoming preview preserves prior completed import', (
+    tester,
+  ) async {
+    await tester.runAsync(
+      () => Hive.box('user').putAll({
+        'spotifyImportTracks': [
+          {'sentinel': 'prior'},
+        ],
+        'spotifyMatchResults': [
+          {'sentinel': 'completed'},
+        ],
+      }),
+    );
+    final before = jsonDecode(jsonEncode(Hive.box('user').toMap()));
+    final preview = SpotifyCsvImporter.parseBytes(
+      Uint8List.fromList(utf8.encode('Title,Artist\nIncoming,Owner\n')),
+      fileName: 'incoming.csv',
+    );
+    await tester.pumpWidget(
+      MaterialApp(home: SpotifyImportPage(initialPreview: preview)),
+    );
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(const SizedBox.shrink());
+    expect(Hive.box('user').toMap(), before);
+  });
+  testWidgets(
     'ZIP preview discloses entry and saves only after explicit action',
     (tester) async {
       await pumpPage(

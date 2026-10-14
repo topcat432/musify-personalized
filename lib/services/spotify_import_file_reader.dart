@@ -14,16 +14,20 @@ class SpotifyImportFileReader {
   static Future<Uint8List> read(
     PlatformFile file, {
     Future<void>? cancelled,
+    int? maxBytes,
   }) async {
     final limit =
-        (file.name.toLowerCase().endsWith('.json') ||
-            file.name.toLowerCase().endsWith('.zip'))
-        ? SpotifyCsvImporter.maxJsonBytes
-        : null;
+        maxBytes ??
+        ((file.name.toLowerCase().endsWith('.json') ||
+                file.name.toLowerCase().endsWith('.zip'))
+            ? SpotifyCsvImporter.maxJsonBytes
+            : null);
     void check(int size) {
       if (limit != null && size > limit) {
-        throw const SpotifyImportException(
-          'JSON and ZIP song lists must be 8 MiB or smaller.',
+        throw SpotifyImportException(
+          maxBytes == null
+              ? 'JSON and ZIP song lists must be 8 MiB or smaller.'
+              : 'The incoming song list must be 8 MiB or smaller.',
         );
       }
     }

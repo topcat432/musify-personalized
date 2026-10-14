@@ -1,5 +1,20 @@
 # Musify Personalized current state
 
+## F05-A incoming-file preview foundation,2026-10-14
+
+The approved Android share/open roadmap now has bounded in-memory intake and a
+validated-preview entry to the existing explicit Save flow. Offers never read or
+save; active leases own cancellation and stale callbacks cannot release newer
+requests. All incoming formats have8MiB/20second/1second read/cleanup bounds;
+ordinary picker CSV/TSV policy remains. ZIP choice stays explicit. The prior import
+and completed work remain unchanged until Save. [Contract](SPOTIFY_INCOMING_FILE_INTAKE.md).
+This is partial host infrastructure: intent handlers, actual URI grant verification,
+native transport and runtime acceptance are not yet implemented/qualified. No
+manifest, adapter, backup format, dependency or permission change. Immutable c249
+and queued native acceptance remain separate. Analysis/40 focused and688 aggregate
+tests PASS. Both strict Windows suites FAIL16+24/all40 actuals match unchanged
+control. Exact-source Linux CI remains required for this foundation.
+
 ## Saved membership read integrity correction,2026-10-14
 
 An independent review found that saved source review decoded membership without
@@ -14,7 +29,7 @@ absence, unsupported memberships and valid saved membership retain their behavio
 Analysis and25 focused checks PASS. Guarded aggregate PASS681, including seven
 uncommitted inbox tests; the source-only correction adds eight tests to666.
 Both strict Windows suites FAIL16+24; all40 actual images match the unchanged
-control byte-for-byte. Exact-source Linux CI is pending. The incoming-file inbox
+control byte-for-byte. Exactc874d11d CI38609076258 PASS674/40,3310 inflater checks and all required builds. The incoming-file inbox
 prototype remains outside this correction.
 No adapter, backup format, dependency or permission change. Native/signing/phone
 acceptance remains separate; immutable signed c249 is unchanged.
