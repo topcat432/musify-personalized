@@ -2169,3 +2169,21 @@ for reviewed false unchanged wording after a committed empty-source write.
 Successor uses committed/unverified outcome and truthful saved feedback, retains
 destination/newer source/pending audit, and covers reopen plus explicit existing-
 destination reconciliation with no duplicate. Exact successor CI pending.
+
+
+## Qualified truthful empty-source reporting, 2026-10-14
+
+Exactb0e8d9f82bf335e95445c17e8da90b2ba9ace262 CI38655879713 PASS:
+765 aggregate/analysis/16+24 strict Linux visuals/49 reader-policy/30 actual
+channel/3310 inflater checks/all required Android builds. Exact050f00e7 control
+reproduces false unchanged feedback after a committed write. The corrected
+service/widget/reopen/reconciliation path preserves the saved destination, newer
+source and uncertain audit with no duplicate creation. Nativec249 and its audit
+remain separate; fresh23:51:29Z26GiB guard refused126.83%.
+
+Next pure occurrence-plan prototype is staged without a production caller or
+mutation API; [contract and decisions](SPOTIFY_OCCURRENCE_PLAN.md). It preserves
+manual entries/order/removals and selected recordings, refuses unknown ownership
+and ambiguous changed anchors, and does not introduce a storage schema or use
+queue IDs as import ownership. Its13 pure tests are present but unqualified.
+Fresh23:53:13Z3GiB guard refused100.87%; no formatter/analyzer/test launched.

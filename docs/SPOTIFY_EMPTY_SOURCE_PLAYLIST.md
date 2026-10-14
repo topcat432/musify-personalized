@@ -96,3 +96,11 @@ pending marker remain intact. A normal explicit song transfer can reconcile into
 that same destination, archiving the uncertain zero-song attempt without creating
 a duplicate or calling it a completed empty transfer. Pure/service/widget/reopen
 regressions and an exact050f00e7 control qualify this correction; pending CI.
+
+
+Exactb0e8d9f8 CI38655879713 terminal PASS:765 aggregate, clean analysis,
+16+24 strict Linux visuals, exact prior-source reporting/rollback controls,
+channel/policy/inflater checks and all required builds. Service and compact widget
+regressions prove saved/unverified feedback, source/destination preservation,
+reopen and explicit idempotent reconciliation. Native/phone qualification remains
+separate; the last guarded native attempt refused126.83%, without a launch.

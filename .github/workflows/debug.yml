@@ -248,6 +248,8 @@ jobs:
             test/services/spotify_empty_source_playlist_test.dart
             test/screens/spotify_empty_source_playlist_page_test.dart
             test/support/spotify_empty_source_fixture.dart
+            lib/services/spotify_source_occurrence_plan.dart
+            test/services/spotify_source_occurrence_plan_test.dart
           )
           for file in "${files[@]}"; do
             mkdir -p "$output/$(dirname "$file")"
