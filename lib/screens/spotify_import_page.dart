@@ -170,7 +170,9 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            '${preview.tracks.length} Spotify tracks saved for matching.',
+            preview.tracks.isEmpty
+                ? 'Source playlists saved for review; no songs to match.'
+                : '${preview.tracks.length} Spotify tracks saved for matching.',
           ),
         ),
       );
@@ -236,7 +238,7 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
                     : () => Navigator.of(context).push(
                         MaterialPageRoute<void>(
                           builder: (_) => SpotifySourcePlaylistsPage(
-                            preview: preview.sourcePlaylists,
+                            preview: _saved ? null : preview.sourcePlaylists,
                           ),
                         ),
                       ),
@@ -334,7 +336,9 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
                   _isSaving
                       ? 'Saving…'
                       : _saved
-                      ? 'Saved for matching'
+                      ? preview.tracks.isEmpty
+                          ? 'Saved source playlists'
+                          : 'Saved for matching'
                       : 'Save and continue',
                 ),
               ),

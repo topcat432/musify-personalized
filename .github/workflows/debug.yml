@@ -180,6 +180,37 @@ jobs:
           name: whole-completeness-control-${{ github.run_number }}
           path: whole-completeness-control.log
           if-no-files-found: error
+      - name: Prepare read-only empty-source formatting suggestions
+        shell: bash
+        run: |
+          set -euo pipefail
+          output="$RUNNER_TEMP/musify-empty-source-format"
+          files=(
+            lib/screens/spotify_import_page.dart
+            lib/screens/spotify_source_playlists_page.dart
+            lib/services/spotify_import_destination_service.dart
+            lib/services/spotify_playlist_draft.dart
+            lib/services/spotify_whole_source_readiness.dart
+            test/services/spotify_empty_source_playlist_test.dart
+            test/screens/spotify_empty_source_playlist_page_test.dart
+            test/support/spotify_empty_source_fixture.dart
+          )
+          for file in "${files[@]}"; do
+            mkdir -p "$output/$(dirname "$file")"
+            cp "$file" "$output/$file"
+          done
+          dart format "$output/lib" "$output/test"
+          test "$(du -sb "$output" | cut -f1)" -le 10485760
+          git diff --exit-code
+
+      - name: Upload read-only formatting suggestions
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: empty-source-format-${{ github.run_number }}
+          path: ${{ runner.temp }}/musify-empty-source-format/
+          if-no-files-found: error
+          retention-days: 7
       - name: Analyze Dart code
         id: analyze
         shell: bash

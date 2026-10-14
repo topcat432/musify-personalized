@@ -21,6 +21,70 @@ class SpotifySourcePlaylistsPage extends StatefulWidget {
 class _SpotifySourcePlaylistsPageState
     extends State<SpotifySourcePlaylistsPage> {
   var selected = 0;
+  var creating = false;
+  String? message;
+  Future<void> reviewEmptySource(SpotifySourcePlaylist source) async {
+    if (creating) return;
+    setState(() {
+      creating = true;
+      message = null;
+    });
+    try {
+      final snapshot = await widget.routingService.loadSourcePlaylistSnapshot(
+        source.position,
+      );
+      if (snapshot.wholeSourceReadiness?.verifiedEmpty != true) {
+        throw StateError(
+          'The source is not verifiably empty. Its membership was retained; reload and review it.',
+        );
+      }
+      if (!mounted) return;
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Create empty source playlist?'),
+          content: SingleChildScrollView(
+            child: Text(
+              '"${snapshot.sourceName}" has 0 source items. No songs will be transferred. A destination already linked to this source will be reused without changing its name, contents or location. Removed destinations will not be recreated automatically.',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Confirm empty playlist'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+      final result = await widget.routingService.createEmptySourcePlaylist(
+        snapshot: snapshot,
+      );
+      if (!mounted) return;
+      final status = result.created
+          ? 'Created empty playlist "${result.destinationTitle}". 0 songs transferred.'
+          : 'Reused "${result.destinationTitle}" without changes. 0 songs transferred.';
+      setState(() {
+        message = result.trackingRecorded
+            ? status
+            : '$status Audit unverified; review before retrying.';
+      });
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          message = error is StateError
+              ? error.message.toString()
+              : 'Empty playlist creation could not be verified. Existing data was retained.';
+        });
+      }
+    } finally {
+      if (mounted) setState(() => creating = false);
+    }
+  }
   @override
   Widget build(BuildContext context) {
     List<SpotifySourcePlaylist> sources;
@@ -78,7 +142,7 @@ class _SpotifySourcePlaylistsPageState
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'Recording matches are shared across playlists. Source order and unsupported items are retained. Playlist recreation and synchronization are not implemented yet.',
+                    'Recording matches are shared across playlists. Source order and unsupported items are retained. Nonempty sources can route resolved recordings. Empty sources can be created after confirmation; exact repeated slots and synchronization remain separate.',
                   ),
                   const SizedBox(height: 16),
                   DropdownButtonFormField<int>(
@@ -97,13 +161,20 @@ class _SpotifySourcePlaylistsPageState
                           ),
                         ),
                     ],
-                    onChanged: (value) {
+                    onChanged: creating ? null : (value) {
                       if (value != null) setState(() => selected = value);
                     },
                   ),
                   const SizedBox(height: 8),
                   Text('${source.members.length} source items'),
-                  if (widget.preview == null)
+                  if (message != null)
+                    PersonalizedStatusBanner(title: 'Empty source action', message: message!),
+                  if (widget.preview == null && source.members.isEmpty)
+                    OutlinedButton(
+                      onPressed: creating ? null : () => reviewEmptySource(source),
+                      child: Text(creating ? 'Checking source…' : 'Review empty playlist creation'),
+                    ),
+                  if (widget.preview == null && source.members.isNotEmpty)
                     OutlinedButton(
                       onPressed: () => Navigator.of(context).push(
                         personalizedPageRoute<void>(

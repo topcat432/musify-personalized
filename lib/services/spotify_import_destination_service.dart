@@ -103,6 +103,16 @@ class SpotifyImportRouteResult {
   final int alreadyPresentCount;
 }
 
+class SpotifyEmptySourcePlaylistResult {
+  const SpotifyEmptySourcePlaylistResult({
+    required this.destinationId,
+    required this.destinationTitle,
+    required this.created,
+    this.trackingRecorded = true,
+  });
+  final String destinationId, destinationTitle;
+  final bool created, trackingRecorded;
+}
 class SpotifyImportDestinationService {
   const SpotifyImportDestinationService({
     this.metadataWriter,
@@ -331,6 +341,202 @@ class SpotifyImportDestinationService {
   static String _sessionId(Map<String, dynamic> metadata) =>
       importSessionIdentity(metadata);
 
+  void _validateEmptySource(SpotifyImportDestinationSnapshot snapshot) {
+    _validateCurrentSnapshot(snapshot);
+    final box = Hive.box('user');
+    final live = SpotifyWholeSourceReadiness.inspect(
+      rawTracks: box.get('spotifyImportTracks'),
+      rawResults: box.get('spotifyMatchResults'),
+      rawExcludedRows: box.get('spotifyExcludedImportRows'),
+      metadata: _readMap(box.get('spotifyImportMetadata')),
+      sourcePlaylistPosition: snapshot.sourcePlaylistPosition,
+    );
+    if (snapshot.sourcePlaylistPosition == null ||
+        snapshot.sourcePlaylistKey == null ||
+        snapshot.wholeSourceReadiness?.verifiedEmpty != true ||
+        !live.verifiedEmpty ||
+        live.fingerprint != snapshot.wholeSourceReadiness?.fingerprint) {
+      throw StateError('The source is not verifiably empty. Reload its membership; no playlist was changed.');
+    }
+  }
+
+  // Empty creation is a separate zero-song action. It never certifies a song
+  // transfer or advances the last-successful resolved-recording baseline.
+  Future<SpotifyEmptySourcePlaylistResult> createEmptySourcePlaylist({
+    required SpotifyImportDestinationSnapshot snapshot,
+  }) async {
+    if (_routingActive) throw StateError('Another transfer is already running. Wait for it to finish.');
+    _routingActive = true;
+    try {
+      _validateEmptySource(snapshot);
+      final box = Hive.box('user');
+      final metadata = _readMap(box.get('spotifyImportMetadata'));
+      final priorPending = metadata[importRoutingPendingKey];
+      final sourceKey = snapshot.sourcePlaylistKey!;
+      if (metadata.containsKey(importRoutingPendingKey) && (priorPending is! Map ||
+          priorPending['action'] != 'create_empty_source_playlist' ||
+          priorPending['selectedCount'] is! int || priorPending['selectedCount'] != 0 ||
+          priorPending['sourceItemCount'] is! int || priorPending['sourceItemCount'] != 0 ||
+          priorPending['operationId'] is! String || (priorPending['operationId'] as String).isEmpty ||
+          priorPending['sourcePlaylistKey'] != sourceKey ||
+          priorPending['importSessionId'] != snapshot.importSessionId)) {
+        throw StateError('An earlier transfer needs review before creating an empty source destination.');
+      }
+      if (priorPending is Map && (priorPending['destinationId'] is! String || (priorPending['destinationId'] as String).isEmpty)) {
+        throw StateError('The previous empty-source attempt is unverified. Review it before continuing.');
+      }
+      final rawHistory = metadata['routingHistory'];
+      if (metadata.containsKey('routingHistory') && (rawHistory is! List || rawHistory.any((row) => row is! Map))) {
+        throw StateError('Saved routing history is unverified. The original values were retained.');
+      }
+      final history = _readMaps(rawHistory);
+      final priorActions = history.where((row) =>
+          row['action'] == 'create_empty_source_playlist' && row['sourcePlaylistKey'] == sourceKey).toList();
+      if (priorActions.any((row) => row['destinationId'] is! String || (row['destinationId'] as String).isEmpty)) {
+        throw StateError('The previous empty-source audit is unverified. Existing data was retained.');
+      }
+      final linked = _currentCustomPlaylists().where((playlist) =>
+          playlist['importSourcePlaylistKey'] == sourceKey).toList();
+      if (linked.length > 1) throw StateError('More than one destination belongs to this source. Review them in the library before continuing.');
+      final existing = linked.isEmpty ? null : linked.single;
+      final priorId = priorPending is Map ? priorPending['destinationId'] :
+          priorActions.isEmpty ? null : priorActions.last['destinationId'];
+      if (priorId != null && (existing == null || existing['ytid'] != priorId)) {
+        throw StateError('The previously recorded destination was removed or changed. It will not be recreated automatically.');
+      }
+      final id = existing == null ? PlaylistUtils.generateCustomPlaylistId() : existing['ytid'];
+      if (id is! String || id.trim().isEmpty || (existing != null && existing['list'] is! List)) {
+        throw StateError('The saved destination is unverified. Existing values were retained.');
+      }
+      final operationId = '${DateTime.now().toUtc().microsecondsSinceEpoch}:empty:$sourceKey';
+      final pending = <String, dynamic>{
+        'operationId': operationId,
+        'action': 'create_empty_source_playlist',
+        'importSessionId': snapshot.importSessionId,
+        'sourcePlaylistKey': sourceKey,
+        'sourcePlaylistFingerprint': snapshot.sourcePlaylistFingerprint,
+        'destinationId': id,
+        'selectedCount': 0,
+        'sourceItemCount': 0,
+        'confirmedAt': DateTime.now().toUtc().toIso8601String(),
+      };
+      await _writeEmptyMetadata(box, {...metadata, importRoutingPendingKey: pending});
+      var destinationWritten = false;
+      final hadPlaylists = box.containsKey('customPlaylists');
+      final beforePlaylists = copyImportRoutingValue(box.get('customPlaylists'));
+      try {
+        _validateEmptySource(snapshot);
+        final checkpoint = _readMap(box.get('spotifyImportMetadata'))[importRoutingPendingKey];
+        if (checkpoint is! Map || checkpoint['operationId'] != operationId) {
+          throw StateError('The empty-source checkpoint was not saved. No destination was created.');
+        }
+        final currentLinked = _currentCustomPlaylists().where((playlist) =>
+            playlist['importSourcePlaylistKey'] == sourceKey).toList();
+        if ((existing == null && currentLinked.isNotEmpty) ||
+            (existing != null && (currentLinked.length != 1 || currentLinked.single['ytid'] != id))) {
+          throw StateError('The source destination changed during confirmation. Reload before continuing.');
+        }
+        if (existing == null) {
+          final playlist = <String, dynamic>{
+            'ytid': id, 'title': snapshot.sourceName, 'source': 'user-created',
+            'importSourceName': snapshot.sourceName,
+            'importSourcePlaylistKey': sourceKey,
+            'list': <dynamic>[], 'createdAt': DateTime.now().millisecondsSinceEpoch,
+          };
+          await _writeDestination('customPlaylists', <Map>[..._storedPlaylists('customPlaylists'), playlist]);
+          destinationWritten = true;
+          userCustomPlaylists.value = _storedPlaylists('customPlaylists');
+        }
+        _validateEmptySource(snapshot);
+      } catch (_) {
+        final restored = box.containsKey('customPlaylists') == hadPlaylists &&
+            jsonEncode(box.get('customPlaylists')) == jsonEncode(beforePlaylists);
+        if (!destinationWritten && restored) {
+          await _removeEmptyPending(box, snapshot, operationId, priorPending);
+        }
+        rethrow;
+      }
+      final actual = _currentCustomPlaylists().where((playlist) =>
+          playlist['ytid'] == id && playlist['importSourcePlaylistKey'] == sourceKey).toList();
+      if (actual.length != 1) throw StateError('The destination changed during creation. The saved library was retained; review its pending audit before retrying.');
+      final title = actual.single['title']?.toString() ?? snapshot.sourceName;
+      var trackingRecorded = true;
+      try {
+        final current = _readMap(box.get('spotifyImportMetadata'));
+        final owned = current[importRoutingPendingKey];
+        if (_sessionId(current) != snapshot.importSessionId || owned is! Map || owned['operationId'] != operationId) {
+          throw StateError('The empty-source audit checkpoint changed.');
+        }
+        final currentHistory = current['routingHistory'];
+        if (current.containsKey('routingHistory') && (currentHistory is! List || currentHistory.any((row) => row is! Map))) {
+          throw StateError('The routing history changed.');
+        }
+        final completed = Map<String, dynamic>.from(current)
+          ..['routingHistory'] = [
+            ..._readMaps(currentHistory),
+            {...pending, 'destinationTitle': title, 'createdPlaylist': existing == null,
+              'addedCount': 0, 'alreadyPresentCount': 0, 'songTransfer': false,
+              'status': 'completed', 'routedAt': DateTime.now().toUtc().toIso8601String()},
+          ]
+          ..remove(importRoutingPendingKey);
+        await _writeEmptyMetadata(box, completed);
+        _validateEmptySource(snapshot);
+        final saved = _readMap(box.get('spotifyImportMetadata'));
+        final savedHistory = _readMaps(saved['routingHistory']);
+        if (saved.containsKey(importRoutingPendingKey) || !savedHistory.any((row) =>
+            row['operationId'] == operationId && row['action'] == 'create_empty_source_playlist' &&
+            row['songTransfer'] == false && row['selectedCount'] == 0 && row['addedCount'] == 0)) {
+          throw StateError('The completed empty-source audit was not saved.');
+        }
+      } catch (_) {
+        trackingRecorded = false;
+        final current = _readMap(box.get('spotifyImportMetadata'));
+        final owned = current[importRoutingPendingKey];
+        if (_sessionId(current) == snapshot.importSessionId &&
+            (owned == null || (owned is Map && owned['operationId'] == operationId))) {
+          try {await _writeEmptyMetadata(box, {...current, importRoutingPendingKey: pending});} catch (_) {}
+        }
+      }
+      final finalDestination = _currentCustomPlaylists().where((playlist) =>
+          playlist['ytid'] == id && playlist['importSourcePlaylistKey'] == sourceKey).toList();
+      if (finalDestination.length != 1) {
+        final current = _readMap(box.get('spotifyImportMetadata'));
+        final owned = current[importRoutingPendingKey];
+        if (_sessionId(current) == snapshot.importSessionId &&
+            (owned == null || (owned is Map && owned['operationId'] == operationId))) {
+          try {await _writeEmptyMetadata(box, {...current, importRoutingPendingKey: pending});} catch (_) {}
+        }
+        throw StateError('The destination was removed during confirmation. It will not be recreated automatically; its audit needs review.');
+      }
+      userCustomPlaylists.value = _storedPlaylists('customPlaylists');
+      userPlaylistFolders.value = _storedPlaylists('playlistFolders');
+      return SpotifyEmptySourcePlaylistResult(destinationId: id,
+          destinationTitle: finalDestination.single['title']?.toString() ?? title,
+          created: existing == null, trackingRecorded: trackingRecorded,);
+    } finally {_routingActive = false;}
+  }
+
+  Future<void> _writeEmptyMetadata(Box<dynamic> box, Map<String, dynamic> values) async {
+    final had = box.containsKey('spotifyImportMetadata');
+    final before = copyImportRoutingValue(box.get('spotifyImportMetadata'));
+    try {await _writeRoutingMetadata(box, values);} catch (_) {
+      if (jsonEncode(box.get('spotifyImportMetadata')) == jsonEncode(values)) {
+        if (had) {await box.put('spotifyImportMetadata', before);}
+        else {await box.delete('spotifyImportMetadata');}
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> _removeEmptyPending(Box<dynamic> box, SpotifyImportDestinationSnapshot snapshot,
+      String operationId, Object? priorPending,) async {
+    final current = _readMap(box.get('spotifyImportMetadata'));
+    final owned = current[importRoutingPendingKey];
+    if (_sessionId(current) != snapshot.importSessionId || owned is! Map || owned['operationId'] != operationId) return;
+    if (priorPending == null) {current.remove(importRoutingPendingKey);}
+    else {current[importRoutingPendingKey] = copyImportRoutingValue(priorPending);}
+    try {await _writeEmptyMetadata(box, current);} catch (_) {}
+  }
   Future<SpotifyImportRouteResult> route({
     required SpotifyImportDestinationSnapshot snapshot,
     required int requestedCount,

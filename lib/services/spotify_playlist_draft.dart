@@ -11,7 +11,7 @@ class SpotifyPlaylistDraft {
   final List<SpotifySourcePlaylist> playlists;
   final int ignoredAlbums;
   SpotifyImportPreview toPreview({required String fileName}) {
-    if (tracks.isEmpty)
+    if (tracks.isEmpty && !playlists.any((source) => source.members.isEmpty))
       throw const SpotifyImportException(
         'This playlist backup has no supported songs to match. Its source items were not changed.',
       );
@@ -38,7 +38,7 @@ class SpotifyPlaylistDraft {
       rejectedRows: List.unmodifiable(rejected),
       sourcePlaylists: playlists,
       notices: [
-        '${playlists.length} source playlists and $row ordered memberships will be retained. ${tracks.length} unique Spotify recordings will be matched once. Unsupported items stay in source review; playlist recreation and repeat synchronization are not implemented.',
+        '${playlists.length} source playlists and $row ordered memberships will be retained. ${tracks.length} unique Spotify recordings will be matched once. Unsupported items stay in source review. Empty sources can be created after confirmation; exact repeated slots and synchronization are separate.',
         if (ignoredAlbums > 0) '$ignoredAlbums saved albums were not imported.',
       ],
     );

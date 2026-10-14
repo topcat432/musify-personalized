@@ -16,6 +16,7 @@ class SpotifyWholeSourceReadiness {
     required this.repeatedMemberships,
     required this.fingerprint,
     this.rejectedInputRows = 0,
+    this.emptyNamedSource = false,
     this.issue,
   });
   final int sourceRows,
@@ -27,6 +28,10 @@ class SpotifyWholeSourceReadiness {
   final String? fingerprint;
   final int rejectedInputRows;
   final String? issue;
+  final bool emptyNamedSource;
+  bool get verifiedEmpty => emptyNamedSource && sourceRows == 0 &&
+      pending == 0 && excluded == 0 && unsupported == 0 &&
+      rejectedInputRows == 0 && unknown == 0 && fingerprint != null;
   bool get ready =>
       sourceRows > 0 &&
       pending == 0 &&
@@ -115,6 +120,7 @@ class SpotifyWholeSourceReadiness {
         metadata[SpotifySourcePlaylistCodec.metadataKey] == null)
       unknown++;
     var scope = tracks.keys.toSet();
+    var emptyNamedSource = false;
     try {
       final sources = SpotifySourcePlaylistCodec.readSaved(
         metadata[SpotifySourcePlaylistCodec.metadataKey],
@@ -159,6 +165,7 @@ class SpotifyWholeSourceReadiness {
         scope = {};
       } else {
         selected = [sources[sourcePlaylistPosition - 1]];
+        emptyNamedSource = sources[sourcePlaylistPosition - 1].members.isEmpty;
         scope = {};
       }
       final seen = <int>{};
@@ -249,7 +256,7 @@ class SpotifyWholeSourceReadiness {
         excluded == 0 &&
         unsupported == 0 &&
         rejectedInput == 0 &&
-        scope.isNotEmpty) {
+        (scope.isNotEmpty || emptyNamedSource)) {
       try {
         fingerprint = sha256
             .convert(
@@ -279,6 +286,7 @@ class SpotifyWholeSourceReadiness {
       }
     }
     return SpotifyWholeSourceReadiness(
+      emptyNamedSource: emptyNamedSource,
       sourceRows: scope.length,
       pending: pending,
       excluded: excluded,
