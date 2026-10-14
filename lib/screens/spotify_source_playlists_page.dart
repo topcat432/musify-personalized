@@ -1,11 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
+import 'package:musify/screens/spotify_import_destination_page.dart';
+import 'package:musify/services/spotify_import_destination_service.dart';
 import 'package:musify/services/spotify_source_playlist.dart';
 import 'package:musify/widgets/personalized_ui.dart';
 
 class SpotifySourcePlaylistsPage extends StatefulWidget {
-  const SpotifySourcePlaylistsPage({super.key, this.preview});
+  const SpotifySourcePlaylistsPage({
+    super.key,
+    this.preview,
+    this.routingService = const SpotifyImportDestinationService(),
+  });
   final List<SpotifySourcePlaylist>? preview;
+  final SpotifyImportDestinationService routingService;
   @override
   State<SpotifySourcePlaylistsPage> createState() =>
       _SpotifySourcePlaylistsPageState();
@@ -93,6 +100,18 @@ class _SpotifySourcePlaylistsPageState
                   ),
                   const SizedBox(height: 8),
                   Text('${source.members.length} source items'),
+                  if (widget.preview == null)
+                    OutlinedButton(
+                      onPressed: () => Navigator.of(context).push(
+                        personalizedPageRoute<void>(
+                          builder: (_) => SpotifyImportDestinationPage(
+                            sourcePlaylistPosition: source.position,
+                            routingService: widget.routingService,
+                          ),
+                        ),
+                      ),
+                      child: const Text('Route resolved songs'),
+                    ),
                 ],
               ),
             ),

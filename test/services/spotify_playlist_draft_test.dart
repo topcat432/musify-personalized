@@ -22,6 +22,43 @@ void main() {
       Uint8List.fromList(utf8.encode(jsonEncode(document)));
   final rejected = throwsA(isA<SpotifyImportException>());
   test(
+    'supplied playlist identity conflict cannot silently share a source scope',
+    () {
+      final uri = 'spotify:playlist:${'P' * 22}';
+      expect(
+        () => SpotifyPlaylistDraft.parseBytes(
+          bytes({
+            'playlists': [
+              {
+                'name': 'Same',
+                'uri': uri,
+                'id': 'Q' * 22,
+                'tracks': [a],
+              },
+            ],
+          }),
+        ),
+        rejected,
+      );
+      expect(
+        SpotifyPlaylistDraft.parseBytes(
+          bytes({
+            'playlists': [
+              {
+                'name': 'Same',
+                'uri': uri,
+                'id': 'P' * 22,
+                'tracks': [a],
+              },
+            ],
+          }),
+        ).playlists.single.spotifyUri,
+        uri,
+      );
+    },
+  );
+
+  test(
     'unique recording matched once with ordered repeated playlist membership',
     () {
       final draft = SpotifyPlaylistDraft.parseBytes(

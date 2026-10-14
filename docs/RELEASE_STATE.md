@@ -1,5 +1,22 @@
 # Musify Personalized current state
 
+## F04-D source-specific resolved-song routing,2026-10-14
+
+Saved source review now opens the existing explicit destination preview/Apply
+flow, constrained to the chosen source in first membership-occurrence order.
+Chosen recordings, pending/unsupported items and source repetitions stay retained.
+Scoped target keys separate same-name sources and unrelated existing playlists;
+retries/restart and saved-file restore preserve scope/order. Source fingerprints
+reject stale membership before writes; a late membership change leaves actual
+writes intact with unverified tracking. Failed destination writes roll back only
+the exact owned staged value, never a newer independent edit. [Contract](SPOTIFY_SOURCE_PLAYLIST_ROUTING.md).
+The playlist-ID/URI conflict guard prevents assigning a contradictory source key.
+Targeted service/widget and identity tests, aggregate analysis and666 tests PASS; exact-source CI pending. Windows strict FAIL16+24/all40 actuals unchanged. Test-only root-zone
+I/O adapters resolve the Flutter fake-clock fixture; production defaults remain.
+No global adapter/backup format/dependency/permission change. Exact repetition
+recreation, empty-only sources, account schemas and repeat synchronization remain
+unfulfilled; immutable signed c249 and its native queue remain separate.
+
 ## F04-C durable named-playlist intake/review,2026-10-14
 
 Direct JSON and selected ZIP payloads now connect the precise named-playlist
@@ -11,7 +28,7 @@ forward-version data is retained with an error. Same-URI artist lists compare
 structurally, and supplied track-ID conflicts retain an unsupported member at its
 original position. [Contract](SPOTIFY_PLAYLIST_MEMBERSHIP.md). No global adapter,
 backup format, dependency or permission change. Analysis and651 aggregate tests
-PASS; final targeted suites and both strict Windows suites ran. Windows remains
+PASS; exact859a16c3 CI38596632931 PASS651/40,3310 inflater checks and all required builds. Final targeted suites and both strict Windows suites ran. Windows remains
 FAIL16+24/all40 actuals unchanged. Exact-source CI pending. Native/signing/phone
 qualification is separate; c249 unchanged. Source-playlist recreation and repeat
 synchronization are not implemented and are the next roadmap milestones.

@@ -7,17 +7,24 @@
  *     (at your option) any later version.
  */
 
+import 'dart:convert';
+
 import 'package:hive/hive.dart';
 import 'package:musify/services/common_services.dart';
 import 'package:musify/services/data_manager.dart';
 import 'package:musify/services/playlists_manager.dart';
 import 'package:musify/services/spotify_import_routing_state.dart';
+import 'package:musify/services/spotify_source_playlist.dart';
+import 'package:musify/services/spotify_source_playlist_projection.dart';
 import 'package:musify/utilities/playlist_utils.dart';
 
 enum SpotifyImportSelectionKind { all, firstCount, individual, newlyResolved }
 
 typedef SpotifyRoutingMetadataWriter =
     Future<void> Function(Box<dynamic> box, Map<String, dynamic> metadata);
+
+typedef SpotifyDestinationWriter =
+    Future<void> Function(Box<dynamic> box, String key, List<dynamic> value);
 
 enum SpotifyImportDestinationKind { likedSongs, newPlaylist, existingPlaylist }
 
@@ -35,6 +42,11 @@ class SpotifyImportDestinationSnapshot {
     this.newlyResolvedBaselineKnown = false,
     this.newlyResolvedRecordingIds = const {},
     this.resolutionFingerprint,
+    this.sourcePlaylistPosition,
+    this.sourcePlaylistKey,
+    this.sourcePlaylistFingerprint,
+    this.sourceUnsupportedMembers = 0,
+    this.sourceRepeatedMembers = 0,
   });
 
   final String importSessionId;
@@ -49,6 +61,9 @@ class SpotifyImportDestinationSnapshot {
   final bool newlyResolvedBaselineKnown;
   final Set<String> newlyResolvedRecordingIds;
   final String? resolutionFingerprint;
+  final int? sourcePlaylistPosition;
+  final String? sourcePlaylistKey, sourcePlaylistFingerprint;
+  final int sourceUnsupportedMembers, sourceRepeatedMembers;
 
   int get duplicateMatchCount => resolvedResultCount - resolvedSongs.length;
 }
@@ -86,8 +101,12 @@ class SpotifyImportRouteResult {
 }
 
 class SpotifyImportDestinationService {
-  const SpotifyImportDestinationService({this.metadataWriter});
+  const SpotifyImportDestinationService({
+    this.metadataWriter,
+    this.destinationWriter,
+  });
   final SpotifyRoutingMetadataWriter? metadataWriter;
+  final SpotifyDestinationWriter? destinationWriter;
   static bool _routingActive = false;
 
   Future<SpotifyImportDestinationSnapshot> loadSnapshot() async {
@@ -138,6 +157,48 @@ class SpotifyImportDestinationService {
       newlyResolvedBaselineKnown: baseline != null && identityReliable,
       newlyResolvedRecordingIds: Set.unmodifiable(newlyResolved),
       resolutionFingerprint: identities.fingerprint,
+    );
+  }
+
+  SpotifySourcePlaylistProjection _sourceProjection(
+    SpotifyImportDestinationSnapshot snapshot,
+    int position,
+  ) {
+    final box = Hive.box('user');
+    final metadata = _readMap(box.get('spotifyImportMetadata'));
+    return SpotifySourcePlaylistProjection.project(
+      sources: SpotifySourcePlaylistCodec.decode(
+        metadata[SpotifySourcePlaylistCodec.metadataKey],
+      ),
+      position: position,
+      tracks: _readMaps(box.get('spotifyImportTracks')),
+      snapshot: snapshot,
+    );
+  }
+
+  Future<SpotifyImportDestinationSnapshot> loadSourcePlaylistSnapshot(
+    int position,
+  ) async {
+    final base = await loadSnapshot();
+    final source = _sourceProjection(base, position);
+    return SpotifyImportDestinationSnapshot(
+      importSessionId: base.importSessionId,
+      sourceName: source.source.name,
+      resolvedSongs: source.songs,
+      resolvedResultCount: source.songs.length + source.repeatedResolvedMembers,
+      unresolvedCount: source.pendingMembers,
+      customPlaylists: base.customPlaylists,
+      resolvedRecordings: base.resolvedRecordings,
+      recordingIdentitiesReliable: base.recordingIdentitiesReliable,
+      sourceRowsReliable: base.sourceRowsReliable,
+      newlyResolvedBaselineKnown: base.newlyResolvedBaselineKnown,
+      newlyResolvedRecordingIds: base.newlyResolvedRecordingIds,
+      resolutionFingerprint: base.resolutionFingerprint,
+      sourcePlaylistPosition: position,
+      sourcePlaylistKey: source.scopeKey,
+      sourcePlaylistFingerprint: source.fingerprint,
+      sourceUnsupportedMembers: source.unsupportedMembers,
+      sourceRepeatedMembers: source.repeatedResolvedMembers,
     );
   }
 
@@ -280,7 +341,9 @@ class SpotifyImportDestinationService {
     Set<String> selectedRecordingIds = const {},
   }) async {
     _validateCurrentSnapshot(snapshot);
-    final confirmedSnapshot = await loadSnapshot();
+    final confirmedSnapshot = snapshot.sourcePlaylistPosition == null
+        ? await loadSnapshot()
+        : await loadSourcePlaylistSnapshot(snapshot.sourcePlaylistPosition!);
     if (confirmedSnapshot.importSessionId != snapshot.importSessionId ||
         snapshot.resolvedSongs
                 .map((song) => song['ytid']?.toString().trim())
@@ -332,6 +395,10 @@ class SpotifyImportDestinationService {
       'operationId': operationId,
       'importSessionId': snapshot.importSessionId,
       'selectionKind': selectionKind.name,
+      if (snapshot.sourcePlaylistKey != null)
+        'sourcePlaylistKey': snapshot.sourcePlaylistKey,
+      if (snapshot.sourcePlaylistFingerprint != null)
+        'sourcePlaylistFingerprint': snapshot.sourcePlaylistFingerprint,
       'selectedRecordingIds': selected
           .map((song) => song['ytid']?.toString().trim())
           .toList(),
@@ -389,6 +456,7 @@ class SpotifyImportDestinationService {
         selected,
         name: newPlaylistName,
         fallbackName: snapshot.sourceName,
+        sourcePlaylistKey: snapshot.sourcePlaylistKey,
       ),
       SpotifyImportDestinationKind.existingPlaylist =>
         await _routeToExistingPlaylist(
@@ -444,6 +512,22 @@ class SpotifyImportDestinationService {
           target.put('spotifyImportMetadata', values))(box, metadata);
 
   void _validateCurrentSnapshot(SpotifyImportDestinationSnapshot snapshot) {
+    if (snapshot.sourcePlaylistPosition == null &&
+        (snapshot.sourcePlaylistKey != null ||
+            snapshot.sourcePlaylistFingerprint != null))
+      throw StateError('Reload the source playlist before transferring.');
+    if (snapshot.sourcePlaylistPosition != null) {
+      final projected = _sourceProjection(
+        snapshot,
+        snapshot.sourcePlaylistPosition!,
+      );
+      if (projected.scopeKey != snapshot.sourcePlaylistKey ||
+          projected.fingerprint != snapshot.sourcePlaylistFingerprint) {
+        throw StateError(
+          'Source playlist membership changed. Reload before transferring; no source data was removed.',
+        );
+      }
+    }
     final currentSessionId = _sessionId(
       _readMap(Hive.box('user').get('spotifyImportMetadata')),
     );
@@ -464,6 +548,30 @@ class SpotifyImportDestinationService {
     }
   }
 
+  Future<void> _writeDestination(String key, List<dynamic> value) async {
+    final box = Hive.box('user');
+    final had = box.containsKey(key);
+    final before = copyImportRoutingValue(box.get(key));
+    try {
+      if (destinationWriter == null) {
+        await addOrUpdateData<List>('user', key, value);
+      } else {
+        await destinationWriter!(box, key, value);
+      }
+    } catch (error, stack) {
+      // Restore only this writer's exact staged value; never overwrite a newer
+      // independent library edit. The pending audit retains uncertainty.
+      if (jsonEncode(box.get(key)) == jsonEncode(value)) {
+        if (had) {
+          await box.put(key, before);
+        } else {
+          await box.delete(key);
+        }
+      }
+      Error.throwWithStackTrace(error, stack);
+    }
+  }
+
   Future<SpotifyImportRouteResult> _routeToLiked(
     List<Map<String, dynamic>> selected,
   ) async {
@@ -473,7 +581,7 @@ class SpotifyImportDestinationService {
         .where((song) => !existingIds.contains(song['ytid']?.toString()))
         .toList(growable: false);
     final updated = <dynamic>[...additions, ...existing];
-    await addOrUpdateData<List>('user', 'likedSongs', updated);
+    await _writeDestination('likedSongs', updated);
     userLikedSongsList.value = updated;
     return SpotifyImportRouteResult(
       destinationTitle: 'Liked Songs',
@@ -487,13 +595,17 @@ class SpotifyImportDestinationService {
     List<Map<String, dynamic>> selected, {
     String? name,
     required String fallbackName,
+    String? sourcePlaylistKey,
   }) async {
     final normalizedName = name?.trim() ?? '';
     final title = normalizedName.isEmpty ? fallbackName : normalizedName;
     for (final existing in getUserCustomPlaylists()) {
       if (existing['source'] == 'user-created' &&
           existing['title']?.toString() == title &&
-          existing['importSourceName']?.toString() == fallbackName) {
+          (sourcePlaylistKey == null
+              ? existing['importSourcePlaylistKey'] == null &&
+                    existing['importSourceName']?.toString() == fallbackName
+              : existing['importSourcePlaylistKey'] == sourcePlaylistKey)) {
         return _routeToExistingPlaylist(
           selected,
           playlistId: existing['ytid']?.toString(),
@@ -505,11 +617,13 @@ class SpotifyImportDestinationService {
       'title': title,
       'source': 'user-created',
       'importSourceName': fallbackName,
+      if (sourcePlaylistKey != null)
+        'importSourcePlaylistKey': sourcePlaylistKey,
       'list': selected,
       'createdAt': DateTime.now().millisecondsSinceEpoch,
     };
     final updated = <Map>[...userCustomPlaylists.value, playlist];
-    await addOrUpdateData<List>('user', 'customPlaylists', updated);
+    await _writeDestination('customPlaylists', updated);
     userCustomPlaylists.value = updated;
     return SpotifyImportRouteResult(
       destinationTitle: title,
@@ -535,7 +649,7 @@ class SpotifyImportDestinationService {
     if (rootIndex >= 0) {
       final outcome = _appendSongs(root[rootIndex], selected);
       root[rootIndex] = outcome.playlist;
-      await addOrUpdateData<List>('user', 'customPlaylists', root);
+      await _writeDestination('customPlaylists', root);
       userCustomPlaylists.value = root;
       return outcome.result;
     }
@@ -557,7 +671,7 @@ class SpotifyImportDestinationService {
       playlists[playlistIndex] = outcome.playlist;
       folder['playlists'] = playlists;
       folders[folderIndex] = folder;
-      await addOrUpdateData<List>('user', 'playlistFolders', folders);
+      await _writeDestination('playlistFolders', folders);
       userPlaylistFolders.value = folders;
       return outcome.result;
     }
@@ -602,7 +716,12 @@ class SpotifyImportDestinationService {
       for (final playlist in snapshot.customPlaylists) {
         if (playlist['source'] == 'user-created' &&
             playlist['title']?.toString() == title &&
-            playlist['importSourceName']?.toString() == snapshot.sourceName) {
+            (snapshot.sourcePlaylistKey == null
+                ? playlist['importSourcePlaylistKey'] == null &&
+                      playlist['importSourceName']?.toString() ==
+                          snapshot.sourceName
+                : playlist['importSourcePlaylistKey'] ==
+                      snapshot.sourcePlaylistKey)) {
           return _songIds(playlist['list'] as List? ?? const []);
         }
       }
@@ -625,6 +744,8 @@ class SpotifyImportDestinationService {
     List<Map<String, dynamic>> selected,
     String operationId,
   ) async {
+    if (snapshot.sourcePlaylistPosition != null)
+      _validateCurrentSnapshot(snapshot);
     final box = Hive.box('user');
     final metadata = _readMap(box.get('spotifyImportMetadata'));
     final pending = metadata[importRoutingPendingKey];
@@ -644,6 +765,10 @@ class SpotifyImportDestinationService {
         'alreadyPresentCount': result.alreadyPresentCount,
         'routedAt': at,
         'selectionKind': selectionKind.name,
+        if (snapshot.sourcePlaylistKey != null)
+          'sourcePlaylistKey': snapshot.sourcePlaylistKey,
+        if (snapshot.sourcePlaylistFingerprint != null)
+          'sourcePlaylistFingerprint': snapshot.sourcePlaylistFingerprint,
         'selectedRecordingIds': selected
             .map((song) => song['ytid']?.toString().trim())
             .toList(),

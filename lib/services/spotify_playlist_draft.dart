@@ -90,6 +90,16 @@ class SpotifyPlaylistDraft {
               !RegExp(r'^spotify:playlist:[A-Za-z0-9]{22}$').hasMatch(uri))) {
         fail();
       }
+      final suppliedPlaylistId = source['id'];
+      if (uri != null &&
+          suppliedPlaylistId != null &&
+          (suppliedPlaylistId is! String ||
+              suppliedPlaylistId !=
+                  uri.substring('spotify:playlist:'.length))) {
+        throw const SpotifyImportException(
+          'The playlist ID and URI conflict. Nothing was saved.',
+        );
+      }
       for (final (position, item) in (source['tracks'] as List).indexed) {
         row++;
         final metadata = <String, String>{};

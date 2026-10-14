@@ -13,11 +13,18 @@ import 'package:musify/services/spotify_import_destination_service.dart';
 import 'package:musify/widgets/personalized_ui.dart';
 
 class SpotifyImportDestinationPage extends StatefulWidget {
-  const SpotifyImportDestinationPage({super.key, this.initialSnapshot});
+  const SpotifyImportDestinationPage({
+    super.key,
+    this.initialSnapshot,
+    this.sourcePlaylistPosition,
+    this.routingService = const SpotifyImportDestinationService(),
+  });
 
   /// Supplies deterministic data to screenshot previews without touching the
   /// user's Hive boxes. Production callers leave this null.
   final SpotifyImportDestinationSnapshot? initialSnapshot;
+  final int? sourcePlaylistPosition;
+  final SpotifyImportDestinationService routingService;
 
   @override
   State<SpotifyImportDestinationPage> createState() =>
@@ -26,7 +33,7 @@ class SpotifyImportDestinationPage extends StatefulWidget {
 
 class _SpotifyImportDestinationPageState
     extends State<SpotifyImportDestinationPage> {
-  final _service = const SpotifyImportDestinationService();
+  SpotifyImportDestinationService get _service => widget.routingService;
   final _countController = TextEditingController();
   final _playlistNameController = TextEditingController();
   SpotifyImportDestinationSnapshot? _snapshot;
@@ -93,7 +100,11 @@ class _SpotifyImportDestinationPageState
 
   Future<void> _load() async {
     try {
-      final snapshot = await _service.loadSnapshot();
+      final snapshot = widget.sourcePlaylistPosition == null
+          ? await _service.loadSnapshot()
+          : await _service.loadSourcePlaylistSnapshot(
+              widget.sourcePlaylistPosition!,
+            );
       if (!mounted) return;
       setState(() {
         _applySnapshot(snapshot);
@@ -232,6 +243,13 @@ class _SpotifyImportDestinationPageState
                   description:
                       'Choose which matched recordings to transfer and exactly where they should appear in Musify.',
                 ),
+
+                if (readySnapshot?.sourcePlaylistPosition != null)
+                  PersonalizedStatusBanner(
+                    title: 'Source playlist: ${readySnapshot!.sourceName}',
+                    message:
+                        'Only resolved recordings from this source are selected, in source order. ${readySnapshot.sourceUnsupportedMembers} unsupported items stay in source review; ${readySnapshot.sourceRepeatedMembers} repeated resolved memberships are retained in the source and transferred once.',
+                  ),
                 if (_error != null) ...[
                   const SizedBox(height: 16),
                   PersonalizedStatusBanner(
