@@ -1,5 +1,18 @@
 # Musify Personalized current state
 
+## Stable optional batch and host-only qualification,2026-10-14
+
+F01 source811bc222e22678d45d3c6f6330c3ccca25436679 passes CI38479895933
+(497 tests/40 strict Linux visuals). F02 product source8c938ae96b3abeddb687a27e6ab1bf3092abf15a
+passes exact CI38485178534 (522 tests/40 visuals, required build/channel checks),
+with independent terminal/log receipts outside Git. This follow-up adds only
+boundary/reader regression tests and documentation; product code is unchanged.
+Baseline signed24a/d12f remain preserved. One consolidated sign-only optional-batch
+artifact follows exact-tip CI; no signing/publication credential changes.
+All device testing is currently held by the owner, including emulator work in
+this turn. The [runtime queue](RELEASE_VERIFICATION_QUEUE.md) records target-specific
+authorization needed before resuming. No phone route substitutes for admission.
+
 ## Optional direct saved-track JSON step,2026-10-13
 
 F02 adds a bounded offline YourLibrary saved-track JSON adapter using existing

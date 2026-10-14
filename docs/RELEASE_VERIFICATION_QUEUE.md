@@ -1,5 +1,16 @@
 # Dependency-ordered Musify verification queue
 
+## Current owner hold,2026-10-14
+
+No device testing is authorized in this turn. The owner now holds device testing
+until explicit authorization; this includes both Samsung and disposable-emulator
+runtime activity here. Earlier target/lease instructions below are a resume plan,
+not permission overriding that hold. Before runtime, clarify whether new approval
+covers owned5558, Samsung, or both; keep their separate lease/data/installation
+and admission gates. Remote phone access never bypasses the emulator26GiB/80%
+resource rule. Host sign-only rehearsal with publication disabled is separately
+authorized and does not authorize install, launch, UI or device testing.
+
 ## Candidate provenance, 2026-10-13
 
 Sole branch/PR: agent/local-stable-consolidation / draft PR23. Protected master

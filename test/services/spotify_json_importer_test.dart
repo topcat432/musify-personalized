@@ -209,4 +209,51 @@ void main() {
       }
     },
   );
+  test('an exactly 8 MiB valid JSON export remains importable', () {
+    final body = jsonEncode({
+      'tracks': [track('Owned boundary')],
+    });
+    final bytes = Uint8List.fromList(
+      utf8.encode(
+        body +
+            ' ' * (SpotifyCsvImporter.maxJsonBytes - utf8.encode(body).length),
+      ),
+    );
+    expect(bytes.length, SpotifyCsvImporter.maxJsonBytes);
+    expect(
+      SpotifyCsvImporter.parseBytes(
+        bytes,
+        fileName: 'owned.json',
+      ).tracks.single.title,
+      'Owned boundary',
+    );
+  });
+
+  test('an exactly 10000-track export preserves every source position', () {
+    final result = parse({
+      'tracks': List.generate(
+        SpotifyCsvImporter.maxJsonTracks,
+        (index) => track('Owned $index'),
+      ),
+    });
+    expect(result.tracks, hasLength(10000));
+    expect(result.tracks.first.sourceRow, 1);
+    expect(result.tracks.last.sourceRow, 10000);
+    expect(result.tracks.last.title, 'Owned 9999');
+  });
+
+  test('the maximum supported structural depth remains valid', () {
+    final nest = SpotifyCsvImporter.maxJsonDepth - 1;
+    final text =
+        '{"tracks":[{"track":"Owned","artist":"Owned"}],"other":${'[' * nest}0${']' * nest}}';
+    final result = SpotifyCsvImporter.parseBytes(
+      Uint8List.fromList(utf8.encode(text)),
+      fileName: 'owned.json',
+    );
+    expect(result.tracks.single.title, 'Owned');
+    expect(
+      result.notices,
+      contains('Other library items: 1 entry not imported.'),
+    );
+  });
 }

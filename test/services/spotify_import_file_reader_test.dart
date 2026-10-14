@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
@@ -104,6 +105,56 @@ void main() {
       );
       expect(stopped, isTrue);
       await source.close();
+    },
+  );
+  test(
+    'a streamed I/O error cancels the subscription and never returns partial bytes',
+    () async {
+      var stopped = false;
+      final source = StreamController<List<int>>(
+        onCancel: () {
+          stopped = true;
+        },
+      );
+      final error = StateError('Owned read failure');
+      final file = PlatformFile(
+        name: 'owned.json',
+        size: 10,
+        readStream: source.stream,
+      );
+      final expectation = expectLater(
+        SpotifyImportFileReader.read(file),
+        throwsA(same(error)),
+      );
+      source.add([123]);
+      source.addError(error);
+      await expectation;
+      expect(stopped, isTrue);
+      await source.close();
+    },
+  );
+
+  test(
+    'the selected-path fallback reads only its owned file and leaves it unchanged',
+    () async {
+      final root = await Directory.systemTemp.createTemp(
+        'json-reader-selected-',
+      );
+      try {
+        final file = File('${root.path}/selected.json');
+        final contents = Uint8List.fromList([123, 34, 97, 34, 58, 49, 125]);
+        await file.writeAsBytes(contents, flush: true);
+        final selected = PlatformFile(
+          name: 'selected.json',
+          size: contents.length,
+          path: file.path,
+        );
+        expect(await SpotifyImportFileReader.read(selected), contents);
+        expect(await file.readAsBytes(), contents);
+        expect(await root.list().length, 1);
+      } finally {
+        await root.delete(recursive: true);
+      }
     },
   );
 }
