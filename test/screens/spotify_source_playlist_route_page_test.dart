@@ -175,6 +175,7 @@ class _IoDestinationService extends SpotifyImportDestinationService {
     SpotifyImportSelectionKind selectionKind =
         SpotifyImportSelectionKind.firstCount,
     Set<String> selectedRecordingIds = const {},
+    bool requireWholeSource = false,
   }) {
     final completed = Completer<SpotifyImportRouteResult>();
     Zone.root.run(
@@ -187,6 +188,7 @@ class _IoDestinationService extends SpotifyImportDestinationService {
             existingPlaylistId: existingPlaylistId,
             selectionKind: selectionKind,
             selectedRecordingIds: selectedRecordingIds,
+            requireWholeSource: requireWholeSource,
           )
           .then<void>(
             completed.complete,

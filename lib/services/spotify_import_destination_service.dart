@@ -16,6 +16,7 @@ import 'package:musify/services/playlists_manager.dart';
 import 'package:musify/services/spotify_import_routing_state.dart';
 import 'package:musify/services/spotify_source_playlist.dart';
 import 'package:musify/services/spotify_source_playlist_projection.dart';
+import 'package:musify/services/spotify_whole_source_readiness.dart';
 import 'package:musify/utilities/playlist_utils.dart';
 
 enum SpotifyImportSelectionKind { all, firstCount, individual, newlyResolved }
@@ -42,6 +43,7 @@ class SpotifyImportDestinationSnapshot {
     this.newlyResolvedBaselineKnown = false,
     this.newlyResolvedRecordingIds = const {},
     this.resolutionFingerprint,
+    this.wholeSourceReadiness,
     this.sourcePlaylistPosition,
     this.sourcePlaylistKey,
     this.sourcePlaylistFingerprint,
@@ -61,6 +63,7 @@ class SpotifyImportDestinationSnapshot {
   final bool newlyResolvedBaselineKnown;
   final Set<String> newlyResolvedRecordingIds;
   final String? resolutionFingerprint;
+  final SpotifyWholeSourceReadiness? wholeSourceReadiness;
   final int? sourcePlaylistPosition;
   final String? sourcePlaylistKey, sourcePlaylistFingerprint;
   final int sourceUnsupportedMembers, sourceRepeatedMembers;
@@ -111,7 +114,7 @@ class SpotifyImportDestinationService {
 
   Future<SpotifyImportDestinationSnapshot> loadSnapshot() async {
     final box = Hive.box('user');
-    final results = _readMaps(box.get('spotifyMatchResults'));
+    final results = _effectiveResults(box);
     final storedIdentities = resolvedImportRecordings(results);
     // Preserve stored order when historical source-row positions are incomplete.
     if (storedIdentities.reliable) {
@@ -125,7 +128,9 @@ class SpotifyImportDestinationService {
     final songs = _uniqueSongs(resolved);
     final identities = resolvedImportRecordings(results);
     final identityReliable =
-        identities.reliable && hasStableImportSessionIdentity(metadata);
+        identities.reliable &&
+        hasStableImportSessionIdentity(metadata) &&
+        _exclusionsKnown(box);
     final baseline = readImportRoutingBaseline(metadata, _sessionId(metadata));
     final newlyResolved = baseline != null && identityReliable
         ? identities.rows
@@ -134,7 +139,7 @@ class SpotifyImportDestinationService {
               .toSet()
         : <String>{};
     final customPlaylists =
-        getUserCustomPlaylists()
+        _currentCustomPlaylists()
             .map(Map<String, dynamic>.from)
             .toList(growable: false)
           ..sort(
@@ -157,6 +162,12 @@ class SpotifyImportDestinationService {
       newlyResolvedBaselineKnown: baseline != null && identityReliable,
       newlyResolvedRecordingIds: Set.unmodifiable(newlyResolved),
       resolutionFingerprint: identities.fingerprint,
+      wholeSourceReadiness: SpotifyWholeSourceReadiness.inspect(
+        rawTracks: box.get('spotifyImportTracks'),
+        rawResults: box.get('spotifyMatchResults'),
+        rawExcludedRows: box.get('spotifyExcludedImportRows'),
+        metadata: metadata,
+      ),
     );
   }
 
@@ -195,6 +206,13 @@ class SpotifyImportDestinationService {
       newlyResolvedBaselineKnown: base.newlyResolvedBaselineKnown,
       newlyResolvedRecordingIds: base.newlyResolvedRecordingIds,
       resolutionFingerprint: base.resolutionFingerprint,
+      wholeSourceReadiness: SpotifyWholeSourceReadiness.inspect(
+        rawTracks: Hive.box('user').get('spotifyImportTracks'),
+        rawResults: Hive.box('user').get('spotifyMatchResults'),
+        rawExcludedRows: Hive.box('user').get('spotifyExcludedImportRows'),
+        metadata: _readMap(Hive.box('user').get('spotifyImportMetadata')),
+        sourcePlaylistPosition: position,
+      ),
       sourcePlaylistPosition: position,
       sourcePlaylistKey: source.scopeKey,
       sourcePlaylistFingerprint: source.fingerprint,
@@ -212,12 +230,16 @@ class SpotifyImportDestinationService {
     SpotifyImportSelectionKind selectionKind =
         SpotifyImportSelectionKind.firstCount,
     Set<String> selectedRecordingIds = const {},
+    bool requireWholeSource = false,
   }) {
+    if (requireWholeSource)
+      _validateCurrentSnapshot(snapshot, requireWholeSource: true);
     final selected = selectSongs(
       snapshot,
       requestedCount,
       selectionKind: selectionKind,
       selectedRecordingIds: selectedRecordingIds,
+      requireWholeSource: requireWholeSource,
     );
     final existingIds = _destinationSongIds(
       destinationKind,
@@ -243,7 +265,15 @@ class SpotifyImportDestinationService {
     SpotifyImportSelectionKind selectionKind =
         SpotifyImportSelectionKind.firstCount,
     Set<String> selectedRecordingIds = const {},
+    bool requireWholeSource = false,
   }) {
+    if (requireWholeSource &&
+        (selectionKind != SpotifyImportSelectionKind.all ||
+            snapshot.wholeSourceReadiness?.ready != true)) {
+      throw StateError(
+        'The whole source is not ready. Review every unresolved, excluded, unsupported or unverified row, or choose an explicit partial transfer.',
+      );
+    }
     Iterable<Map<String, dynamic>> selected;
     switch (selectionKind) {
       case SpotifyImportSelectionKind.all:
@@ -310,6 +340,7 @@ class SpotifyImportDestinationService {
     SpotifyImportSelectionKind selectionKind =
         SpotifyImportSelectionKind.firstCount,
     Set<String> selectedRecordingIds = const {},
+    bool requireWholeSource = false,
   }) async {
     if (_routingActive)
       throw StateError(
@@ -325,6 +356,7 @@ class SpotifyImportDestinationService {
         existingPlaylistId: existingPlaylistId,
         selectionKind: selectionKind,
         selectedRecordingIds: Set.unmodifiable(selectedRecordingIds),
+        requireWholeSource: requireWholeSource,
       );
     } finally {
       _routingActive = false;
@@ -340,8 +372,9 @@ class SpotifyImportDestinationService {
     SpotifyImportSelectionKind selectionKind =
         SpotifyImportSelectionKind.firstCount,
     Set<String> selectedRecordingIds = const {},
+    bool requireWholeSource = false,
   }) async {
-    _validateCurrentSnapshot(snapshot);
+    _validateCurrentSnapshot(snapshot, requireWholeSource: requireWholeSource);
     final confirmedSnapshot = snapshot.sourcePlaylistPosition == null
         ? await loadSnapshot()
         : await loadSourcePlaylistSnapshot(snapshot.sourcePlaylistPosition!);
@@ -356,7 +389,10 @@ class SpotifyImportDestinationService {
         'The resolved recordings changed. Reload the import before transferring.',
       );
     }
-    _validateCurrentSnapshot(confirmedSnapshot);
+    _validateCurrentSnapshot(
+      confirmedSnapshot,
+      requireWholeSource: requireWholeSource,
+    );
     if (selectionKind == SpotifyImportSelectionKind.newlyResolved &&
         (!snapshot.newlyResolvedBaselineKnown ||
             !confirmedSnapshot.newlyResolvedBaselineKnown ||
@@ -375,6 +411,7 @@ class SpotifyImportDestinationService {
       requestedCount,
       selectionKind: selectionKind,
       selectedRecordingIds: Set.unmodifiable(selectedRecordingIds),
+      requireWholeSource: requireWholeSource,
     );
     if (selected.isEmpty) {
       throw StateError('Choose at least one resolved song.');
@@ -383,7 +420,7 @@ class SpotifyImportDestinationService {
     if (destinationKind == SpotifyImportDestinationKind.existingPlaylist) {
       final id = existingPlaylistId?.trim() ?? '';
       if (id.isEmpty ||
-          !getUserCustomPlaylists().any(
+          !_currentCustomPlaylists().any(
             (playlist) => playlist['ytid']?.toString() == id,
           )) {
         throw StateError('The selected playlist no longer exists.');
@@ -436,7 +473,10 @@ class SpotifyImportDestinationService {
     // fails or the process stops, legacy/newly-resolved state is never guessed.
     await _writeRoutingMetadata(box, metadata);
     try {
-      _validateCurrentSnapshot(confirmedSnapshot);
+      _validateCurrentSnapshot(
+        confirmedSnapshot,
+        requireWholeSource: requireWholeSource,
+      );
     } catch (_) {
       final current = _readMap(box.get('spotifyImportMetadata'));
       if (_sessionId(current) == snapshot.importSessionId &&
@@ -473,6 +513,7 @@ class SpotifyImportDestinationService {
         selectionKind,
         selected,
         operationId,
+        requireWholeSource: requireWholeSource,
       );
     } catch (_) {
       // The destination is already durable. Retain/restore the uncertainty
@@ -512,7 +553,32 @@ class SpotifyImportDestinationService {
       (target, values) =>
           target.put('spotifyImportMetadata', values))(box, metadata);
 
-  void _validateCurrentSnapshot(SpotifyImportDestinationSnapshot snapshot) {
+  void _validateCurrentSnapshot(
+    SpotifyImportDestinationSnapshot snapshot, {
+    bool requireWholeSource = false,
+  }) {
+    if (!_exclusionsKnown(Hive.box('user'))) {
+      throw StateError(
+        'Saved exclusion decisions could not be verified. The import was retained; review or recover it before transferring.',
+      );
+    }
+    if (requireWholeSource) {
+      final box = Hive.box('user');
+      final live = SpotifyWholeSourceReadiness.inspect(
+        rawTracks: box.get('spotifyImportTracks'),
+        rawResults: box.get('spotifyMatchResults'),
+        rawExcludedRows: box.get('spotifyExcludedImportRows'),
+        metadata: _readMap(box.get('spotifyImportMetadata')),
+        sourcePlaylistPosition: snapshot.sourcePlaylistPosition,
+      );
+      if (snapshot.wholeSourceReadiness?.ready != true ||
+          !live.ready ||
+          live.fingerprint != snapshot.wholeSourceReadiness?.fingerprint) {
+        throw StateError(
+          'Whole-source readiness changed. Reload and review the source before transferring.',
+        );
+      }
+    }
     if (snapshot.sourcePlaylistPosition == null &&
         (snapshot.sourcePlaylistKey != null ||
             snapshot.sourcePlaylistFingerprint != null))
@@ -541,7 +607,7 @@ class SpotifyImportDestinationService {
     if (snapshot.resolutionFingerprint != null &&
         snapshot.resolutionFingerprint !=
             resolvedImportRecordings(
-              _readMaps(Hive.box('user').get('spotifyMatchResults')),
+              _effectiveResults(Hive.box('user')),
             ).fingerprint) {
       throw StateError(
         'The resolved recordings changed. Reload the import before transferring.',
@@ -573,17 +639,67 @@ class SpotifyImportDestinationService {
     }
   }
 
+  List<Map<String, dynamic>> _storedPlaylists(String key, List<Map> fallback) {
+    final box = Hive.box('user');
+    final raw = box.containsKey(key) ? box.get(key) : fallback;
+    if (raw is! List || raw.any((item) => item is! Map)) {
+      throw StateError(
+        'Saved playlist data could not be verified. Existing library data was retained.',
+      );
+    }
+    return raw
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList(growable: true);
+  }
+
+  List<Map<String, dynamic>> _folderPlaylists(Map<String, dynamic> folder) {
+    final raw = folder['playlists'] ?? const [];
+    if (raw is! List || raw.any((item) => item is! Map)) {
+      throw StateError(
+        'Saved folder membership could not be verified. Existing library data was retained.',
+      );
+    }
+    return raw
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList(growable: true);
+  }
+
+  List<Map<String, dynamic>> _currentCustomPlaylists() => [
+    ..._storedPlaylists(
+      'customPlaylists',
+      userCustomPlaylists.value,
+    ).where((playlist) => playlist['source'] == 'user-created'),
+    for (final folder in _storedPlaylists(
+      'playlistFolders',
+      userPlaylistFolders.value,
+    ))
+      ..._folderPlaylists(
+        folder,
+      ).where((playlist) => playlist['source'] == 'user-created'),
+  ];
+  List<dynamic> _currentLikedSongs() {
+    final box = Hive.box('user');
+    if (!box.containsKey('likedSongs'))
+      return List<dynamic>.from(userLikedSongsList.value);
+    final raw = box.get('likedSongs');
+    if (raw is! List)
+      throw StateError(
+        'Saved Liked Songs could not be verified. Existing library data was retained.',
+      );
+    return List<dynamic>.from(raw);
+  }
+
   Future<SpotifyImportRouteResult> _routeToLiked(
     List<Map<String, dynamic>> selected,
   ) async {
-    final existing = List<dynamic>.from(userLikedSongsList.value);
+    final existing = _currentLikedSongs();
     final existingIds = _songIds(existing);
     final additions = selected
         .where((song) => !existingIds.contains(song['ytid']?.toString()))
         .toList(growable: false);
     final updated = <dynamic>[...additions, ...existing];
     await _writeDestination('likedSongs', updated);
-    userLikedSongsList.value = updated;
+    userLikedSongsList.value = _currentLikedSongs();
     return SpotifyImportRouteResult(
       destinationTitle: 'Liked Songs',
       selectedCount: selected.length,
@@ -600,7 +716,7 @@ class SpotifyImportDestinationService {
   }) async {
     final normalizedName = name?.trim() ?? '';
     final title = normalizedName.isEmpty ? fallbackName : normalizedName;
-    for (final existing in getUserCustomPlaylists()) {
+    for (final existing in _currentCustomPlaylists()) {
       if (existing['source'] == 'user-created' &&
           existing['title']?.toString() == title &&
           (sourcePlaylistKey == null
@@ -623,9 +739,15 @@ class SpotifyImportDestinationService {
       'list': selected,
       'createdAt': DateTime.now().millisecondsSinceEpoch,
     };
-    final updated = <Map>[...userCustomPlaylists.value, playlist];
+    final updated = <Map>[
+      ..._storedPlaylists('customPlaylists', userCustomPlaylists.value),
+      playlist,
+    ];
     await _writeDestination('customPlaylists', updated);
-    userCustomPlaylists.value = updated;
+    userCustomPlaylists.value = _storedPlaylists(
+      'customPlaylists',
+      userCustomPlaylists.value,
+    );
     return SpotifyImportRouteResult(
       destinationTitle: title,
       selectedCount: selected.length,
@@ -641,9 +763,10 @@ class SpotifyImportDestinationService {
     final id = playlistId?.trim() ?? '';
     if (id.isEmpty) throw StateError('Choose a destination playlist.');
 
-    final root = userCustomPlaylists.value
-        .map(Map<String, dynamic>.from)
-        .toList(growable: true);
+    final root = _storedPlaylists(
+      'customPlaylists',
+      userCustomPlaylists.value,
+    ).map(Map<String, dynamic>.from).toList(growable: true);
     final rootIndex = root.indexWhere(
       (playlist) => playlist['ytid']?.toString() == id,
     );
@@ -651,19 +774,20 @@ class SpotifyImportDestinationService {
       final outcome = _appendSongs(root[rootIndex], selected);
       root[rootIndex] = outcome.playlist;
       await _writeDestination('customPlaylists', root);
-      userCustomPlaylists.value = root;
+      userCustomPlaylists.value = _storedPlaylists(
+        'customPlaylists',
+        userCustomPlaylists.value,
+      );
       return outcome.result;
     }
 
-    final folders = userPlaylistFolders.value
-        .map(Map<String, dynamic>.from)
-        .toList(growable: true);
+    final folders = _storedPlaylists(
+      'playlistFolders',
+      userPlaylistFolders.value,
+    ).map(Map<String, dynamic>.from).toList(growable: true);
     for (var folderIndex = 0; folderIndex < folders.length; folderIndex++) {
       final folder = Map<String, dynamic>.from(folders[folderIndex]);
-      final playlists = (folder['playlists'] as List<dynamic>? ?? [])
-          .whereType<Map>()
-          .map(Map<String, dynamic>.from)
-          .toList(growable: true);
+      final playlists = _folderPlaylists(folder);
       final playlistIndex = playlists.indexWhere(
         (playlist) => playlist['ytid']?.toString() == id,
       );
@@ -673,7 +797,10 @@ class SpotifyImportDestinationService {
       folder['playlists'] = playlists;
       folders[folderIndex] = folder;
       await _writeDestination('playlistFolders', folders);
-      userPlaylistFolders.value = folders;
+      userPlaylistFolders.value = _storedPlaylists(
+        'playlistFolders',
+        userPlaylistFolders.value,
+      );
       return outcome.result;
     }
     throw StateError('The selected playlist no longer exists.');
@@ -709,7 +836,7 @@ class SpotifyImportDestinationService {
     String? existingPlaylistId,
   }) {
     if (kind == SpotifyImportDestinationKind.likedSongs) {
-      return _songIds(userLikedSongsList.value);
+      return _songIds(_currentLikedSongs());
     }
     if (kind == SpotifyImportDestinationKind.newPlaylist) {
       final requestedName = newPlaylistName?.trim() ?? '';
@@ -743,10 +870,10 @@ class SpotifyImportDestinationService {
     SpotifyImportRouteResult result,
     SpotifyImportSelectionKind selectionKind,
     List<Map<String, dynamic>> selected,
-    String operationId,
-  ) async {
-    if (snapshot.sourcePlaylistPosition != null)
-      _validateCurrentSnapshot(snapshot);
+    String operationId, {
+    bool requireWholeSource = false,
+  }) async {
+    _validateCurrentSnapshot(snapshot, requireWholeSource: requireWholeSource);
     final box = Hive.box('user');
     final metadata = _readMap(box.get('spotifyImportMetadata'));
     final pending = metadata[importRoutingPendingKey];
@@ -788,6 +915,7 @@ class SpotifyImportDestinationService {
     );
     metadata.remove(importRoutingPendingKey);
     await _writeRoutingMetadata(box, metadata);
+    _validateCurrentSnapshot(snapshot, requireWholeSource: requireWholeSource);
   }
 
   static List<Map<String, dynamic>> _uniqueSongs(
@@ -808,6 +936,29 @@ class SpotifyImportDestinationService {
       songs.add(song);
     }
     return songs;
+  }
+
+  static bool _exclusionsKnown(Box<dynamic> box) {
+    final raw = box.get('spotifyExcludedImportRows');
+    return raw == null ||
+        (raw is List && raw.every((row) => importRecordingRow(row) != null));
+  }
+
+  static List<Map<String, dynamic>> _effectiveResults(Box<dynamic> box) {
+    final raw = box.get('spotifyExcludedImportRows');
+    final excluded = raw is List
+        ? raw.map(importRecordingRow).whereType<String>().toSet()
+        : <String>{};
+    return _readMaps(box.get('spotifyMatchResults'))
+        .map((result) {
+          // Read-only projection honors an exclusion even if interruption left its
+          // prior matched outcome. Never repair or erase the owner's stored state.
+          if (excluded.contains(importRecordingRow(result['sourceRow']))) {
+            return Map<String, dynamic>.from(result)..['status'] = 'excluded';
+          }
+          return result;
+        })
+        .toList(growable: false);
   }
 
   static Set<String> _songIds(Iterable<dynamic> songs) => songs

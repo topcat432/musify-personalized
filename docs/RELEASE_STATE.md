@@ -2097,3 +2097,17 @@ pending-cancellation defect. Source-only lifecycle contract tests are the next
 bounded follow-up; current Windows and native intake remain unverified. Signed
 c249/runtime/normal-clone receipts are preserved. Cold semantic audit28208 is
 completed PASS; About/Back and subsequent native gates remain pending.
+## Whole-source readiness milestone in qualification, 2026-10-14
+
+Qualified base8ff4297fbe80b29c073a0c362253f996c6256d02 exactCI38633231647
+PASS702 aggregate/40 strict Linux visuals/30 channel/49 reader-policy/3310
+inflater/all required builds. Current dirty successor implements the approved
+whole-source-ready option, live raw-data checks, authoritative exclusion-index
+projection and current stored destination collection protection; [contract](SPOTIFY_WHOLE_SOURCE_ROUTING.md).
+First targeted43 PASS/seven FAIL and complete rerun45 PASS/five FAIL are retained;
+Final targeted51 PASS; analysis and722 aggregate PASS. Both Windows strict suites
+FAIL16+24; all40 actual image hashes equal the preserved F02 control, with no
+reference updates. Exact Linux CI remains pending for this source.
+Normal3GiB host admission is available (last67.12%). Fresh21:52:32Z26GiB native
+admission refused99.65%; nothing launched. c249 cold semantic audit28208 remains
+completed PASS, with About/Back/reliability/provider gates separate and open.

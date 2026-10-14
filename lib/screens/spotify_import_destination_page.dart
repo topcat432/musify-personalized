@@ -43,6 +43,7 @@ class _SpotifyImportDestinationPageState
   SpotifyImportSelectionKind _selectionKind = SpotifyImportSelectionKind.all;
   final Set<String> _selectedRecordingIds = {};
   bool get _useAll => _selectionKind == SpotifyImportSelectionKind.all;
+  bool _requireWholeSource = false;
   bool _loading = true;
   bool _saving = false;
   String? _error;
@@ -73,6 +74,7 @@ class _SpotifyImportDestinationPageState
         previousSnapshot.importSessionId != snapshot.importSessionId) {
       _selectionKind = SpotifyImportSelectionKind.all;
       _selectedRecordingIds.clear();
+      _requireWholeSource = false;
     }
     _selectedRecordingIds.retainAll(
       snapshot.resolvedSongs
@@ -126,7 +128,20 @@ class _SpotifyImportDestinationPageState
         snapshot.resolvedSongs.length,
       );
 
+  void _chooseSelection(
+    SpotifyImportSelectionKind kind, {
+    bool wholeSource = false,
+  }) {
+    setState(() {
+      _selectionKind = kind;
+      _requireWholeSource = wholeSource;
+      _error = null;
+    });
+  }
+
   int _selectedCount(SpotifyImportDestinationSnapshot snapshot) {
+    if (_requireWholeSource && snapshot.wholeSourceReadiness?.ready != true)
+      return 0;
     if (_selectionKind == SpotifyImportSelectionKind.newlyResolved &&
         !snapshot.newlyResolvedBaselineKnown)
       return 0;
@@ -136,8 +151,18 @@ class _SpotifyImportDestinationPageState
           _requestedCount(snapshot),
           selectionKind: _selectionKind,
           selectedRecordingIds: _selectedRecordingIds,
+          requireWholeSource: _requireWholeSource,
         )
         .length;
+  }
+
+  void _reportTransferError(Object error) {
+    if (!mounted) return;
+    final message = error.toString();
+    setState(() => _error = message);
+    ScaffoldMessenger.maybeOf(
+      context,
+    )?.showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _route() async {
@@ -145,6 +170,7 @@ class _SpotifyImportDestinationPageState
     if (snapshot == null || _saving) return;
     final count = _selectedCount(snapshot);
     final approvedKind = _selectionKind;
+    final approvedWholeSource = _requireWholeSource;
     final approvedIds = Set<String>.unmodifiable(_selectedRecordingIds);
     final approvedDestination = _destination;
     final approvedName = _playlistNameController.text;
@@ -164,15 +190,22 @@ class _SpotifyImportDestinationPageState
       return;
     }
 
-    final preview = _service.preview(
-      snapshot: snapshot,
-      requestedCount: count,
-      destinationKind: approvedDestination,
-      newPlaylistName: approvedName,
-      existingPlaylistId: approvedPlaylistId,
-      selectionKind: approvedKind,
-      selectedRecordingIds: approvedIds,
-    );
+    final SpotifyImportRoutePreview preview;
+    try {
+      preview = _service.preview(
+        snapshot: snapshot,
+        requestedCount: count,
+        destinationKind: approvedDestination,
+        newPlaylistName: approvedName,
+        existingPlaylistId: approvedPlaylistId,
+        selectionKind: approvedKind,
+        selectedRecordingIds: approvedIds,
+        requireWholeSource: approvedWholeSource,
+      );
+    } catch (error) {
+      _reportTransferError(error);
+      return;
+    }
     final approved = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => SpotifyImportConfirmationDialog(
@@ -196,6 +229,7 @@ class _SpotifyImportDestinationPageState
         existingPlaylistId: approvedPlaylistId,
         selectionKind: approvedKind,
         selectedRecordingIds: approvedIds,
+        requireWholeSource: approvedWholeSource,
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -209,8 +243,7 @@ class _SpotifyImportDestinationPageState
       );
       await _load();
     } catch (error) {
-      if (!mounted) return;
-      setState(() => _error = error.toString());
+      _reportTransferError(error);
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -257,6 +290,12 @@ class _SpotifyImportDestinationPageState
                     title: 'Transfer not completed',
                     message: _error!,
                   ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: _saving ? null : _load,
+                    icon: const Icon(Icons.refresh_rounded),
+                    label: const Text('Reload source'),
+                  ),
                 ],
                 const SizedBox(height: 22),
                 if (readySnapshot == null)
@@ -291,12 +330,33 @@ class _SpotifyImportDestinationPageState
                     title: 'Move every matched song',
                     description:
                         '${readySnapshot.resolvedSongs.length} unique songs are ready',
-                    selected: _useAll,
+                    selected: _useAll && !_requireWholeSource,
                     enabled: !_saving,
-                    onTap: () => setState(
-                      () => _selectionKind = SpotifyImportSelectionKind.all,
-                    ),
+                    onTap: () =>
+                        _chooseSelection(SpotifyImportSelectionKind.all),
                   ),
+                  if (readySnapshot.wholeSourceReadiness != null) ...[
+                    const SizedBox(height: 10),
+                    KeyedSubtree(
+                      key: const ValueKey('whole-source-selection'),
+                      child: _SelectionCard(
+                        icon: Icons.done_all_rounded,
+                        title: 'Whole source recordings',
+                        description: readySnapshot.wholeSourceReadiness!.ready
+                            ? '${readySnapshot.wholeSourceReadiness!.sourceRows} source rows resolved. Each recording transfers once; repeated memberships stay retained.'
+                            : readySnapshot.wholeSourceReadiness!.issue ??
+                                  '${readySnapshot.wholeSourceReadiness!.pending} unresolved, ${readySnapshot.wholeSourceReadiness!.excluded} excluded, ${readySnapshot.wholeSourceReadiness!.unsupported} unsupported members, ${readySnapshot.wholeSourceReadiness!.rejectedInputRows} rejected input rows and ${readySnapshot.wholeSourceReadiness!.unknown} unverified entries remain. Review them or choose a partial transfer.',
+                        selected: _requireWholeSource,
+                        enabled:
+                            !_saving &&
+                            readySnapshot.wholeSourceReadiness!.ready,
+                        onTap: () => _chooseSelection(
+                          SpotifyImportSelectionKind.all,
+                          wholeSource: true,
+                        ),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 10),
                   _SelectionCard(
                     icon: Icons.tune_rounded,
@@ -305,10 +365,8 @@ class _SpotifyImportDestinationPageState
                     selected:
                         _selectionKind == SpotifyImportSelectionKind.firstCount,
                     enabled: !_saving,
-                    onTap: () => setState(
-                      () => _selectionKind =
-                          SpotifyImportSelectionKind.firstCount,
-                    ),
+                    onTap: () =>
+                        _chooseSelection(SpotifyImportSelectionKind.firstCount),
                   ),
                   if (_selectionKind ==
                       SpotifyImportSelectionKind.firstCount) ...[
@@ -336,10 +394,8 @@ class _SpotifyImportDestinationPageState
                     selected:
                         _selectionKind == SpotifyImportSelectionKind.individual,
                     enabled: !_saving,
-                    onTap: () => setState(
-                      () => _selectionKind =
-                          SpotifyImportSelectionKind.individual,
-                    ),
+                    onTap: () =>
+                        _chooseSelection(SpotifyImportSelectionKind.individual),
                   ),
                   if (_selectionKind ==
                       SpotifyImportSelectionKind.individual) ...[
@@ -392,9 +448,8 @@ class _SpotifyImportDestinationPageState
                         SpotifyImportSelectionKind.newlyResolved,
                     enabled:
                         !_saving && readySnapshot.newlyResolvedBaselineKnown,
-                    onTap: () => setState(
-                      () => _selectionKind =
-                          SpotifyImportSelectionKind.newlyResolved,
+                    onTap: () => _chooseSelection(
+                      SpotifyImportSelectionKind.newlyResolved,
                     ),
                   ),
                   if (!readySnapshot.newlyResolvedBaselineKnown) ...[

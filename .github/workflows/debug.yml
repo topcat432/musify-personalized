@@ -125,6 +125,33 @@ jobs:
           fi
           grep -Fq 'Finished pending request A must not resurrect after BUSY' "$output/control-result.txt"
           echo "Exact a24730c channel control reproduced pending-request resurrection."
+      - name: Reproduce authoritative-exclusion defect on exact prior source
+        shell: bash
+        run: |
+          set -euo pipefail
+          original="$GITHUB_WORKSPACE"
+          control="$RUNNER_TEMP/musify-exclusion-control-8ff4297f"
+          git fetch --no-tags --depth=1 origin 8ff4297fbe80b29c073a0c362253f996c6256d02
+          git worktree add --detach "$control" 8ff4297fbe80b29c073a0c362253f996c6256d02
+          cp test/services/spotify_exclusion_routing_contract_test.dart "$control/test/services/"
+          cd "$control"
+          flutter pub get --offline
+          if flutter test --no-pub -j 1 --reporter expanded test/services/spotify_exclusion_routing_contract_test.dart > "$original/whole-exclusion-control.log" 2>&1; then
+            echo "Prior source unexpectedly honored the partial exclusion checkpoint"
+            exit 1
+          fi
+          grep -Fq 'Authoritative permanent exclusion must not be routed' "$original/whole-exclusion-control.log"
+          grep -Fq 'Expected:' "$original/whole-exclusion-control.log"
+          echo "Exact8ff4297f control reproduced authoritative-exclusion omission."
+          test "$(git -C "$original" rev-parse HEAD)" = "$SOURCE_SHA"
+
+      - name: Upload exact prior-source exclusion control log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: whole-exclusion-control-${{ github.run_number }}
+          path: whole-exclusion-control.log
+          if-no-files-found: error
       - name: Analyze Dart code
         id: analyze
         shell: bash
