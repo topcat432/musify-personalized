@@ -41,7 +41,7 @@ qualification remain separate acceptance requirements.
 
 ## F05-B bridge work in progress
 
-The dirty bridge now wires a bounded native descriptor catalog to a non-interrupting
+The bridge source now wires a bounded native descriptor catalog to a non-interrupting
 arrival notice and explicit inbox Preview. Native supports only the registered
 import MIME types and actual content URI read grants; it never persists grants,
 converts URIs to filesystem paths or caches source files. A targeted vendored-plugin
@@ -56,7 +56,7 @@ subscription, observes late replies, and cancellation addresses the exact reques
 Failed previews retain an active lease for Retry or Cancel; older callbacks cannot
 publish or release a successor. Widget cancellation/retry regressions are prepared.
 
-This work is uncommitted and uninstalled. Earlier Java policy/reader49 checks and
+This work is committed as a source checkpoint and remains uninstalled. Earlier Java policy/reader49 checks and
 Android/Flutter Java API compilation passed; earlier Dart analysis passed. The
 first transport run passed17 and failed one missing-reply deadline case. Subsequent
 stream-boundary changes and new widget tests are unverified: normal3GiB host-test
@@ -74,3 +74,33 @@ Widget preview assertions must wait for stream cleanup and the observable
 review/error result; cancellation tests must settle the late owned stream before
 checking timer cleanup. The correction is pending exact-source CI and makes no
 native intake claim. Local updated tests remain admission-blocked.
+### Request ownership and early row-budget correction, 2026-10-14
+
+Exact a24730c CI38628233753 is terminal FAIL:698 passed/one failed.
+Analysis,49 Java policy/reader and3310 inflater checks passed; strict visual
+suites and Android builds were skipped. The remaining retry widget reached a
+lazy preview layout whose Save button was outside its default viewport. The
+successor verifies the actual preview route and scrolls to the enabled Save
+control; it retains prior-state and read-count assertions.
+
+Source review reproduced a native contract gap: ready request A attempts Preview
+while metadata inspection B owns the worker; read A returns BUSY before activation.
+The old finish implementation did not remove pending A, so authoritative refresh
+requeued the cancelled file. Finish now releases exactly the pending or active
+ID and cancels only a job owning that descriptor. The production Java channel is
+exercised with deterministic API doubles and a blocked B barrier; an independently
+compiled exact a24730c control must fail on A resurrection. This is channel host
+proof, not actual Android grants or provider cancellation qualification.
+
+Acquiring a lease now notifies the shared service. Global notice navigation checks
+that owner, the root permits one inbox route, pending Preview buttons respect the
+global active lease, and stale lease acquisition fails with retained requests.
+Real Navigator/widget regressions cover A reading, A in unsaved Save review,
+repeated notice taps and a second inbox route, with unchanged Hive state.
+
+Incoming CSV/TSV alone now uses the existing maxJsonTracks early data-row budget
+before retaining another row. A compact many-row fixture with a malformed tail
+must reject at that budget first; the ordinary picker parser retains its existing
+policy. Actual Android parsing/allocation and intake lifecycle remain unqualified;
+no observed OOM is claimed. Cold semantic audit28208 remains completed PASS on
+signed c249; About/Back and subsequent native gates remain separate and pending.

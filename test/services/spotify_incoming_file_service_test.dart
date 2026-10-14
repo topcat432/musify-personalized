@@ -21,16 +21,30 @@ void main() {
   late SpotifyIncomingFileService service;
   late List<Map<String, dynamic>> catalog;
   late List<MethodCall> calls;
+  Map<String, dynamic>? nativeActive;
   setUp(() {
     service = SpotifyIncomingFileService(channel: channel);
     catalog = [file('a')];
     calls = [];
+    nativeActive = null;
     messenger.setMockMethodCallHandler(channel, (call) async {
       calls.add(call);
       if (call.method == 'list') return {'files': catalog, 'notice': null};
-      if (call.method == 'read') return Uint8List.fromList([1, 2, 3]);
-      if (call.method == 'finish' || call.method == 'dismiss')
-        catalog.removeWhere((f) => f['id'] == call.arguments['id']);
+      if (call.method == 'read') {
+        final id = call.arguments['id'];
+        final index = catalog.indexWhere((file) => file['id'] == id);
+        if (nativeActive?['id'] != id) {
+          if (nativeActive != null || index < 0) throw PlatformException(code: 'INCOMING_BUSY');
+          nativeActive = catalog.removeAt(index);
+        }
+        return Uint8List.fromList([1, 2, 3]);
+      }
+      if (call.method == 'finish') {
+        final id = call.arguments['id'];
+        if (nativeActive?['id'] == id) nativeActive = null;
+        catalog.removeWhere((file) => file['id'] == id);
+      }
+      if (call.method == 'dismiss') catalog.removeWhere((file) => file['id'] == call.arguments['id']);
       return null;
     });
   });

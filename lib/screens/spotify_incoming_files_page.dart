@@ -37,7 +37,13 @@ class _SpotifyIncomingFilesPageState extends State<SpotifyIncomingFilesPage> {
 
   Future<void> _open(SpotifyIncomingFile file) async {
     if (_lease != null) return;
-    final lease = widget.service.inbox.begin(file.id);
+    final SpotifyIncomingFileLease lease;
+    try {
+      lease = widget.service.begin(file.id);
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Finish or cancel the active preview before opening another file.');
+      return;
+    }
     setState(() { _lease = lease; _error = null; });
     await _preview(lease);
   }
@@ -120,6 +126,11 @@ class _SpotifyIncomingFilesPageState extends State<SpotifyIncomingFilesPage> {
               message: _error ?? widget.service.notice!,
             ),
           ),
+        if (_lease == null && widget.service.inbox.active != null)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Text('Another song-list preview is open. Finish or cancel it before opening this file.'),
+          ),
         if (_lease != null)
           ListTile(
             title: Text(_lease!.file.name),
@@ -140,7 +151,7 @@ class _SpotifyIncomingFilesPageState extends State<SpotifyIncomingFilesPage> {
             trailing: Wrap(
               children: [
                 TextButton(
-                  onPressed: _lease == null ? () => _open(file) : null,
+                  onPressed: _lease == null && widget.service.inbox.active == null ? () => _open(file) : null,
                   child: const Text('Preview'),
                 ),
                 IconButton(
@@ -192,7 +203,9 @@ class SpotifyIncomingFileNotice extends StatelessWidget {
                     : '$count incoming song-list file${count == 1 ? '' : 's'}',
               ),
               trailing: TextButton(
-                onPressed: onReview,
+                onPressed: service.inbox.active == null
+                    ? () { if (service.inbox.active == null) onReview(); }
+                    : null,
                 child: const Text('Review'),
               ),
             ),

@@ -85,6 +85,21 @@ class Musify extends StatefulWidget {
 }
 
 class _MusifyState extends State<Musify> with WidgetsBindingObserver {
+  bool _incomingInboxOpen = false;
+
+  Future<void> _reviewIncomingFiles() async {
+    final service = SpotifyIncomingFileService.instance;
+    final navigator = NavigationManager.parentNavigatorKey.currentState;
+    if (_incomingInboxOpen || service.inbox.active != null || navigator == null) return;
+    _incomingInboxOpen = true;
+    try {
+      await navigator.push(MaterialPageRoute<void>(
+        builder: (_) => SpotifyIncomingFilesPage(service: service),
+      ));
+    } finally {
+      _incomingInboxOpen = false;
+    }
+  }
   void changeSettings({
     ThemeMode? newThemeMode,
     Locale? newLocale,
@@ -286,16 +301,7 @@ class _MusifyState extends State<Musify> with WidgetsBindingObserver {
                     right: 0,
                     child: SpotifyIncomingFileNotice(
                       service: SpotifyIncomingFileService.instance,
-                      onReview: () => NavigationManager
-                          .parentNavigatorKey
-                          .currentState
-                          ?.push(
-                            MaterialPageRoute<void>(
-                              builder: (_) => SpotifyIncomingFilesPage(
-                                service: SpotifyIncomingFileService.instance,
-                              ),
-                            ),
-                          ),
+                      onReview: _reviewIncomingFiles,
                     ),
                   ),
                 ],

@@ -2074,3 +2074,17 @@ roadmap and VISUAL_SYSTEM.md remain useful design references. This map tracks
 facts, not blanket permission. Next gates: verify current-head CI and full product
 runtime/visual acceptance, exact signed in-place real-data rehearsal, reviewed
 integration and publication, then conditional in-place phone acceptance.
+
+## Incoming-file ownership correction, 2026-10-14
+
+Exact source a24730c00e8b0dd3c12a7aa39a5cc42834739c32 CI38628233753
+is terminal FAIL698 passed/one failed; analysis/49 Java/3310 inflater passed,
+visuals and APK builds skipped. Its correction is bundled with reviewed pending
+finish/global-preview ownership/early incoming-row-budget fixes; all remain
+unqualified pending successor exact-source CI. Fresh20:12:38Z normal3GiB host
+admission refused100.84%; no local test/build launched and no worker budget reduced.
+Cold semantic audit28208 is completed PASS on immutable signed c249, not pending:
+independent saved-file cold-export restore/reopen whole user/settings typed hashes
+match the preupdate baseline. About/Back, empty-library/rollback, picker/cancel/Save
+and approved playback queue remain separate pending gates. Samsung and other
+workloads remain untouched; no new signing, release, install or publication.

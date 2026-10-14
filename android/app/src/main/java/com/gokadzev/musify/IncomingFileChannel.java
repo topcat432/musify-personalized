@@ -83,10 +83,14 @@ public final class IncomingFileChannel {
           reply.success(null); changed(); pump(); break;
         }
         case "finish": {
+          Entry released = pending.remove(id);
           if (active != null && active.id.equals(id)) {
-            if (busy != null && busy.entry == active) cancel(busy);
+            released = active;
             active = null;
           }
+          // begin is Dart-owned; a BUSY read can leave its descriptor pending.
+          // Release only that exact ID, preserving another inspection/read owner.
+          if (released != null && busy != null && busy.entry == released) cancel(busy);
           reply.success(null); changed(); pump(); break;
         }
         case "cancel": {

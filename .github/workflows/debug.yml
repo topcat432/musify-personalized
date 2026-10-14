@@ -106,6 +106,25 @@ jobs:
           javac --release 8 -d "$output" packages/receive_sharing_intent/android/src/main/java/com/kasem/receive_sharing_intent/ImportFileIntentPolicy.java android/app/src/main/java/com/gokadzev/musify/IncomingFileReader.java tool/IncomingFileHostTest.java
           java -Xmx128m -XX:MaxMetaspaceSize=64m -cp "$output" com.gokadzev.musify.IncomingFileHostTest
 
+      - name: Verify production incoming-channel ownership contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          output="$RUNNER_TEMP/musify-incoming-channel-host"
+          mkdir -p "$output/current" "$output/control"
+          mapfile -t doubles < <(find tool/incoming-channel-host -name '*.java' -print)
+          common=(packages/receive_sharing_intent/android/src/main/java/com/kasem/receive_sharing_intent/ImportFileIntentPolicy.java android/app/src/main/java/com/gokadzev/musify/IncomingFileReader.java)
+          javac --release 8 -d "$output/current" "${doubles[@]}" "${common[@]}" android/app/src/main/java/com/gokadzev/musify/IncomingFileChannel.java
+          java -Xmx128m -XX:MaxMetaspaceSize=64m -cp "$output/current" com.gokadzev.musify.IncomingFileChannelHostTest
+          git fetch --no-tags --depth=1 origin a24730c00e8b0dd3c12a7aa39a5cc42834739c32
+          git show a24730c00e8b0dd3c12a7aa39a5cc42834739c32:android/app/src/main/java/com/gokadzev/musify/IncomingFileChannel.java > "$output/IncomingFileChannel.java"
+          javac --release 8 -d "$output/control" "${doubles[@]}" "${common[@]}" "$output/IncomingFileChannel.java"
+          if java -Xmx128m -XX:MaxMetaspaceSize=64m -cp "$output/control" com.gokadzev.musify.IncomingFileChannelHostTest > "$output/control-result.txt" 2>&1; then
+            echo "Defective channel unexpectedly passed the cancellation contract"
+            exit 1
+          fi
+          grep -F 'Finished pending request A must not resurrect after BUSY' "$output/control-result.txt"
+          echo "Exact a24730c channel control reproduced pending-request resurrection."
       - name: Analyze Dart code
         id: analyze
         shell: bash

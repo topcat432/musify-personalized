@@ -184,6 +184,11 @@ class SpotifyIncomingFileService extends ChangeNotifier {
     }
   }
 
+  SpotifyIncomingFileLease begin(String id) {
+    final lease = inbox.begin(id);
+    if (!_closed) notifyListeners();
+    return lease;
+  }
   Future<void> finish(SpotifyIncomingFileLease lease) async {
     if (!inbox.finish(lease)) return;
     for (final stop in _reads.values.toList()) stop();

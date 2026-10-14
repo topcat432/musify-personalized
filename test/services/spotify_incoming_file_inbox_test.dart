@@ -262,4 +262,17 @@ void main() {
       expect(inbox.active!.id, 'b');
     },
   );
+  test('incoming CSV and TSV reject at the early row budget before malformed tail', () async {
+    for (final extension in ['csv', 'TSV']) {
+      final delimiter = extension == 'csv' ? ',' : '\t';
+      final bytes = utf8.encode('Title${delimiter}Artist\n${List.filled(SpotifyCsvImporter.maxJsonTracks + 1, 'a${delimiter}b\n').join()}"malformed tail');
+      final inbox = SpotifyIncomingFileInbox(); inbox.offer(file('many', name: 'many.$extension')); inbox.offer(file('next'));
+      final lease = inbox.begin('many');
+      await expectLater(inbox.readPreview(lease, openStream: (_) => Stream.value(bytes)), throwsA(isA<SpotifyImportException>().having((error) => error.message, 'early row rejection', 'Incoming song lists must contain at most ${SpotifyCsvImporter.maxJsonTracks} data rows.')));
+      expect(inbox.active!.id, 'many'); expect(inbox.pending.single.id, 'next');
+      inbox.finish(lease); expect(inbox.begin('next').file.id, 'next');
+    }
+    final ordinary = Uint8List.fromList(utf8.encode('Title,Artist\n${List.filled(SpotifyCsvImporter.maxJsonTracks + 1, 'a,b\n').join()}'));
+    expect(SpotifyCsvImporter.parseBytes(ordinary, fileName: 'ordinary.csv').tracks.length, SpotifyCsvImporter.maxJsonTracks + 1);
+  });
 }

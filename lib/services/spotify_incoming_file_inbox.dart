@@ -119,7 +119,18 @@ class SpotifyIncomingFileInbox {
       );
       requireCurrent();
       if (!file.name.toLowerCase().endsWith('.zip')) {
-        return SpotifySongListImporter.parseBytes(bytes, fileName: file.name);
+        try {
+          return SpotifySongListImporter.parseBytes(
+            bytes,
+            fileName: file.name,
+            maxDataRows: SpotifyCsvImporter.maxJsonTracks,
+          );
+        } on SpotifyImportException catch (error) {
+          if (error.message.startsWith('ZIP song lists must contain at most ')) {
+            throw SpotifyImportException('Incoming song lists must contain at most ${SpotifyCsvImporter.maxJsonTracks} data rows.');
+          }
+          rethrow;
+        }
       }
       final archive = SpotifyZipArchive.inspect(bytes);
       final String? entry;
