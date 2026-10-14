@@ -2155,3 +2155,10 @@ was cancelled for fake-clock IO harness correction. Actual saved-backup independ
 restore/reopen and owner-edit service cases passed. c88dc79a exactCI38652526860
 terminal FAIL757 passed/two failed: one miswired injection and one offscreen
 compact repeat tap. Successor corrects those fixtures without weakening checks.
+
+
+47a6ba02 exactCI38653580549 terminal FAIL despite759 assertions reported
+passed: expected stale-source error escaped the widget root IO zone and failed
+subprocess finalization. Successor bridges failure values into the caller's zone
+and checks live emptiness before projecting an obsolete source snapshot; no
+assertion or visual comparison is weakened. Full successor qualification pending.

@@ -342,7 +342,6 @@ class SpotifyImportDestinationService {
       importSessionIdentity(metadata);
 
   void _validateEmptySource(SpotifyImportDestinationSnapshot snapshot) {
-    _validateCurrentSnapshot(snapshot);
     final box = Hive.box('user');
     final live = SpotifyWholeSourceReadiness.inspect(
       rawTracks: box.get('spotifyImportTracks'),
@@ -358,6 +357,7 @@ class SpotifyImportDestinationService {
         live.fingerprint != snapshot.wholeSourceReadiness?.fingerprint) {
       throw StateError('The source is not verifiably empty. Reload its membership; no playlist was changed.');
     }
+    _validateCurrentSnapshot(snapshot);
   }
 
   // Empty creation is a separate zero-song action. It never certifies a song

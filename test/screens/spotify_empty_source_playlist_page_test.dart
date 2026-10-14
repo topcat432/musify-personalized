@@ -28,7 +28,7 @@ void main() {
   Future<void> review(WidgetTester tester) async {await tester.pumpAndSettle();await tester.ensureVisible(find.text('Review empty playlist creation'));await tester.pumpAndSettle();expect(find.text('Review empty playlist creation').hitTestable(),findsOneWidget);await tester.tap(find.text('Review empty playlist creation'));await tester.pumpAndSettle();expect(find.text('Create empty source playlist?'),findsOneWidget);expect(find.textContaining('0 source items'),findsWidgets);}
   Future<void> confirm(WidgetTester tester,_IoEmptyService service) async {
     await tester.tap(find.text('Confirm empty playlist'));await tester.pump();
-    await tester.runAsync(()=>service.lastCreation!.then<void>((_) {},onError:(Object _,StackTrace __) {}));await tester.pumpAndSettle();
+    await tester.runAsync(()=>service.lastCompletion!);await tester.pumpAndSettle();
   }
   testWidgets('compact2x explicit zero-song confirmation cancel create and repeat preserve unrelated content',(tester) async {
     final service=_IoEmptyService();final before=jsonDecode(jsonEncode(Hive.box('user').toMap()));
@@ -64,22 +64,32 @@ void main() {
   });
 }
 
-// Actual serialized Hive writes run outside the widget fake clock.
+// Actual serialized Hive IO runs in the root zone. Failures cross back as
+// values, then are thrown in the widget's error zone so expected failures
+// cannot escape into the tester subprocess's finalization handler.
+typedef _IoOutcome<T> = ({T? value, Object? error, StackTrace? stack});
+Future<_IoOutcome<T>> _realIo<T>(Future<T> Function() action) => Zone.root.run(() async {
+  try {return (value:await action(),error:null,stack:null);}
+  catch (error,stack) {return (value:null,error:error,stack:stack);}
+});
 class _IoEmptyService extends SpotifyImportDestinationService {
-  Future<SpotifyEmptySourcePlaylistResult>? lastCreation;
+  Future<void>? lastCompletion;
   @override
-  Future<SpotifyEmptySourcePlaylistResult> createEmptySourcePlaylist({required SpotifyImportDestinationSnapshot snapshot}) {
-    final completed=Zone.root.run(() => Completer<SpotifyEmptySourcePlaylistResult>());
-    Zone.root.run(()=>super.createEmptySourcePlaylist(snapshot:snapshot).then<void>(completed.complete,onError:(Object error,StackTrace stack)=>completed.completeError(error,stack)));
-    return lastCreation=completed.future;
+  Future<SpotifyEmptySourcePlaylistResult> createEmptySourcePlaylist({required SpotifyImportDestinationSnapshot snapshot}) async {
+    final outcome=_realIo(()=>super.createEmptySourcePlaylist(snapshot:snapshot));
+    lastCompletion=Zone.root.run(()=>outcome.then<void>((_) {}));
+    final completed=await outcome;
+    if(completed.error!=null) Error.throwWithStackTrace(completed.error!,completed.stack!);
+    return completed.value!;
   }
 }
 class _IoSessionService extends SpotifyImportSessionService {
   Future<void>? lastSave;
   @override
-  Future<void> saveNewImport(SpotifyImportPreview preview,{DateTime? importedAt}) {
-    final completed=Zone.root.run(() => Completer<void>());
-    Zone.root.run(()=>super.saveNewImport(preview,importedAt:importedAt).then<void>((_)=>completed.complete(),onError:(Object error,StackTrace stack)=>completed.completeError(error,stack)));
-    return lastSave=completed.future;
+  Future<void> saveNewImport(SpotifyImportPreview preview,{DateTime? importedAt}) async {
+    final outcome=_realIo(() async {await super.saveNewImport(preview,importedAt:importedAt);return true;});
+    lastSave=Zone.root.run(()=>outcome.then<void>((_) {}));
+    final completed=await outcome;
+    if(completed.error!=null) Error.throwWithStackTrace(completed.error!,completed.stack!);
   }
 }

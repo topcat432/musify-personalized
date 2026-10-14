@@ -77,3 +77,11 @@ the destination-appearance fixture called the default service instead of its
 injected writer, and the compact repeated-confirmation tap occurred before a
 scrolled frame settled. Corrections retain both persistence and hit-test assertions.
 Successor exact-source qualification remains pending; no golden comparison changed.
+
+
+47a6ba02 exactCI38653580549 is terminal FAIL despite759 assertions reported
+passed: an expected stale-source error escaped the root-zone widget IO bridge
+and failed subprocess finalization. The successor carries real-IO errors back
+as values and rethrows them in the caller's test zone. Live empty verification
+also precedes projection of an obsolete scoped snapshot. No failure is relabelled
+as a pass; strict visuals and builds remain pending for the successor.
