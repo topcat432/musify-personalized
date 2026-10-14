@@ -50,7 +50,9 @@ retryable error; Musify never silently chooses or flattens an entry.
   worker. Dart checks the response proof and never falls back to permissive raw
   decoding; stale cancellation IDs cannot cancel the successor.
 - Existing streamed reader cancellation/deadline and JSON depth/10,000-row
-  limits remain. ZIP CSV/TSV cap total rows at10,000 and reject playlist-prefixed
+  limits remain. Streamed-reader finally cleanup has a1-second bound and observes
+  late failures. ZIP CSV/TSV enforce10,000 data records during delimiter scanning,
+  before excess records or track models are retained, and reject playlist-prefixed
   and recognized membership columns. No new durable session fields.
 
 

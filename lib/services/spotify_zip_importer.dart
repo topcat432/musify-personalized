@@ -135,6 +135,7 @@ class SpotifyZipImporter {
       decoded,
       fileName: name,
       rejectPlaylistMembership: true,
+      maxDataRows: SpotifyCsvImporter.maxJsonTracks,
     );
     if (preview.totalDataRows > SpotifyCsvImporter.maxJsonTracks) {
       _fail('ZIP song lists must contain at most 10,000 tracks.');

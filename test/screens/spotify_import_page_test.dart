@@ -646,6 +646,125 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+  for (final failure in ['stalled cleanup', 'ZIP row budget']) {
+    testWidgets(
+      '$failure preserves prior session and allows explicit successor save',
+      (tester) async {
+        await pumpPage(
+          tester,
+          _IoSessionService(sessionWriter: (box, values) => box.putAll(values)),
+        );
+        await choose(tester, 'Old');
+        await tester.tap(button('Save and continue'));
+        await tester.pump();
+        await settleSave(tester);
+        await tester.runAsync(
+          () => Hive.box('user').putAll({
+            'likedSongs': ['keep'],
+            'spotifyMatchResults': [
+              {'status': 'accepted', 'ytid': 'selected-old'},
+            ],
+            'spotifyExcludedImportRows': [7],
+          }),
+        );
+        final before = jsonDecode(jsonEncode(Hive.box('user').toMap()));
+        final cleanup = Completer<void>();
+        final source = StreamController<List<int>>(
+          onCancel: () => cleanup.future,
+        );
+        late PlatformFile selected;
+        if (failure == 'stalled cleanup') {
+          selected = PlatformFile(
+            name: 'owned.json',
+            size: 1,
+            readStream: source.stream,
+          );
+        } else {
+          final template = base64Decode(
+            'UEsDBBQAAAAAALwETl1mdiMFMwAAADMAAAAJAAAAc29uZ3MuY3N2VHJhY2sgTmFtZSxBcnRpc3QgTmFtZShzKQpGaXJzdCxPd25lcgpTZWNvbmQsT3duZXIKUEsBAhQAFAAAAAAAvAROXWZ2IwUzAAAAMwAAAAkAAAAAAAAAAAAAAIABAAAAAHNvbmdzLmNzdlBLBQYAAAAAAQABADcAAABaAAAAAAA=',
+          );
+          final oldCentral = ByteData.sublistView(
+            template,
+          ).getUint32(template.length - 6, Endian.little);
+          final payload = utf8.encode(
+            'Title,Artist\n' +
+                List.filled(10001, 'A,B\n').join() +
+                '"unterminated',
+          );
+          final bytes = Uint8List.fromList([
+            ...template.sublist(0, 39),
+            ...payload,
+            ...template.sublist(oldCentral),
+          ]);
+          final central = 39 + payload.length;
+          final data = ByteData.sublistView(bytes);
+          for (final offset in [14, central + 16]) {
+            data.setUint32(offset, 3260943932, Endian.little);
+          }
+          for (final offset in [18, 22, central + 20, central + 24]) {
+            data.setUint32(offset, payload.length, Endian.little);
+          }
+          data.setUint32(bytes.length - 6, central, Endian.little);
+          selected = PlatformFile(
+            name: 'owned.zip',
+            size: bytes.length,
+            bytes: bytes,
+          );
+        }
+        picker.results.add(Future.value(FilePickerResult([selected])));
+        await tester.tap(button('Choose song list file'));
+        await tester.pump();
+        if (failure == 'stalled cleanup') {
+          source.add([123]);
+          await tester.pump();
+          await tester.pump(const Duration(seconds: 20));
+          await tester.pump(const Duration(seconds: 2));
+        }
+        await tester.pumpAndSettle();
+        expect(
+          find.textContaining(
+            failure == 'stalled cleanup' ? 'timed out' : 'data rows',
+          ),
+          findsWidgets,
+        );
+        expect(Hive.box('user').toMap(), before);
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pumpAndSettle();
+        await tester.runAsync(() async {
+          await Hive.close();
+          await Hive.openBox('user');
+        });
+        expect(Hive.box('user').toMap(), before);
+        await pumpPage(
+          tester,
+          _IoSessionService(sessionWriter: (box, values) => box.putAll(values)),
+        );
+        await choose(tester, 'Next');
+        expect(Hive.box('user').toMap(), before);
+        if (failure == 'stalled cleanup') {
+          cleanup.completeError(StateError('Late owned cleanup failure'));
+          await tester.pump();
+        }
+        await tester.tap(button('Save and continue'));
+        await tester.pump();
+        await settleSave(tester);
+        expect(Hive.box('user').get('spotifyImportTracks')[0]['title'], 'Next');
+        expect(Hive.box('user').get('likedSongs'), ['keep']);
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pumpAndSettle();
+        await tester.runAsync(() async {
+          await Hive.close();
+          final box = await Hive.openBox('user');
+          expect(box.get('spotifyImportTracks')[0]['title'], 'Next');
+        });
+        if (failure == 'stalled cleanup') {
+          source.close();
+          await tester.pump();
+        }
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
 }
 
 class _Picker extends FilePickerPlatform {

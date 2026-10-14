@@ -1,5 +1,21 @@
 # Musify Personalized current state
 
+## File cleanup and early ZIP row-budget correction,2026-10-14
+
+A controlled-clock regression reproduced an indefinitely pending streamed read
+when its provider's onCancel future never completed. The reader now bounds its
+finally cleanup to one second, observes late cleanup failures, and preserves the
+original read failure. A read timeout therefore settles within20+1 seconds.
+ZIP CSV/TSV now pass an optional10,000-data-record budget into the delimiter
+scanner, rejecting before retaining excess records or constructing track models.
+Direct CSV/TSV defaults remain unchanged. Quoted multiline records, original
+logical positions and ignored trailing blank records retain their semantics.
+Real Hive widget regressions cover old session/decisions/exclusions/favorites,
+close/reopen, late cleanup failure, successor preview and explicit Save/reopen.
+Analysis and86 focused tests PASS; Windows strict FAIL16+24, with all40 actual
+images byte-identical to retained control. Exact-source Linux CI is pending. No schema/dependency,
+reference-image, signing or device change; F03 remains PARTIAL.
+
 ## F03 stalled transport correction,2026-10-14
 
 Deterministic regressions at the exact d06f24b6 CI checkpoint exposed delayed

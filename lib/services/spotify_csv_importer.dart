@@ -90,6 +90,7 @@ class SpotifyCsvImporter {
     Uint8List bytes, {
     required String fileName,
     bool rejectPlaylistMembership = false,
+    int? maxDataRows,
   }) {
     if (fileName.toLowerCase().endsWith('.json')) {
       return _parseLibraryJson(bytes, fileName);
@@ -104,7 +105,11 @@ class SpotifyCsvImporter {
     final text = utf8
         .decode(bytes, allowMalformed: true)
         .replaceFirst('\ufeff', '');
-    final rows = _parseDelimited(text, delimiter: isTsv ? '\t' : ',');
+    final rows = _parseDelimited(
+      text,
+      delimiter: isTsv ? '\t' : ',',
+      maxDataRows: maxDataRows,
+    );
     if (rows.length < 2) {
       throw const SpotifyImportException(
         'The song list must contain a header row and at least one song.',
@@ -442,8 +447,36 @@ class SpotifyCsvImporter {
   static List<List<String>> _parseDelimited(
     String input, {
     required String delimiter,
+    int? maxDataRows,
   }) {
+    if (maxDataRows != null && maxDataRows < 0) {
+      throw ArgumentError.value(maxDataRows, 'maxDataRows');
+    }
     final rows = <List<String>>[];
+    var pendingBlankRows = 0;
+    void retainRow(List<String> completedRow) {
+      if (maxDataRows == null || rows.isEmpty) {
+        rows.add(completedRow);
+        return;
+      }
+      // Trailing blank records have always been ignored. Count them without
+      // retaining their fields until a later nonblank record makes them data.
+      if (completedRow.every((value) => value.trim().isEmpty)) {
+        pendingBlankRows++;
+        return;
+      }
+      if (rows.length - 1 + pendingBlankRows + 1 > maxDataRows) {
+        throw SpotifyImportException(
+          'ZIP song lists must contain at most $maxDataRows data rows.',
+        );
+      }
+      for (var index = 0; index < pendingBlankRows; index++) {
+        rows.add(const <String>[]);
+      }
+      pendingBlankRows = 0;
+      rows.add(completedRow);
+    }
+
     var row = <String>[];
     final field = StringBuffer();
     var inQuotes = false;
@@ -480,7 +513,7 @@ class SpotifyCsvImporter {
         }
         row.add(field.toString());
         field.clear();
-        rows.add(row);
+        retainRow(row);
         row = <String>[];
       } else {
         field.write(character);
@@ -495,7 +528,7 @@ class SpotifyCsvImporter {
 
     if (field.isNotEmpty || row.isNotEmpty) {
       row.add(field.toString());
-      rows.add(row);
+      retainRow(row);
     }
 
     while (rows.isNotEmpty &&

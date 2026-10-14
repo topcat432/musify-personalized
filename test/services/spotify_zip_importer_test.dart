@@ -300,4 +300,19 @@ void main() {
       );
     });
   }
+  test('ZIP row budget stops before visiting a malformed tail', () async {
+    final payload = utf8.encode(
+      'Title,Artist\n' + List.filled(10001, 'A,B\n').join() + '"unterminated',
+    );
+    await expectLater(
+      parse(stored(payload, 3260943932)),
+      throwsA(
+        isA<SpotifyImportException>().having(
+          (e) => e.message,
+          'early row limit',
+          contains('data rows'),
+        ),
+      ),
+    );
+  });
 }

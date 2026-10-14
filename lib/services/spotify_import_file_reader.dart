@@ -9,6 +9,7 @@ import 'package:rxdart/rxdart.dart';
 class SpotifyImportFileReader {
   const SpotifyImportFileReader._();
   static const readTimeout = Duration(seconds: 20);
+  static const cleanupTimeout = Duration(seconds: 1);
 
   static Future<Uint8List> read(
     PlatformFile file, {
@@ -51,6 +52,7 @@ class SpotifyImportFileReader {
     final iterator = StreamIterator<List<int>>(stream);
     final bytes = BytesBuilder(copy: false);
     final clock = Stopwatch()..start();
+    var completedRead = false;
     try {
       while (true) {
         final remaining = readTimeout - clock.elapsed;
@@ -61,13 +63,27 @@ class SpotifyImportFileReader {
       }
       if (wasCancelled)
         throw const SpotifyImportException('File selection was cancelled.');
+      completedRead = true;
       return bytes.takeBytes();
     } on TimeoutException {
       throw const SpotifyImportException(
         'Reading this file timed out. Choose a local song list and try again.',
       );
     } finally {
-      await iterator.cancel();
+      try {
+        // cancel detaches this subscription immediately; provider cleanup can
+        // finish later. timeout observes late errors without adopting its work.
+        await iterator.cancel().timeout(cleanupTimeout);
+      } on TimeoutException {
+        if (completedRead) {
+          throw const SpotifyImportException(
+            'Stopping this file read timed out. Choose a local song list and try again.',
+          );
+        }
+      } catch (error, stack) {
+        // Do not replace the original read/timeout/cancellation failure.
+        if (completedRead) Error.throwWithStackTrace(error, stack);
+      }
     }
   }
 }

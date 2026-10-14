@@ -8,6 +8,47 @@ void main() {
   Uint8List csvBytes(String value) => Uint8List.fromList(utf8.encode(value));
 
   group('SpotifyCsvImporter', () {
+    test(
+      'optional row budget preserves quoted records and interior positions',
+      () {
+        final preview = SpotifyCsvImporter.parseBytes(
+          csvBytes(
+            'Title,Artist\r\n"First\npart",Owner\r\n,\r\nSecond,Owner\r\n,\r\n\r\n',
+          ),
+          fileName: 'owned.csv',
+          maxDataRows: 3,
+        );
+        expect(preview.tracks.map((track) => track.title), [
+          'First\npart',
+          'Second',
+        ]);
+        expect(preview.tracks.map((track) => track.sourceRow), [2, 4]);
+        expect(preview.totalDataRows, 3);
+      },
+    );
+    test('direct CSV remains unrestricted and visits a malformed tail', () {
+      final records = 'Title,Artist\n' + List.filled(10001, 'A,B\n').join();
+      expect(
+        SpotifyCsvImporter.parseBytes(
+          csvBytes(records),
+          fileName: 'owned.csv',
+        ).tracks.length,
+        10001,
+      );
+      expect(
+        () => SpotifyCsvImporter.parseBytes(
+          csvBytes('$records"unterminated'),
+          fileName: 'owned.csv',
+        ),
+        throwsA(
+          isA<SpotifyImportException>().having(
+            (e) => e.message,
+            'malformed tail',
+            contains('unterminated'),
+          ),
+        ),
+      );
+    });
     test('parses Soundiiz CSV with quoted artists', () {
       const csv = '''index,title,artist,album,isrc
 0,THE 1,"Rell Moore, Saint Meadow",THE 1 (MIXTAPE),QZTAZ2464735

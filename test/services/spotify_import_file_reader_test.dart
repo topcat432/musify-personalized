@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:fake_async/fake_async.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:musify/services/spotify_csv_importer.dart';
@@ -186,6 +187,44 @@ void main() {
       } finally {
         await root.delete(recursive: true);
       }
+    },
+  );
+  test(
+    'stalled onCancel cannot keep the read timeout pending indefinitely',
+    () {
+      fakeAsync((clock) {
+        final cleanup = Completer<void>();
+        var cancelCalls = 0;
+        var ended = false;
+        Object? error;
+        final source = StreamController<List<int>>(
+          onCancel: () {
+            cancelCalls++;
+            return cleanup.future;
+          },
+        );
+        SpotifyImportFileReader.read(
+          PlatformFile(name: 'owned.json', size: 1, readStream: source.stream),
+        ).then<void>(
+          (_) => fail('Stalled read returned bytes'),
+          onError: (Object e) {
+            ended = true;
+            error = e;
+          },
+        );
+        clock.flushMicrotasks();
+        source.add([123]);
+        clock.flushMicrotasks();
+        clock.elapse(const Duration(seconds: 22));
+        clock.flushMicrotasks();
+        expect(cancelCalls, 1);
+        expect(ended, isTrue);
+        expect(error, isA<SpotifyImportException>());
+        cleanup.completeError(StateError('Late owned cleanup failure'));
+        clock.flushMicrotasks();
+        source.close();
+        clock.flushMicrotasks();
+      });
     },
   );
 }
