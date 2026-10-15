@@ -38,7 +38,6 @@ import 'package:musify/utilities/app_utils.dart';
 import 'package:musify/utilities/flutter_toast.dart';
 import 'package:musify/utilities/offline_playlist_dialogs.dart';
 import 'package:musify/utilities/playlist_dialogs.dart';
-import 'package:musify/utilities/playlist_utils.dart';
 import 'package:musify/utilities/song_filtering.dart';
 import 'package:musify/utilities/sort_utils.dart';
 import 'package:musify/widgets/edit_playlist_dialog.dart';
@@ -97,9 +96,9 @@ class _PlaylistPageState extends State<PlaylistPage> {
   late final TextEditingController _searchController;
   late final FocusNode _searchFocusNode;
 
-  List<dynamic> _getSourceList(String searchQuery) {
+  List<int> _getSourceIndices(String searchQuery) {
     final list = _playlist?['list'] as List<dynamic>? ?? [];
-    return filterSongsByQuery(list, searchQuery);
+    return filterSongIndicesByQuery(list, searchQuery);
   }
 
   bool get _isArtistCatalogLoading =>
@@ -218,17 +217,19 @@ class _PlaylistPageState extends State<PlaylistPage> {
                     ValueListenableBuilder<String>(
                       valueListenable: _searchQueryNotifier,
                       builder: (context, searchQuery, _) {
-                        final sourceList = _getSourceList(searchQuery);
+                        final sourceIndices = _getSourceIndices(searchQuery);
                         return SliverPadding(
                           padding: commonListViewBottomPadding,
                           sliver: SliverList.builder(
-                            itemCount: sourceList.length,
+                            itemCount: sourceIndices.length,
                             itemBuilder: (context, index) {
                               final isRemovable =
                                   _playlist['source'] == 'user-created';
                               return _buildSongListItem(
-                                sourceList[index],
+                                _playlist['list'][sourceIndices[index]],
                                 index,
+                                sourceIndices[index],
+                                sourceIndices.length,
                                 isRemovable,
                               );
                             },
@@ -777,20 +778,17 @@ class _PlaylistPageState extends State<PlaylistPage> {
     }
   }
 
-  Widget _buildSongListItem(dynamic song, int index, bool isRemovable) {
-    final sourceList = _getSourceList(_searchQueryNotifier.value);
-    final totalItems = sourceList.length;
+  Widget _buildSongListItem(
+    dynamic song,
+    int index,
+    int fullIndex,
+    int totalItems,
+    bool isRemovable,
+  ) {
     final borderRadius = getItemBorderRadius(index, totalItems);
     final isUserCreatedPlaylist = _playlist?['source'] == 'user-created';
     final playlistId = isUserCreatedPlaylist ? _playlist!['ytid'] : null;
     final isSearching = _searchQueryNotifier.value.isNotEmpty;
-    final fullIndex = isSearching
-        ? PlaylistUtils.findSongIndexByYtid(_playlist, song['ytid'])
-        : index;
-
-    if (isSearching && fullIndex == -1) {
-      logger.log('Warning: Song ${song['ytid']} not found in full playlist');
-    }
 
     return SongBar(
       song,
@@ -810,7 +808,7 @@ class _PlaylistPageState extends State<PlaylistPage> {
       onPlay: () {
         audioHandler.playPlaylistSong(
           playlist: _playlist,
-          songIndex: fullIndex != -1 ? fullIndex : index,
+          songIndex: fullIndex,
         );
       },
       borderRadius: borderRadius,

@@ -100,6 +100,70 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
     },
   );
+  for (final query in ['match', 'SECOND', '']) {
+    testWidgets('playlist search preserves repeated slot for "$query"', (
+      tester,
+    ) async {
+      tester.view
+        ..physicalSize = const Size(800, 1400)
+        ..devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final repeated = {
+        'ytid': 'repeated',
+        'title': 'Match repeated',
+        'artist': 'Fixture',
+      };
+      final songs = [
+        {'ytid': 'prefix', 'title': 'Hidden prefix', 'artist': 'Fixture'},
+        repeated,
+        {'ytid': 'middle', 'title': 'Hidden middle', 'artist': 'Fixture'},
+        repeated,
+        {
+          'ytid': 'repeated',
+          'title': 'Match second version',
+          'artist': 'Fixture',
+        },
+      ];
+      await tester.pumpWidget(
+        priorityReviewApp(
+          brightness: Brightness.dark,
+          child: PlaylistPage(
+            playlistData: {
+              'ytid': 'customId-repeat-search',
+              'title': 'Repeated playlist',
+              'source': 'user-created',
+              'image': '',
+              'list': songs,
+            },
+          ),
+        ),
+      );
+      await tester.pump();
+      final search = find.byType(TextField);
+      await tester.ensureVisible(search);
+      await tester.enterText(search, query);
+      await tester.pump();
+      final target = query == 'match'
+          ? find.text('Match repeated').last
+          : find.text('Match second version');
+      await tester.ensureVisible(target);
+      await tester.tap(target);
+      await tester.pump();
+      expect(handler.startIndex, query == 'match' ? 3 : 4);
+      expect(handler.replace, isTrue);
+      expect(
+        handler.songs.map((song) => song['title']),
+        songs.map((song) => song['title']),
+      );
+      expect(
+        handler.songs[handler.startIndex!]['title'],
+        query == 'match' ? 'Match repeated' : 'Match second version',
+      );
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+  }
 }
 
 class _CaptureQueueHandler extends MusifyAudioHandler {

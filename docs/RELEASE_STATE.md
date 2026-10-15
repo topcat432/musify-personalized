@@ -1,5 +1,43 @@
 # Musify Personalized current state
 
+## Isolated empty-export proof and playlist slot correction,2026-10-15
+
+Current candidate predecessor b0f5d4ffcee3939311ee7218e91b520c757fe3b8 passed
+[exact CI38666790364](https://github.com/topcat432/musify-personalized/actions/runs/38666790364):
+analysis,784 aggregate tests,16+24 strict Linux visuals,nine logger tests,
+49 reader/30 channel/3310 inflater checks and all required Android builds.
+Its predecessor aa894e2d run38666177250 was cancelled, not passed.
+
+The isolated5560 working clone uses the same API35 Google APIs x86_64 system
+image,2GiB guest RAM and four vCPUs as saved5558. It changes1080x2400/density420
+to720x1280/density320, swiftshader_indirect to swiftshader, and layered userdata/
+encryption disks to self-contained QCOW2 copies independently compared logically
+identical. Original5558 files/configuration remain preserved. One cold Launcher/
+Settings/c249 probe had usable hierarchies without ANR, not repeatability proof.
+Several variables changed together; no single-cause attribution is established.
+Observed owned peak private bytes4,679,602,176 and peak working set4,127,690,752;
+minimum available host bytes12,576,444,416 during that probe. Early paging settled
+before the app phase. Guest RAM/vCPU,26GiB commit forecast,80% threshold and8GiB
+physical reserve were not reduced. No global memory/pagefile/security change.
+
+Signed c249 empty restore, app-process restart, actual saved-file reopen/checksums
+and independent typed Hive close/reopen PASS on5560. The export has zero user/music/
+import entries and exactly one intentional update-check opt-out setting. Full
+guest cold restart and signed-baseline rollback remain outstanding. Recovery-only
+launch was refused before startup for insufficient physical reserve; no emulator
+is running and the lease is free. Normal-debug four Hives remain exact/mode600.
+Canonical private evidence: c249-isolated-empty-independent-index.json and
+optional-batch-f01-f02-acceptance.json under the established evidence root.
+F01/F02 native acceptance has not started. Current candidate is not installed;
+provider reliability, actual phone, signing/publication and merge gates stay held.
+
+The next bounded source correction preserves original playlist slot indices when
+searching repeated recordings. It keeps queue order and chosen row position,
+including repeated references to one map and different rows with the same ytid.
+Predecessor filtered taps reproducibly chose slot1 instead of3/4; corrected actual
+widget tests PASS5. No schema, stored list, golden, dependency or provider change.
+Analysis and787 aggregate tests PASS. Strict Windows FAIL16+24, with all40 actual PNG hashes matching the retained control exactly; reference/actual/isolated diff inspected. No reference change. Exact successor Linux CI remains pending.
+
 ## Signed c249 owned5558 update/data checkpoint,2026-10-14
 
 Immutable signed c249395a4dc0a151a73f8402afdfc444eb140261 installed in place on

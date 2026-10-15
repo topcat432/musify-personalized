@@ -21,11 +21,24 @@
 
 List<dynamic> filterSongsByQuery(List<dynamic> songsList, String searchQuery) {
   if (searchQuery.isEmpty) return songsList;
-
   final q = searchQuery.toLowerCase();
-  return songsList.where((s) {
-    final title = (s['title'] ?? '').toString().toLowerCase();
-    final artist = (s['artist'] ?? '').toString().toLowerCase();
-    return title.contains(q) || artist.contains(q);
-  }).toList();
+  return songsList.where((song) => _matchesSongQuery(song, q)).toList();
+}
+
+/// Original playlist slots in visible order, including repeated map instances.
+List<int> filterSongIndicesByQuery(
+  List<dynamic> songsList,
+  String searchQuery,
+) {
+  final q = searchQuery.toLowerCase();
+  return [
+    for (var index = 0; index < songsList.length; index++)
+      if (q.isEmpty || _matchesSongQuery(songsList[index], q)) index,
+  ];
+}
+
+bool _matchesSongQuery(dynamic song, String q) {
+  final title = (song['title'] ?? '').toString().toLowerCase();
+  final artist = (song['artist'] ?? '').toString().toLowerCase();
+  return title.contains(q) || artist.contains(q);
 }

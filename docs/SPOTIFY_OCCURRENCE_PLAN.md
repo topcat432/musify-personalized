@@ -51,10 +51,14 @@ maps with repeated recording IDs. A new separately created snapshot can therefor
 store selected recordings in source membership order without a new Hive adapter,
 per-song field or queue identity. Existing add-song helpers deduplicate and must
 not implement this action. Queue loading clones each slot with a fresh runtime
-ID; unfiltered removal uses the actual slot index. Filtered playlist playback
-currently finds the first matching recording ID, so selecting a later repeat in
-search is not yet reliable. That UI behavior must be qualified before integration;
-this prototype changes neither playback nor playlist UI.
+ID; unfiltered removal uses the actual slot index. Filtered playlist playback now carries each visible row's original slot index
+into the existing full-playlist queue call. It does not look up a recording ID
+or map equality, so later repeats and distinct rows sharing a recording retain
+their selected position. Three actual-row regressions cover shared map instances,
+case-insensitive filtered selection and unfiltered selection; both filtered
+cases fail against predecessor b0f5d4f with slot1 instead of3/4. This UI correction
+adds no durable occurrence tags or recreation writer. Exact successor CI and
+native qualification remain separate gates.
 
 Proposed minimum durable proof: an immutable versioned creation descriptor in
 the existing import operation journal and a matching playlist-level creation
