@@ -1,5 +1,17 @@
 # Product acceptance ledger
 
+## Consolidated entry and identity coverage,2026-10-15
+
+Initial platform reads observe controls from before the read; metadata and queue
+entry reserve ownership before their first await and share that token through
+normal queue selection/loading. Queue commit is staged past native shuffle waits.
+All63 focused cases and clean analysis/all1064 local app tests pass, including
+winning queue/media/current-song and persisted recent-history attribution.
+The approved combined source/coverage verdict precedes signing/promotion; fast
+checks/CI may run during review. abd9d2e3 CI passed but remains withheld for its
+entry gaps. The resulting artifact still requires exact CI/sign/owned5560 runtime;
+c249 partial playback/data proof is not transferred to this newer source.
+
 ## Explicit control ownership matrix,2026-10-15
 
 Metadata now observes the audio action counter from request start without

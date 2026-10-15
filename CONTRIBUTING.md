@@ -29,6 +29,24 @@ origin/master on one task branch/PR, avoiding competing overhaul branches.
 
 ## Toolchain and checks
 
+For a bounded baseline correction, combine the source and coverage findings into
+one review verdict before signing or promotion. Fast local checks and exact CI
+may run during review. Close the agreed request/await/commit boundary together;
+do not turn the gate into incremental speculative scope expansion. Future-feature
+assessment stays isolated from baseline writes and emulator/heavy-build resources.
+
+Ordinary branch CI already uses per-branch concurrency with cancellation of
+superseded runs; signed-release uses the serial signed-production group with
+cancellation disabled. Do not cancel signing/release runs or needed controls.
+The external owned smoke harness is prepared for exact-APK in-place install,
+pre/post/restart saved exports, independent typed inventories and captured UI/logs;
+the current corrected artifact has not yet run it. Cold share, visible actual
+source and playback-control acceptance still require that exact artifact.
+Keep one canonical signed Actions APK/manifest outside Git, verify source,
+retained signer/v2/v3, monotonic version and APK hash at each stage, and reuse
+that same qualified APK for any later separately authorized phone acceptance.
+Do not rebuild a different APK for delivery or infer native safety from CI.
+
 Windows work must follow [STORAGE_WORKFLOW.md](docs/STORAGE_WORKFLOW.md).
 tool/dev.ps1 setup still configures only the calling process; test/visual/verify/
 build now require the existing task-storage session, which checks resources and

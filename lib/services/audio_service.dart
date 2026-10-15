@@ -1101,25 +1101,64 @@ class MusifyAudioHandler extends BaseAudioHandler {
     int? startIndex,
     bool shuffle = false,
   }) async {
+    final requestId = replace || startIndex != null
+        ? _reservePlaybackAction()
+        : null;
+    await _addPlaylistToQueue(
+      songs,
+      replace: replace,
+      startIndex: startIndex,
+      shuffle: shuffle,
+      requestId: requestId,
+    );
+  }
+
+  Future<void> _addPlaylistToQueue(
+    List<Map> songs, {
+    required bool replace,
+    required int? requestId,
+    int? startIndex,
+    bool shuffle = false,
+  }) async {
+    bool ownsRequest() => requestId == null || !_isStaleTransition(requestId);
     try {
+      final requestedSongs = cloneMaps(songs);
+      if (replace) {
+        await audioPlayer.setShuffleModeEnabled(false);
+        if (!ownsRequest()) return;
+        final hasSongs = requestedSongs.any((song) =>
+            song['ytid'] != null && song['ytid'].toString().isNotEmpty) ||
+            _getUnplayedManualSongs().isNotEmpty;
+        if (shuffle && hasSongs) {
+          try {
+            await audioPlayer.setShuffleModeEnabled(true);
+          } catch (error, stackTrace) {
+            if (!ownsRequest()) return;
+            // Preserve the existing shuffle-enable failure policy: the Dart
+            // queue can still select its requested recording.
+            logger.log('Error setting shuffle mode', error: error, stackTrace: stackTrace);
+          }
+          if (!ownsRequest()) return;
+        }
+      }
+      if (!ownsRequest()) return;
       final manuallyAddedSongs = replace ? _getUnplayedManualSongs() : <Map>[];
+      // Commit only after all native setup waits still belong to this action.
       if (replace) {
         _consecutiveErrors = 0;
         _queueList.clear();
         _originalQueueList.clear();
         _currentQueueIndex = 0;
         _currentLoadingIndex = -1;
-        _currentLoadingTransitionId = -1;
         _resetPreloadingState();
         shuffleNotifier.value = false;
         unawaited(Hive.box('settings').put('shuffleEnabled', false));
-        await audioPlayer.setShuffleModeEnabled(false);
       }
 
       int? targetQueueIndex;
 
-      for (var i = 0; i < songs.length; i++) {
-        final song = songs[i];
+      for (var i = 0; i < requestedSongs.length; i++) {
+        final song = requestedSongs[i];
         if (song['ytid'] != null && song['ytid'].toString().isNotEmpty) {
           _queueList.add(_queueEntryIds.createSong(song));
 
@@ -1143,25 +1182,34 @@ class MusifyAudioHandler extends BaseAudioHandler {
 
       if (replace && shuffle && _queueList.isNotEmpty) {
         _currentQueueIndex = targetQueueIndex ?? 0;
-        await setShuffleMode(AudioServiceShuffleMode.all);
+        shuffleNotifier.value = true;
+        unawaited(Hive.box('settings').put('shuffleEnabled', true));
+        final unplayedManualSongs = _getUnplayedManualSongs();
+        _enableShuffle(
+          unplayedManualSongs,
+          unplayedManualSongs.map(_queueEntryIds.ensureId).toSet(),
+        );
         targetQueueIndex = _currentQueueIndex;
       }
 
       if (targetQueueIndex != null) {
-        await _playFromQueue(targetQueueIndex);
+        await _playFromQueue(targetQueueIndex, reservedTransitionId: requestId);
       } else if (startIndex != null &&
           startIndex < _queueList.length &&
           !replace) {
-        await _playFromQueue(startIndex);
+        await _playFromQueue(startIndex, reservedTransitionId: requestId);
       } else if (replace && _queueList.isNotEmpty) {
-        await _playFromQueue(0);
+        await _playFromQueue(0, reservedTransitionId: requestId);
       }
     } catch (e, stackTrace) {
+      if (!ownsRequest()) return;
       logger.log(
         'Error adding playlist to queue',
         error: e,
         stackTrace: stackTrace,
       );
+    } finally {
+      if (requestId != null) _releasePlaybackAction(requestId);
     }
   }
 
@@ -1348,6 +1396,7 @@ class MusifyAudioHandler extends BaseAudioHandler {
     int? queueIndex,
     bool includeMediaItem = false,
     String? mediaId,
+    int? transitionId,
   }) {
     activeSource.add(null);
     try {
@@ -1357,7 +1406,7 @@ class MusifyAudioHandler extends BaseAudioHandler {
           immediateMediaItem = immediateMediaItem.copyWith(id: mediaId);
         }
         Future.microtask(() {
-          mediaItem.add(immediateMediaItem);
+          if (!_isStaleTransition(transitionId)) mediaItem.add(immediateMediaItem);
         });
       }
 
@@ -1393,7 +1442,8 @@ class MusifyAudioHandler extends BaseAudioHandler {
     }
   }
 
-  Future<void> _playFromQueue(int index) async {
+  Future<void> _playFromQueue(int index, {int? reservedTransitionId}) async {
+    if (_isStaleTransition(reservedTransitionId)) return;
     if (index < 0 || index >= _queueList.length) {
       logger.log('Invalid queue index: $index');
       return;
@@ -1417,8 +1467,7 @@ class MusifyAudioHandler extends BaseAudioHandler {
 
     // Start new transition
     _explicitlyStopped = false;
-    _songTransitionCounter++;
-    final currentTransitionId = _songTransitionCounter;
+    final currentTransitionId = reservedTransitionId ?? _reservePlaybackAction();
     _currentLoadingIndex = index;
     _currentLoadingTransitionId = currentTransitionId;
     _visiblePlaybackError = null;
@@ -1434,8 +1483,9 @@ class MusifyAudioHandler extends BaseAudioHandler {
       final uniqueId = currentMediaItem.id;
 
       await Future.microtask(() {
-        mediaItem.add(currentMediaItem);
+        if (!_isStaleTransition(currentTransitionId)) mediaItem.add(currentMediaItem);
       });
+      if (_isStaleTransition(currentTransitionId)) return;
 
       _emitOptimisticLoadingState(
         queueIndex: _currentQueueIndex,
@@ -1443,13 +1493,13 @@ class MusifyAudioHandler extends BaseAudioHandler {
       );
 
       final success = await playSong(
-        _queueList[index],
+        currentSong,
         mediaId: uniqueId,
         transitionId: currentTransitionId,
       );
 
       // Only process result if this is still the current transition
-      if (currentTransitionId == _currentLoadingTransitionId) {
+      if (!_isStaleTransition(currentTransitionId)) {
         if (success) {
           _preloadUpcomingSongs();
           // Trigger background song addition if auto-play is enabled
@@ -1466,14 +1516,12 @@ class MusifyAudioHandler extends BaseAudioHandler {
         }
       }
     } catch (e, stackTrace) {
+      if (_isStaleTransition(currentTransitionId)) return;
       logger.log('Error playing from queue', error: e, stackTrace: stackTrace);
       _handlePlaybackError(index);
     } finally {
       // Only reset if this is still the transition that started it
-      if (currentTransitionId == _currentLoadingTransitionId) {
-        _currentLoadingIndex = -1;
-        _currentLoadingTransitionId = -1;
-      }
+      _releasePlaybackAction(currentTransitionId);
     }
   }
 
@@ -1955,49 +2003,54 @@ class MusifyAudioHandler extends BaseAudioHandler {
     return false;
   }
 
-  /// Resolves metadata without interrupting the current player. A queue action
-  /// or Stop during resolution supersedes this request, even if its UI owner
-  /// remains mounted and no newer share arrived.
-  Future<bool> resolveAndPlayOwnedSong(
-    Future<Map> Function() resolveSong, {
-    required bool Function() stillCurrent,
-  }) async {
-    final requestedAtTransition = _songTransitionCounter;
-    bool ownsResolution() =>
-        stillCurrent() && requestedAtTransition == _songTransitionCounter;
-    if (!ownsResolution()) return false;
-    try {
-      final song = await resolveSong();
-      if (!ownsResolution()) return false;
-      return await playOwnedSong(song, stillCurrent: stillCurrent);
-    } catch (_) {
-      if (!ownsResolution()) return false;
-      rethrow;
+  /// Snapshot for the initial platform read, before a playable intent is known.
+  /// Capturing does not reserve a request or interrupt current playback.
+  bool Function() capturePlaybackActionOwner() {
+    final captured = _songTransitionCounter;
+    return () => captured == _songTransitionCounter;
+  }
+
+  int _reservePlaybackAction() {
+    final id = ++_songTransitionCounter;
+    _currentLoadingTransitionId = id;
+    _currentLoadingIndex = -1;
+    return id;
+  }
+
+  void _releasePlaybackAction(int id) {
+    _songTransitionOwners.remove(id);
+    if (_currentLoadingTransitionId == id) {
+      _currentLoadingTransitionId = -1;
+      _currentLoadingIndex = -1;
     }
   }
 
-  /// Starts an explicitly owned load using the same transition checks as queues.
-  /// Ownership remains observable through source resolution and native loading.
-  Future<bool> playOwnedSong(
-    Map song, {
+  /// Resolves metadata without interrupting the current player. A queue action
+  /// or Stop during resolution supersedes this request, even if its UI owner
+  /// remains mounted and no newer share arrived.
+  Future<void> resolveAndPlayOwnedSong(
+    Future<Map> Function() resolveSong, {
     required bool Function() stillCurrent,
   }) async {
-    if (!stillCurrent()) return false;
-    final transitionId = ++_songTransitionCounter;
-    _currentLoadingTransitionId = transitionId;
-    _currentLoadingIndex = -1;
-    _explicitlyStopped = false;
-    _visiblePlaybackError = null;
-    _failedAudioSource = null;
+    if (!stillCurrent()) return;
+    final transitionId = _reservePlaybackAction();
     _songTransitionOwners[transitionId] = stillCurrent;
     try {
-      return await playSong(song, transitionId: transitionId);
+      final song = await resolveSong();
+      if (_isStaleTransition(transitionId)) return;
+      // Reuse normal queue selection with this request's existing token.
+      // Queue, media/current song and history describe the same recording.
+      await _addPlaylistToQueue(
+        [song],
+        replace: true,
+        startIndex: 0,
+        requestId: transitionId,
+      );
+    } catch (_) {
+      if (_isStaleTransition(transitionId)) return;
+      rethrow;
     } finally {
-      _songTransitionOwners.remove(transitionId);
-      if (_currentLoadingTransitionId == transitionId) {
-        _currentLoadingTransitionId = -1;
-        _currentLoadingIndex = -1;
-      }
+      _releasePlaybackAction(transitionId);
     }
   }
 
@@ -2048,6 +2101,7 @@ class MusifyAudioHandler extends BaseAudioHandler {
         song: songData,
         includeMediaItem: true,
         mediaId: mediaId,
+        transitionId: transitionId,
       );
 
       final audioSource = await buildAudioSource(
@@ -2663,6 +2717,7 @@ class MusifyAudioHandler extends BaseAudioHandler {
 
   @override
   Future<void> setShuffleMode(AudioServiceShuffleMode shuffleMode) async {
+    final stillCurrent = capturePlaybackActionOwner();
     try {
       final shuffleEnabled = shuffleMode != AudioServiceShuffleMode.none;
       final wasShuffled = shuffleNotifier.value;
@@ -2670,6 +2725,7 @@ class MusifyAudioHandler extends BaseAudioHandler {
       shuffleNotifier.value = shuffleEnabled;
       unawaited(Hive.box('settings').put('shuffleEnabled', shuffleEnabled));
       await audioPlayer.setShuffleModeEnabled(shuffleEnabled);
+      if (!stillCurrent()) return;
 
       if (_queueList.isEmpty) return;
 
@@ -2689,6 +2745,7 @@ class MusifyAudioHandler extends BaseAudioHandler {
         _disableShuffle(unplayedManualSongs, manualSongIds);
       }
     } catch (e, stackTrace) {
+      if (!stillCurrent()) return;
       logger.log(
         'Error setting shuffle mode',
         error: e,

@@ -32,12 +32,25 @@ Future<void> consumeInitialSharedTextIntent({
   required bool Function() stillCurrent,
   required Future<void> Function(String? value) consume,
   required void Function(Object error, StackTrace stackTrace) onError,
+  MusifyAudioHandler? audioHandler,
 }) async {
+  final ownsInitialRead = audioHandler?.capturePlaybackActionOwner();
+  String? value;
   try {
-    final value = await readInitialText();
-    if (stillCurrent() && value != null && value.trim().isNotEmpty) {
-      await consume(value);
-    }
+    value = await readInitialText();
+  } catch (error, stackTrace) {
+    if (stillCurrent() && (ownsInitialRead?.call() ?? true))
+      onError(error, stackTrace);
+    return;
+  }
+  if (!stillCurrent() ||
+      !(ownsInitialRead?.call() ?? true) ||
+      value == null ||
+      value.trim().isEmpty)
+    return;
+  try {
+    // The consumer reserves its own action before metadata resolution.
+    await consume(value);
   } catch (error, stackTrace) {
     if (stillCurrent()) onError(error, stackTrace);
   }

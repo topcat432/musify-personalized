@@ -176,6 +176,7 @@ class _MusifyState extends State<Musify> with WidgetsBindingObserver {
     );
 
     unawaited(consumeInitialSharedTextIntent(
+      audioHandler: audioHandler,
       readInitialText: ReceiveSharingIntent.getInitialText,
       stillCurrent: () =>
           mounted && _textShareGeneration == initialShareGeneration,

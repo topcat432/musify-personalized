@@ -1,5 +1,24 @@
 # Musify Personalized current state
 
+## Consolidated request-entry boundary,2026-10-15
+
+abd9d2e3 exactCI38762075833 passed but is withheld for the reviewed initial-read
+and queue-entry gaps. Initial platform reads now capture audio-control ownership
+before waiting. Valid share/queue actions reserve their token before metadata or
+native shuffle waits; queue contents commit only after owned setup completes.
+The same token reaches queue loading and guarded media-item microtasks. Shared
+handoffs reuse normal queue selection so queue/media/current-song identity agrees.
+
+All63 focused cases and all1064 local app tests pass with clean analysis. Coverage
+includes gated disable/enable shuffle waits in both request orders, stale initial
+read success/error, controls/disposal through metadata/source/native loading,
+winning queue/media/current-song identity and persisted history versus actual
+played recordings. Earlier19 entry failures and13 winning-state failures remain
+retained. CONTRIBUTING records one combined source/coverage verdict before signing,
+existing CI cancellation and one immutable APK through qualification/delivery.
+Resulting-tip exact CI, combined verdict, signing and owned5560 runtime remain
+separate gates. No new schema/provider/phone operation or deferred feature work.
+
 ## User controls during shared-song resolution,2026-10-15
 
 33e27833's five share-versus-share/disposal cases are independently source-closed,
