@@ -125,6 +125,11 @@ access, emulator, phone, signing, publication or security change is authorized b
 this exception. Home-PC session hashing, C:/V: reserves, admission thresholds,
 existing helper, emulator lease and graceful-finally controls remain mandatory.
 
+Sourceb8ec3489eb357a9b2470b13bdffd1477b168c615 qualified all eight native cases
+without skips in Windows job116372191122/run38720054330, with exact source hashes,
+actual resource admission and an old-logger survivor control. This is hosted
+tooling-lifetime evidence; no home emulator, phone or app-data claim follows.
+
 ## Logs and canonical evidence
 
 Any owned logger persisting debug output must implement10MiB per file and no

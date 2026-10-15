@@ -9,15 +9,24 @@ runner's measured disk/physical/commit resources before checkout, then runs only
 the eight native cases under the owned bounded logger. All eight must execute
 and pass without skips. The admission/result receipts and bounded log are retained
 seven days. See STORAGE_WORKFLOW.md for the narrow resource policy; home-PC
-controls, tool setup and security are unchanged. Qualification is pending the
-exact-source Windows/Linux CI run; prior Linux skips are not a Windows pass.
+controls, tool setup and security are unchanged. Sourceb8ec3489eb357a9b2470b13bdffd1477b168c615
+passed all eight native Windows cases with zero skips in
+[Windows job116372191122](https://github.com/topcat432/musify-personalized/actions/runs/38720054330/job/116372191122).
+The pinned b81ac049 old logger failed the intended survivor assertion after the
+3second bound while its sentinel remained alive. Positive child/logger handles
+signalled before cleanup and every separate sentinel remained alive. The runner
+admitted2GiB writes per C:/D: volume,10GiB reserves and1GiB added commit at17.523%
+projected commitment. Source-file hashes, exact admission/result receipts and
+bounded logs are retained in canonical evidence outside Git. Final candidate
+Linux/Windows checks are tracked on PR23; this is tooling containment proof,
+not emulator, phone, playback availability or Windows app-golden qualification.
 The first admitted hosted run38719099292 executed all eight: six passed and two
 cancellation cases failed inside fixture cleanup at TerminateProcess. The revised
 fixture waits at most3seconds on each exact process handle before recording
 survival, preserving the independent sentinel and survivor assertions; cleanup
 waits for actual exit and reports native errors. A pinned b81ac049 old-logger
 control must still demonstrate a surviving descendant after that bound. The
-production containment helper is unchanged; revised native qualification is pending.
+production containment helper is unchanged; successful revised qualification is recorded above.
 Run38719677762 reproduced the intended old-logger survivor after the3second bound,
 with the sentinel alive, then PowerShell's footer propagated the expected native
 exit1 and prevented the positive suite. The control now explicitly succeeds only
