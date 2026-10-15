@@ -665,7 +665,7 @@ String movePlaylistToFolder(
 ) {
   try {
     final updatedFolders = userPlaylistFolders.value
-        .map((folder) => Map<dynamic, dynamic>.from(folder))
+        .map(Map<dynamic, dynamic>.from)
         .toList();
     // A stale picker must refuse before removing any current membership.
     if (folderId != null &&
