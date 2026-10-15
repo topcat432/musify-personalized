@@ -1,5 +1,40 @@
 # Musify Personalized current state
 
+## Pre-write collection divergence guard,2026-10-15
+
+Independent review found that the preceding live-publication guard only covered
+changes made during the write. An unrelated replacement-map edit already pending
+in live memory could still be overwritten from Hive, even while the target
+playlist retained its shared identity. Undo now requires complete equality of
+the affected live/stored root or folder collection before its first write, and
+retains the existing post-write ownership checks. Divergence refuses Undo without
+writing or reconciling either state; stored-only legacy entries remain untouched.
+No schema, persistent field, migration, adapter, dependency or visual change.
+
+Five additional Hive-backed regressions cover pending root metadata, folder-child
+metadata and folder names, plus omitted stored-only legacy entries in both
+locations with byte-exact saved-file and reopen assertions. The positive unrelated
+playlist fixture explicitly loads that playlist into both live and stored state;
+it no longer assumes Undo should adopt an unloaded stored collection.
+The test-only predecessor control is exact source
+4cb49596c7a1aee695fc72441cfefeef2361ac96,
+[CI38681101358](https://github.com/topcat432/musify-personalized/actions/runs/38681101358).
+Analysis and813 existing tests PASS; all five new cases FAIL as expected,
+returning incorrectly successful Undo results instead of refusing. This is a
+qualifying defect control, not a passing candidate. Corrected successor
+qualification is pending:818 aggregate checks expected, plus strict Linux
+visuals and all required builds.
+
+Predecessor0bd4d5ef5435a0f22faf0c6efb40bc339dc180b2 passed
+[exact CI38678970112](https://github.com/topcat432/musify-personalized/actions/runs/38678970112):
+813 aggregate tests, analysis,16+24 strict Linux visuals,nine logger tests,
+49 reader/30 channel/3310 inflater checks and required Android builds.
+That does not qualify this successor. Local workload admission is unavailable:
+measured available physical memory fell below1GiB and host commit exceeded80%
+before additional source-test or26GiB native allowances. Limits remain unchanged.
+Native isolated signed-baseline recovery, F01/F02 acceptance and provider playback
+remain outstanding; no device/provider operation, merge or publication occurred.
+
 ## Pending live metadata publication guard,2026-10-15
 
 Undo predecessor b595e6ef7b721b2c7b8f8e3a05368d504f1fff52 passed

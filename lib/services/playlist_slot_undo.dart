@@ -121,6 +121,14 @@ class PlaylistSlotUndo {
           !_same(_playlist['list'], expected)) {
         return null;
       }
+      final liveCollection = location.key == 'customPlaylists'
+          ? userCustomPlaylists.value
+          : userPlaylistFolders.value;
+      // Refuse pre-existing divergence before writing either owner's collection.
+      // This also leaves stored-only legacy entries untouched until normal reload.
+      if (!_same(liveCollection, location.collection)) {
+        return null;
+      }
       // Stage a separate value so Hive's failed-write rollback retains its old map.
       final staged = _copy(location.collection) as List<dynamic>;
       final target = location.inner == null
@@ -129,11 +137,7 @@ class PlaylistSlotUndo {
                 as Map;
       target['list'] = [for (final i in restoredOrder) _copy(source[i])];
       final frozenStaged = _copy(staged);
-      final expectedLiveCollection = _copy(
-        location.key == 'customPlaylists'
-            ? userCustomPlaylists.value
-            : userPlaylistFolders.value,
-      );
+      final expectedLiveCollection = _copy(liveCollection);
       await (write ?? box.put)(location.key, staged);
       if (!_same(box.get(location.key), frozenStaged) ||
           !_same(
