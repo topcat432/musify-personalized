@@ -159,27 +159,7 @@ void main() {
               final sourceTitles = original
                   .map((song) => song['title'])
                   .toList();
-              expect(
-                savedTitles,
-                undoSort == PlaylistSortType.dateAdded
-                    ? sourceTitles.reversed
-                    : undoSort == PlaylistSortType.default_
-                    ? sourceTitles
-                    : (List<dynamic>.from(original)..sort(
-                            (a, b) =>
-                                (a[undoSort == PlaylistSortType.title
-                                            ? 'title'
-                                            : 'artist']
-                                        as String)
-                                    .compareTo(
-                                      b[undoSort == PlaylistSortType.title
-                                              ? 'title'
-                                              : 'artist']
-                                          as String,
-                                    ),
-                          ))
-                          .map((song) => song['title']),
-              );
+              expect(savedTitles, sourceTitles);
               expect(
                 tester
                     .widgetList<SongBar>(find.byType(SongBar))
@@ -188,14 +168,26 @@ void main() {
               );
               await tester.enterText(find.byType(TextField), '');
               await tester.pump();
+              expect(
+                tester.widgetList<SongBar>(find.byType(SongBar)).map((row) => row.song['title']),
+                undoSort == PlaylistSortType.dateAdded
+                    ? sourceTitles.reversed
+                    : undoSort == PlaylistSortType.default_
+                    ? sourceTitles
+                    : (List<dynamic>.from(original)..sort((a, b) =>
+                        (a[undoSort == PlaylistSortType.title ? 'title' : 'artist'] as String)
+                            .compareTo(b[undoSort == PlaylistSortType.title ? 'title' : 'artist'] as String)))
+                        .map((song) => song['title']),
+              );
               for (final type in [
                 PlaylistSortType.default_,
                 PlaylistSortType.dateAdded,
                 PlaylistSortType.default_,
               ]) {
                 await sort(type);
+                expect((current()['list'] as List).map((song) => song['title']), sourceTitles);
                 expect(
-                  (current()['list'] as List).map((song) => song['title']),
+                  tester.widgetList<SongBar>(find.byType(SongBar)).map((row) => row.song['title']),
                   type == PlaylistSortType.dateAdded
                       ? sourceTitles.reversed
                       : sourceTitles,

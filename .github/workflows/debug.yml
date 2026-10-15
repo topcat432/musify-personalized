@@ -596,7 +596,7 @@ jobs:
           retention-days: 7
 
       - name: Verify bounded canonical playlist ownership and display regressions
-        run: python3 tool/bounded_command_log.py --log playlist-source-focused.log --timeout-seconds 180 -- flutter test --no-pub --reporter expanded -j 1 test/services/playlist_folder_move_preservation_test.dart test/screens/playlist_folder_source_picker_test.dart test/screens/playlist_move_source_order_test.dart test/screens/playlist_page_test.dart test/screens/playlist_song_rename_test.dart
+        run: python3 tool/bounded_command_log.py --log playlist-source-focused.log --timeout-seconds 180 -- flutter test --no-pub --reporter expanded -j 1 test/services/playlist_folder_move_preservation_test.dart test/screens/playlist_folder_source_picker_test.dart test/screens/playlist_move_source_order_test.dart test/screens/playlist_page_test.dart test/screens/playlist_song_rename_test.dart test/screens/playlist_slot_undo_test.dart
 
       - name: Upload focused canonical playlist regression log
         if: always()
