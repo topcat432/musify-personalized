@@ -1,5 +1,22 @@
 # Product acceptance ledger
 
+## Native playback/startup evidence,2026-10-15
+
+Frozen3e5b7cad exact CI38750331039 and sign-only38752702527 passed; the
+publication job was skipped. On owned5560 signed c249, a validated-network warm
+share of one approved recording reached native PLAYING, position3188ms to60915ms,
+buffered168112ms, without observed denial. Seek/tail/next, visible actual-source,
+physical audio, the newer exact APK and actual-phone acceptance remain open.
+Original network settings and normal data were restored; saved-file checksums,
+independent typed Hive reopen, complete user/settings equality, four normal-debug
+Hive byte/mode checks and graceful zero-process/free-lease shutdown passed.
+
+Cold-start YouTube sharing was ignored because only later events were subscribed.
+The essential repair now reads initial text once and suppresses a delayed read
+after a newer share or disposal. It preserves existing YouTube filtering, incoming
+file ownership, data and provider behavior. New repair checks/CI/native cold-start
+proof are separate requirements; the predecessor artifact is not this repair.
+
 ## Baseline delivery priority,2026-10-15
 
 The candidate is explicitly frozen to the reviewed0100aa baseline tree through a

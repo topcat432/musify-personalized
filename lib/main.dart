@@ -86,6 +86,7 @@ class Musify extends StatefulWidget {
 
 class _MusifyState extends State<Musify> with WidgetsBindingObserver {
   bool _incomingInboxOpen = false;
+  int _textShareGeneration = 0;
 
   Future<void> _reviewIncomingFiles() async {
     final service = SpotifyIncomingFileService.instance;
@@ -151,8 +152,10 @@ class _MusifyState extends State<Musify> with WidgetsBindingObserver {
 
     offlineMode.addListener(_onOfflineModeChanged);
 
+    final initialShareGeneration = _textShareGeneration;
     sharingIntentSubscription = ReceiveSharingIntent.getTextStream().listen(
       (String? value) async {
+        _textShareGeneration++;
         await consumeYoutubeSharedTextIntent(
           value,
           audioHandler: audioHandler,
@@ -169,6 +172,26 @@ class _MusifyState extends State<Musify> with WidgetsBindingObserver {
         logger.log('getTextStream error:', error: err);
       },
     );
+
+    unawaited(consumeInitialSharedTextIntent(
+      readInitialText: ReceiveSharingIntent.getInitialText,
+      stillCurrent: () =>
+          mounted && _textShareGeneration == initialShareGeneration,
+      consume: (value) => consumeYoutubeSharedTextIntent(
+        value,
+        audioHandler: audioHandler,
+        onError: (error, stackTrace) => logger.log(
+          'Error while playing initial shared song:',
+          error: error,
+          stackTrace: stackTrace,
+        ),
+      ),
+      onError: (error, stackTrace) => logger.log(
+        'getInitialText error:',
+        error: error,
+        stackTrace: stackTrace,
+      ),
+    ));
 
     try {
       LicenseRegistry.addLicense(() async* {

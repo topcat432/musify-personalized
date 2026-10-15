@@ -1,5 +1,32 @@
 # Musify Personalized current state
 
+## Native baseline and cold-start share repair,2026-10-15
+
+Frozen predecessor3e5b7cad693016c10a2d027f5e7418144b80705d passed exact
+CI38750331039 and sign-only rehearsal38752702527; publication was skipped.
+Its independently verified retained-package APK is version300000016, SHA-256
+f628c0cf0d67f5c06ae76ce1eb50abde68a233294529365444ae76f2343438fd,
+with the pinned signer, v2/v3 and embedded exact source. It is not phone-installed.
+
+Owned5560 native recovery completed with independent typed close/reopen and full
+user/settings inventory equality; normal debug four-Hive bytes/mode600 and graceful
+shutdown/free lease passed. A first playback observation had disabled emulator
+network and a lost cold-start share, so it did not qualify playback. After explicit
+temporary owned Wi-Fi enable/validation, one approved warm-share recording reached
+PLAYING with native position3188ms to60915ms and buffered position168112ms, without
+observed denial. Original network settings and baseline data were restored; the
+post-playback independent typed inventories match exactly. An original CRLF receipt
+parser missed app states; raw dumps and separate corrected proof are retained.
+This is partial c249 bootstrap runtime evidence, not source-kind-chip, physical
+audio, seek/tail/next, exact newer-APK or phone acceptance. No denied source retried.
+
+The essential startup follow-up reads the platform's initial shared text, which
+its event stream explicitly excludes. A delayed initial read yields to a newer
+share or disposed owner; no shared-file reset, provider identity or schema change
+is added. Focused lifecycle/error tests and full exact-tip CI/native qualification
+must pass before this repair can replace the verified predecessor. Deferred
+source-copy work remains preserved and paused. No merge, publication or phone install.
+
 
 ## Usable Samsung baseline freeze,2026-10-15
 

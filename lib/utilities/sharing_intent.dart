@@ -25,6 +25,24 @@ import 'package:musify/utilities/formatter.dart';
 
 final _youtubeLinkRegex = RegExp(r'(youtube\.com|youtu\.be)');
 
+/// The platform text stream excludes the intent that launched the process.
+/// A later share or disposed owner must supersede a delayed initial read.
+Future<void> consumeInitialSharedTextIntent({
+  required Future<String?> Function() readInitialText,
+  required bool Function() stillCurrent,
+  required Future<void> Function(String? value) consume,
+  required void Function(Object error, StackTrace stackTrace) onError,
+}) async {
+  try {
+    final value = await readInitialText();
+    if (stillCurrent() && value != null && value.trim().isNotEmpty) {
+      await consume(value);
+    }
+  } catch (error, stackTrace) {
+    if (stillCurrent()) onError(error, stackTrace);
+  }
+}
+
 Future<void> handleYoutubeSharedTextIntent(
   String? value, {
   required MusifyAudioHandler audioHandler,
