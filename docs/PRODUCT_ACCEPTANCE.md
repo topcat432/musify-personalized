@@ -15,7 +15,12 @@ control. Source43a185d4 passes968 aggregate/40 Linux visuals/analysis. This prov
 modelled exception recovery, not physical ENOSPC or cross-key crash atomicity;
 no durable move journal/schema was added. Final-tip/build gates remain explicit
 in PR23 and the canonical ledger.
-Native baseline5560 recovery thenF01/F02 and phone readiness remain separate gates.
+Independent review also closed105ad478 modelled accepted-move recovery; its exact
+CI38728451339 passes968 aggregate,105 playlist focus,40 strict Linux visuals and
+all required builds. The evidenced account Playlist*.json adapter is now a source
+milestone pending exact CI, rather than an absent parser; see its schema/limits
+contract. All account variants and repeated-slot creation/synchronization remain
+unfulfilled. Native baseline5560 recovery thenF01/F02 and phone readiness remain separate gates.
 
 
 ## Host concurrency and playback follow-up, 2026-10-13

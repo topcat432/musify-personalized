@@ -6,9 +6,9 @@ This document records the approved product direction for bringing external music
 
 This is the current capability classification. Older chronological “future”,
 “absent” and “pending” labels in acceptance notes retain their historical source;
-they do not override this map or exact workflow evidence. Baseline f3947dd8 passed
-[CI38720452674](https://github.com/topcat432/musify-personalized/actions/runs/38720452674):
-928 app tests,3 query/65 playlist/17 preview focused cases,40 strict Linux visuals,
+they do not override this map or exact workflow evidence. Baseline105ad478 passed
+[CI38728451339](https://github.com/topcat432/musify-personalized/actions/runs/38728451339):
+968 app tests,3 query/105 playlist/17 preview focused cases,40 strict Linux visuals,
 analysis/helper checks,all Android builds and8 hosted native Windows lifecycle
 cases with zero skips. Windows tooling proof is not Android/device acceptance.
 
@@ -27,12 +27,13 @@ cases with zero skips. Windows tooling proof is not Android/device acceptance.
 | Release/device gates | Exact-source CI and documented hosted Windows exception | Baseline5560 recovery first, then F01/F02; phone only after owner readiness; signed/default-tip/data gates remain separate | No merge, signing/publication or live-phone action follows source-only qualification |
 
 Implemented-but-runtime-unqualified rows are not absent features. Automated proof
-is not runtime proof, and a read-only plan is not an implemented writer. The next
-bounded milestone is the accepted library-move exception path: source43a185d4
-passes40 new fault/composed cases,105 focus,968 aggregate and40 Linux visuals.
-Exact final-tip/build evidence is tracked by PR23 and the canonical ledger. This
-is modelled exception/reopen proof, not physical ENOSPC or crash atomicity. No new
-importer, provider request, schema or durable journal is selected here.
+is not runtime proof, and a read-only plan is not an implemented writer.
+Independent review closed105ad478 modelled accepted-move exception/reopen recovery;
+physical ENOSPC, torn writes and power-loss remain unqualified. The next selected
+bounded F04 gap is the [evidenced account Playlist*.json adapter](SPOTIFY_ACCOUNT_PLAYLIST_JSON.md),
+whose source and synthetic regression qualification are pending exact CI. It reuses
+existing membership/session shapes and does not enable recreation/synchronization,
+provider requests or a durable journal. Native recovery priority remains unchanged.
 
 
 ## Product contract

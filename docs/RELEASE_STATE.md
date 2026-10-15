@@ -9,7 +9,11 @@ F04 gap implements the evidenced account Playlist*.json shape into the existing
 ordered-membership model. See [schema evidence and limits](SPOTIFY_ACCOUNT_PLAYLIST_JSON.md).
 Only synthetic fixtures enter Git. Parser, production file dispatch, count/identity
 refusal and existing-format Save/rollback/reopen/independent backup restore tests
-are added. Exact-source CI is pending; no local heavy worker is authorized by
+are added. Initial90ad7be8/CI38732850299 passes analysis, focused account/legacy
+parser tests and8 hosted Windows tooling cases; its pinned105ad478 control rejects
+the fixture. Final successor adds ZIP/source-scope and legacy-extra-metadata
+coverage. Final exact aggregate/visual/build qualification is pending; no local
+heavy worker is authorized by
 unsafe host commit pressure. No occurrence writer, synchronization, schema,
 account connection or provider request is added. Baseline5560 recovery thenF01/F02
 remain the first native priority when normal admission passes; no phone/release.

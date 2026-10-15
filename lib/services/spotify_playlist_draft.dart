@@ -7,8 +7,12 @@ export 'package:musify/services/spotify_source_playlist.dart';
 /// Transient membership model only: no save or routing adapter may flatten it.
 /// Compatibility: caseychu/spotify-backup and evidenced account Playlist*.json.
 class SpotifyPlaylistDraft {
-  SpotifyPlaylistDraft._(this.tracks, this.playlists, this.ignoredAlbums,
-      {this.format = 'Named Spotify playlist backup'});
+  SpotifyPlaylistDraft._(
+    this.tracks,
+    this.playlists,
+    this.ignoredAlbums, {
+    this.format = 'Named Spotify playlist backup',
+  });
   final List<SpotifyImportTrack> tracks;
   final List<SpotifySourcePlaylist> playlists;
   final int ignoredAlbums;
@@ -56,7 +60,8 @@ class SpotifyPlaylistDraft {
     );
     var document = SpotifyCsvImporter.decodeBoundedJson(bytes);
     final account = document is Map<String, dynamic>
-        ? SpotifyAccountPlaylistAdapter.normalize(document) : null;
+        ? SpotifyAccountPlaylistAdapter.normalize(document)
+        : null;
     if (account != null) document = account;
     if (document is! Map<String, dynamic> ||
         document['playlists'] is! List ||
@@ -246,7 +251,9 @@ class SpotifyPlaylistDraft {
       List.unmodifiable(tracks),
       List.unmodifiable(playlists),
       (document['albums'] as List?)?.length ?? 0,
-      format: account == null ? 'Named Spotify playlist backup' : 'Spotify account playlists',
+      format: account == null
+          ? 'Named Spotify playlist backup'
+          : 'Spotify account playlists',
     );
   }
 }
