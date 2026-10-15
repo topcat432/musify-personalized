@@ -321,6 +321,35 @@ jobs:
           path: stale-review-exclusion-control.log
           if-no-files-found: error
           retention-days: 7
+      - name: Reproduce rescue overwrite of a newer manual owner on exact prior source
+        shell: bash
+        run: |
+          set -euo pipefail
+          original="$GITHUB_WORKSPACE"
+          control="$RUNNER_TEMP/musify-rescue-owner-control-e2ebb0b8"
+          git fetch --no-tags --depth=1 origin e2ebb0b82a0ef88a42b9ded2220ed886bed559e4
+          git worktree add --detach "$control" e2ebb0b82a0ef88a42b9ded2220ed886bed559e4
+          cp test/services/spotify_rescue_owner_preservation_test.dart "$control/test/services/"
+          cd "$control"
+          flutter pub get --offline
+          set +e
+          python3 "$original/tool/bounded_command_log.py" --log "$original/rescue-owner-control.log" --timeout-seconds 180 -- flutter test --no-pub --reporter expanded -j 1 test/services/spotify_rescue_owner_preservation_test.dart --plain-name 'rescue cannot overwrite a newer real manual decision beside excluded row'
+          result=$?
+          set -e
+          test "$result" -eq 1
+          grep -Fq "Expected: 'owned-newer-manual'" "$original/rescue-owner-control.log"
+          grep -Fq 'Actual: <null>' "$original/rescue-owner-control.log"
+          echo "Exacte2ebb0b8 control reproduced rescue replacing the newer real manual decision."
+          test "$(git -C "$original" rev-parse HEAD)" = "$SOURCE_SHA"
+
+      - name: Upload exact prior-source rescue owner control log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rescue-owner-control-${{ github.run_number }}
+          path: rescue-owner-control.log
+          if-no-files-found: error
+          retention-days: 7
       - name: Prepare read-only empty-source formatting suggestions
         shell: bash
         run: |

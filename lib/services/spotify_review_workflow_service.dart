@@ -143,6 +143,7 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
     void Function(SpotifyRescueProgress progress)? onProgress,
   }) async {
     final box = Hive.box('user');
+    final checkpointState = _captureCheckpointState(box);
     final results = _readMaps(box.get('spotifyMatchResults'));
     final metadata = _readMap(box.get('spotifyImportMetadata'));
     final importSessionId = _sessionId(metadata);
@@ -228,6 +229,7 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
           results,
           metadata,
           expectedSessionId: importSessionId,
+          expectedState: checkpointState,
         )) {
           stopped = true;
           break;
@@ -257,6 +259,7 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
         results,
         metadata,
         expectedSessionId: importSessionId,
+        expectedState: checkpointState,
       );
     }
     final progress = SpotifyRescueProgress(
@@ -744,8 +747,14 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
     String? expectedSessionId,
     List<String>? excludedRows,
     String? explicitExclusionRow,
+    Map<String, Object?>? expectedState,
   }) async {
     final box = Hive.box('user');
+    // Rescue owns a snapshot, not newer decisions made while it was running.
+    if (expectedState != null &&
+        !_sameCheckpointValue(expectedState, _captureCheckpointState(box))) {
+      return false;
+    }
     if (expectedSessionId != null &&
         _sessionId(_readMap(box.get('spotifyImportMetadata'))) !=
             expectedSessionId) {
@@ -774,7 +783,7 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
       if (explicitExclusionRow != null &&
           row == _reviewRowKey(explicitExclusionRow) &&
           isExcluded(proposed.single)) continue;
-      if (!_sameExcludedValue(proposed.single, current.single)) return false;
+      if (!_sameCheckpointValue(proposed.single, current.single)) return false;
     }
     if (excludedRows != null) excluded.addAll(_permanentExclusionRows(excludedRows));
     bool excludedResult(Map<String, dynamic> item) => _resultPermanentlyExcluded(item, excluded);
@@ -790,15 +799,36 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
       ..['excludedCount'] = results.where(excludedResult).length
       ..['pendingResolutionCount'] = results.where((item) => !excludedResult(item) && isPendingResolution(item)).length
       ..['lastMatchingCheckpointAt'] = DateTime.now().toUtc().toIso8601String();
+    // Advance from this write's exact proposal. Rereading after await could
+    // accidentally adopt a different owner's intervening write as our baseline.
+    final nextState = expectedState == null ? null : <String, Object?>{
+      ..._captureCheckpointState(box),
+      'spotifyMatchResults': copyImportRoutingValue(results),
+      'spotifyImportMetadata': copyImportRoutingValue(metadata),
+      if (excludedRows != null)
+        'spotifyExcludedImportRows': copyImportRoutingValue(excludedRows),
+    };
     await box.putAll({
       'spotifyMatchResults': results,
       'spotifyImportMetadata': metadata,
       if (excludedRows != null) 'spotifyExcludedImportRows': excludedRows,
     });
+    if (expectedState != null && nextState != null) {
+      expectedState
+        ..clear()
+        ..addAll(nextState);
+    }
     return true;
   }
 
-  static bool _sameExcludedValue(dynamic left, dynamic right) {
+  static Map<String, Object?> _captureCheckpointState(Box<dynamic> box) => {
+    for (final key in const [
+      'spotifyMatchResults', 'spotifyImportMetadata', 'spotifyExcludedImportRows',
+    ])
+      if (box.containsKey(key)) key: copyImportRoutingValue(box.get(key)),
+  };
+
+  static bool _sameCheckpointValue(dynamic left, dynamic right) {
     if (left is DateTime || right is DateTime) {
       return left is DateTime && right is DateTime &&
           left == right && left.isUtc == right.isUtc;
@@ -807,13 +837,13 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
     if (left is List && right is List) {
       if (left.length != right.length) return false;
       for (var i = 0; i < left.length; i++) {
-        if (!_sameExcludedValue(left[i], right[i])) return false;
+        if (!_sameCheckpointValue(left[i], right[i])) return false;
       }
       return true;
     }
     if (left is Map && right is Map) {
       return left.length == right.length && left.keys.every(
-        (key) => right.containsKey(key) && _sameExcludedValue(left[key], right[key]),
+        (key) => right.containsKey(key) && _sameCheckpointValue(left[key], right[key]),
       );
     }
     return left == right;
