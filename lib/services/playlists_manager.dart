@@ -741,8 +741,12 @@ bool _samePlaylistMoveValue(dynamic left, dynamic right) {
 String movePlaylistToFolder(
   Map playlist,
   String? folderId,
-  BuildContext context,
-) {
+  BuildContext context, {
+  Future<void> Function(String key, List<dynamic>? value)? write,
+}) {
+  Future<void> persist(String key, List<dynamic> value) => write != null
+      ? write(key, value)
+      : addOrUpdateData<List>('user', key, value);
   try {
     final ownedPlaylist = _currentPlaylistMoveSource(playlist);
     final updatedFolders = List<Map>.from(_copyPlaylistMoveValue(userPlaylistFolders.value) as List);
@@ -801,21 +805,9 @@ String movePlaylistToFolder(
     userCustomPlaylists.value = updatedCustomPlaylists;
     userPlaylists.value = updatedYoutubePlaylists;
 
-    unawaited(
-      addOrUpdateData<List>(
-        'user',
-        'playlistFolders',
-        userPlaylistFolders.value,
-      ),
-    );
-    unawaited(
-      addOrUpdateData<List>(
-        'user',
-        'customPlaylists',
-        userCustomPlaylists.value,
-      ),
-    );
-    unawaited(addOrUpdateData<List>('user', 'playlists', userPlaylists.value));
+    unawaited(persist('playlistFolders', userPlaylistFolders.value));
+    unawaited(persist('customPlaylists', userCustomPlaylists.value));
+    unawaited(persist('playlists', userPlaylists.value));
 
     return '${context.l10n!.addedSuccess}!';
   } catch (e, stackTrace) {

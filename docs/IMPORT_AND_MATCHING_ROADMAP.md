@@ -2,6 +2,36 @@
 
 This document records the approved product direction for bringing external music into Musify. It is the source of truth for the import workflow so individual implementation changes do not lose the end goal.
 
+## Current implementation and acceptance map,2026-10-15
+
+This is the current capability classification. Older chronological “future”,
+“absent” and “pending” labels in acceptance notes retain their historical source;
+they do not override this map or exact workflow evidence. Baseline f3947dd8 passed
+[CI38720452674](https://github.com/topcat432/musify-personalized/actions/runs/38720452674):
+928 app tests,3 query/65 playlist/17 preview focused cases,40 strict Linux visuals,
+analysis/helper checks,all Android builds and8 hosted native Windows lifecycle
+cases with zero skips. Windows tooling proof is not Android/device acceptance.
+
+| Area | Implemented and automated | Implemented but runtime-unqualified | Truly absent or separately bounded scope |
+|---|---|---|---|
+| Permanent unresolved/review/manual search/exact links | Retained review, exclusions, chosen recordings, successful query provenance, bounded preview ownership | Complete online previews and real provider availability; fake player lifecycle tests do not prove native player teardown | No replacement provider or in-app ad-free/no-Premium Spotify engine is proven |
+| Destination selectors | All/first-N/individual/newly resolved, exact alternate/order, successful identity snapshots and honestly unknown legacy tracking | Current-source Android/phone regression and full release acceptance | No implicit matching restart, silent exclusion or count-based legacy ownership inference |
+| F01 flat TSV and existing CSV | Picker/preview/explicit Save; parser/session/widget/backup/reopen tests | F01 native picker/save/restart queue follows baseline5560 recovery | Not an absent adapter; no claim every producer's dialect is supported |
+| F02 saved-track JSON | Bounded YourLibrary saved-track schema, explicit preview/Save, session/backup/reopen tests | F02 native picker/save/restart after F01 | Other account-data schemas remain unsupported; this is not full account import |
+| F03 ZIP | Bounded stored/deflated parsing, integrity/row/transport limits, explicit entry selection; Dart/Java inflater and channel harnesses | Actual compressed archive decoding, Android resource/URI lifecycle and restart acceptance on the candidate | Unsupported codecs/account schemas are not silently flattened or treated as fulfilled |
+| F04 named source playlists | Precise compatible producer draft, durable ordered memberships/gaps, retained review, source-scoped unique-recording routing and explicit empty-source creation | Current-source Android picker/preview/routing/reopen; older signed c249 lacks these later features | Exact repeated-slot recreation and repeat-import synchronization have no production writer; the read-only occurrence planner is not fulfillment |
+| F05 Android share/open | Intent policy, actual-grant checks, bounded native catalog/reader, Dart inbox and explicit unsaved preview/Save route;49 reader/30 channel host checks | Real grants, cold/warm intents, provider cancellation/engine lifecycle and candidate restart remain runtime gates | No URI/grant persistence, broad storage permission or automatic import |
+| Existing library move preservation | Unique authoritative source, stale/ambiguous refusal, display/source-order isolation;65 focused playlist tests | Accepted-move write failures/reopen/newer-owner preservation is the next selected host qualification gap | Current move publishes live state and starts three unawaited writes; no accepted-write atomicity or crash-journal proof exists |
+| Playback scope | D-017 YouTube plus saved audio, explicit Offline mode/source details; Spotify imports metadata without Premium | Sustained provider playback/download, real output/focus/accessories and actual-phone acceptance | D-018 in-app ad-free/no-Premium Spotify remains an unproven stretch; cold full-queue recovery is absent and not a current-version promise |
+| Direct Spotify adapter and canonical multi-source architecture | File import remains independent of accounts/cloud/Premium | No account/credential work is authorized by these tests | OAuth adapter, broad cross-source ownership architecture and synchronization require separate feasible designs/dependencies |
+| Release/device gates | Exact-source CI and documented hosted Windows exception | Baseline5560 recovery first, then F01/F02; phone only after owner readiness; signed/default-tip/data gates remain separate | No merge, signing/publication or live-phone action follows source-only qualification |
+
+Implemented-but-runtime-unqualified rows are not absent features. Automated proof
+is not runtime proof, and a read-only plan is not an implemented writer. The next
+bounded work is the accepted library-move failure path, with synthetic Hive faults;
+no new importer, provider request, schema or durable journal is selected here.
+
+
 ## Product contract
 
 Importing is a resumable pipeline with four independent stages:

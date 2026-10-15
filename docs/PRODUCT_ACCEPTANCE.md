@@ -1,5 +1,19 @@
 # Product acceptance ledger
 
+## Current capability classification,2026-10-15
+
+Use the [canonical implementation/acceptance map](IMPORT_AND_MATCHING_ROADMAP.md#current-implementation-and-acceptance-map2026-10-15)
+for current absent versus implemented-but-runtime-unqualified features. It
+supersedes older chronological assertions that I11, TSV/JSON/ZIP, named membership
+or Android intake are absent/future. D-017/D-018 settle baseline versus Spotify
+stretch scope; no new mode/queue architecture is inferred. f3947dd8 exact CI
+qualifies928 app tests,40 strict Linux visuals and8 hosted Windows tooling cases.
+Independent review closed playlist ownership/order, query provenance and hosted
+Windows containment. L02 accepted-move persistence failure/reopen is selected next;
+its current unawaited writes are not qualified by the pre-write rejection tests.
+Native baseline5560 recovery thenF01/F02 and phone readiness remain separate gates.
+
+
 ## Host concurrency and playback follow-up, 2026-10-13
 
 The signed9a6663c6 checkpoint and its immutable APK remain preserved. The current
