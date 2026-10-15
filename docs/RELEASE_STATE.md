@@ -1,5 +1,29 @@
 # Musify Personalized current state
 
+## Pending live metadata publication guard,2026-10-15
+
+Undo predecessor b595e6ef7b721b2c7b8f8e3a05368d504f1fff52 passed
+[exact CI38677859310](https://github.com/topcat432/musify-personalized/actions/runs/38677859310):
+812 aggregate tests,analysis,16+24 strict Linux visuals,nine logger tests,
+49 reader/30 channel/3310 inflater checks and required Android builds.
+
+A final synthetic control reproduced a publication race: a playlist-name or
+unrelated playlist metadata edit made in live memory during Undo's write was
+replaced by the staged collection. The successor snapshots the entire affected
+live collection before awaiting and refuses publication if any of it changes.
+It preserves pending owner edits and retains actual saved data without rollback
+or replay. No schema/field/adapter/dependency or UI rendering change.
+
+Current focused PASS31 (ten Undo views,ten service boundaries,eleven prior playlist
+checks). The added predecessor case fails with an incorrectly successful staged
+result; corrected checks retain both pending names. Local aggregate812/strict
+Windows control evidence belongs to b595; exact successor aggregate/analysis/
+strict Linux/build qualification is required. No additional heavy local full run
+is inferred during measured host physical pressure. Native recovery remains
+outstanding under unchanged limits, followed by F01/F02; six c249 fixtures and
+all original/isolated comparison evidence remain preserved. No device operation,
+provider request, signing/publication or merge.
+
 ## One-shot repeated-slot Undo,2026-10-15
 
 Predecessor bb4cbdb78b9a9d7ecbef8f118e673964668a7e35 passed

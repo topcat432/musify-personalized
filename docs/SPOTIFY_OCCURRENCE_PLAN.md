@@ -145,3 +145,11 @@ before/after a save and preserving newer owner edits. A consumed/uncertain token
 never retries or compensates over actual saved data. This closes the earlier
 Undo prerequisite only after exact successor CI; native qualification remains
 separate. No durable cross-restart Undo or playlist recreation is claimed.
+
+
+The pending-publication guard also compares the entire affected live collection,
+so an owner name/metadata edit made while the Undo write completes cannot be
+replaced by its earlier staged copy. The reproduced predecessor race and31
+focused checks qualify this guard locally; successor exact-source CI remains
+required. Existing saved values are never compensated over or automatically
+replayed when publication is stale/unverified.

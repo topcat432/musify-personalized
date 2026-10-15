@@ -323,4 +323,33 @@ void main() {
       }
     },
   );
+  test(
+    'pending live metadata edits are not overwritten by Undo publication',
+    () async {
+      final other = {
+        'ytid': 'customId-other',
+        'source': 'user-created',
+        'title': 'Before',
+        'list': <Map>[],
+      };
+      userCustomPlaylists.value = [playlist, other];
+      await Hive.box('user').put('customPlaylists', [playlist, other]);
+      final undo = token();
+      final source = undo.restoredSource(remaining)!;
+      final result = await undo.apply(
+        expectedCurrentSongs: remaining,
+        currentSourceOrder: [0, 1, 2],
+        restoredOrder: List.generate(source.length, (i) => i),
+        write: (key, value) async {
+          await Hive.box('user').put(key, value);
+          playlist['title'] = 'Owner pending name';
+          other['title'] = 'Owner pending other';
+        },
+      );
+      expect(result, isNull);
+      expect(userCustomPlaylists.value.first['title'], 'Owner pending name');
+      expect(userCustomPlaylists.value.last['title'], 'Owner pending other');
+      expect(undo.used, isTrue);
+    },
+  );
 }

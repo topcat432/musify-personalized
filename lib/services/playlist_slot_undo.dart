@@ -129,8 +129,19 @@ class PlaylistSlotUndo {
                 as Map;
       target['list'] = [for (final i in restoredOrder) _copy(source[i])];
       final frozenStaged = _copy(staged);
+      final expectedLiveCollection = _copy(
+        location.key == 'customPlaylists'
+            ? userCustomPlaylists.value
+            : userPlaylistFolders.value,
+      );
       await (write ?? box.put)(location.key, staged);
       if (!_same(box.get(location.key), frozenStaged) ||
+          !_same(
+            location.key == 'customPlaylists'
+                ? userCustomPlaylists.value
+                : userPlaylistFolders.value,
+            expectedLiveCollection,
+          ) ||
           !_same(_playlist['list'], expected) ||
           !identical(
             getUserCustomPlaylists().where((p) => p['ytid'] == id).single,
