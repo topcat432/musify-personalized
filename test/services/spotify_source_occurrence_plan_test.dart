@@ -106,6 +106,29 @@ void main() {
     expect(incomplete.issues,contains(SpotifyOccurrencePlanIssue.sourceIncomplete));
     expect(plan(source:sources(rows:[])).issues,contains(SpotifyOccurrencePlanIssue.useExplicitEmptyAction));
   });
+  test('proposed output above capacity refuses every append and preserves manual entries',() {
+    final original=plan(source:sources(rows:[1]));
+    final destination=[...owned(original),...List.filled(9999,const SpotifyDestinationOccurrence(recordingId:'owner-added'))];
+    final before=destination.map((entry)=>[entry.recordingId,entry.occurrenceId]).toList();
+    final result=plan(source:sources(rows:[1,2]),exists:true,destination:destination,baseline:baseline(original));
+    expect(result.canPropose,isFalse,reason:'Destination plus appends must fit the 10000-entry restart bound');
+    expect(result.issues.map((issue)=>issue.name).toSet(),{'destinationCapacityExceeded'});
+    expect(result.appends,isEmpty);expect(result.manualEntries,9999);
+    expect(result.wouldMatchSourceOrder,isFalse);
+    expect(destination.map((entry)=>[entry.recordingId,entry.occurrenceId]).toList(),before);
+    expect(original.occurrences.length,1);
+  });
+  test('exact capacity append and restart preview remain within the same bound',() {
+    final original=plan(source:sources(rows:[1]));
+    final source=sources(rows:[1,2]);
+    final destination=[...owned(original),...List.filled(9998,const SpotifyDestinationOccurrence(recordingId:'owner-added'))];
+    final result=plan(source:source,exists:true,destination:destination,baseline:baseline(original));
+    expect(result.canPropose,isTrue);expect(result.appends.length,1);
+    final hypothetical=[...destination,...result.appends.map((entry)=>SpotifyDestinationOccurrence(recordingId:entry.recordingId,occurrenceId:entry.id))];
+    expect(hypothetical.length,10000);
+    final retry=plan(source:source,exists:true,destination:hypothetical,baseline:baseline(result));
+    expect(retry.canPropose,isTrue);expect(retry.appends,isEmpty);expect(retry.manualEntries,9998);
+  });
   test('oversize destination evidence fails closed before source work',() {
     expect(()=>plan(destination:List.filled(10001,const SpotifyDestinationOccurrence(recordingId:'owned'))),throwsStateError);
   });

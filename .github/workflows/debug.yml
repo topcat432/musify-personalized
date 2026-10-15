@@ -234,6 +234,33 @@ jobs:
           name: empty-reporting-control-${{ github.run_number }}
           path: empty-reporting-control.log
           if-no-files-found: error
+      - name: Reproduce oversized occurrence proposal on exact prior source
+        shell: bash
+        run: |
+          set -euo pipefail
+          original="$GITHUB_WORKSPACE"
+          control="$RUNNER_TEMP/musify-occurrence-capacity-control-6a8d18fc"
+          git fetch --no-tags --depth=1 origin 6a8d18fc3c5f44e0ede564c5f44e63a5863da18d
+          git worktree add --detach "$control" 6a8d18fc3c5f44e0ede564c5f44e63a5863da18d
+          cp test/services/spotify_source_occurrence_plan_test.dart "$control/test/services/"
+          cd "$control"
+          flutter pub get --offline
+          if (ulimit -f 10240; flutter test --no-pub -j 1 --reporter expanded --name 'proposed output above capacity' test/services/spotify_source_occurrence_plan_test.dart) > "$original/occurrence-capacity-control.log" 2>&1; then
+            echo "Prior source unexpectedly refused oversized occurrence output"
+            exit 1
+          fi
+          test "$(wc -c < "$original/occurrence-capacity-control.log")" -lt 10485760
+          grep -Fq 'Destination plus appends must fit the 10000-entry restart bound' "$original/occurrence-capacity-control.log"
+          echo "Exact6a8d18fc control reproduced the 10001-entry occurrence proposal."
+          test "$(git -C "$original" rev-parse HEAD)" = "$SOURCE_SHA"
+
+      - name: Upload exact prior-source occurrence capacity control log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: occurrence-capacity-control-${{ github.run_number }}
+          path: occurrence-capacity-control.log
+          if-no-files-found: error
       - name: Prepare read-only empty-source formatting suggestions
         shell: bash
         run: |
@@ -250,6 +277,7 @@ jobs:
             test/support/spotify_empty_source_fixture.dart
             lib/services/spotify_source_occurrence_plan.dart
             test/services/spotify_source_occurrence_plan_test.dart
+            test/services/spotify_occurrence_existing_schema_test.dart
           )
           for file in "${files[@]}"; do
             mkdir -p "$output/$(dirname "$file")"

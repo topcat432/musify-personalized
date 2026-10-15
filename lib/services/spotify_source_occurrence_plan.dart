@@ -34,7 +34,7 @@ enum SpotifyOccurrencePlanIssue {
   sourceIncomplete, useExplicitEmptyAction, unknownOwnership, wrongDestination,
   wrongSource, destinationRemoved, duplicateOwnership, unknownOccurrence,
   destinationRecordingEdited, sourceRecordingChoiceChanged, ambiguousIdentity,
-  manualRecordingCollision,
+  manualRecordingCollision, destinationCapacityExceeded,
 }
 
 /// Proposals only: append-only on verified existing ownership, exact source order
@@ -133,6 +133,8 @@ class SpotifySourceOccurrencePlan {
         issues.add(SpotifyOccurrencePlanIssue.ambiguousIdentity);
       }
       final desiredIds=occurrences.map((entry)=>entry.id).toSet();
+      final removedSourceUris=baseline.entries.where((entry)=>!desiredIds.contains(entry.id)).map((entry)=>entry.sourceRecordingUri).toSet();
+      final manualRecordingIds=manual.map((entry)=>entry.recordingId).toSet();
       for(final entry in occurrences) {
         final old=prior[entry.id];
         if(old!=null) {
@@ -140,12 +142,13 @@ class SpotifySourceOccurrencePlan {
           // A missing previously owned occurrence is an intentional removal.
           continue;
         }
-        if(baseline.entries.any((old)=>!desiredIds.contains(old.id) && old.sourceRecordingUri==entry.sourceRecordingUri)) issues.add(SpotifyOccurrencePlanIssue.ambiguousIdentity);
+        if(removedSourceUris.contains(entry.sourceRecordingUri)) issues.add(SpotifyOccurrencePlanIssue.ambiguousIdentity);
         if(changedSnapshot && !entry.hasReusableAnchor) issues.add(SpotifyOccurrencePlanIssue.ambiguousIdentity);
-        if(manual.any((song)=>song.recordingId==entry.recordingId)) issues.add(SpotifyOccurrencePlanIssue.manualRecordingCollision);
+        if(manualRecordingIds.contains(entry.recordingId)) issues.add(SpotifyOccurrencePlanIssue.manualRecordingCollision);
         proposed.add(entry);
       }
     }
+    if(destination.length+proposed.length>10000) issues.add(SpotifyOccurrencePlanIssue.destinationCapacityExceeded);
     final safe=issues.isEmpty?proposed:<SpotifySourceOccurrence>[];
     final futureIds=<String?>[...destination.map((entry)=>entry.occurrenceId),...safe.map((entry)=>entry.id)];
     final exact=issues.isEmpty && futureIds.length==occurrences.length &&

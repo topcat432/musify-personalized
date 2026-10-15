@@ -2187,3 +2187,31 @@ manual entries/order/removals and selected recordings, refuses unknown ownership
 and ambiguous changed anchors, and does not introduce a storage schema or use
 queue IDs as import ownership. Its13 pure tests are present but unqualified.
 Fresh23:53:13Z3GiB guard refused100.87%; no formatter/analyzer/test launched.
+
+## Occurrence capacity/schema proof and c249 About/Back, 2026-10-15
+
+Qualified6a8d18fc CI38657271707 PASS778/analysis/40 Linux visuals/all builds.
+Independent review found the pure planner bounded input but could propose10001
+entries after appending to10000 retained entries. Successor refuses all appends
+when destination plus proposal exceeds10000, preserving manual entries; exact
+capacity/retry tests cover the edge. Ownership/collision sets remove quadratic
+scans. Existing-schema tests cover ordered repeats/Hive reopen, saved-file checksum
+inspection/independent restore, rollback of an unrelated owned write and distinct
+runtime queue IDs without durable mutation. Guarded analysis and784 aggregate
+PASS. Strict Windows FAIL16+24; all40 actual PNG hashes match the retained F02
+control exactly. No comparator/golden changed. Exact successor CI is pending.
+[Conservative create-only ownership design](SPOTIFY_OCCURRENCE_PLAN.md) is a
+proposal: no production writer, marker, migration or playback change. Filtered
+playlist playback still finds the first repeated recording and needs slot-aware
+qualification before integrating exact recreation.
+
+Host admission resumed at38.57% for3GiB checks; native26GiB admitted69.6%.
+Pinned c249 About/Back rehearsal PASS on owned emulator-5558: four tabs selected,
+About actual version300000015, Back returned to Settings, then Home selected.
+All four normal-debug Hive files restored byte-exact/mode600 and owned graceful
+shutdown verified. Canonical navigation proof is indexed by private
+host-provider-diagnostic/c249-navigation-index.json and the existing native
+milestone/acceptance ledger. Current successor source was not installed; c249
+remains the immutable signed baseline. Earlier black/SystemUI failures remain
+retained, so this is no blanket cold-start reliability pass. Empty/rollback,
+picker/playback and eventual actual-phone gates remain. No merge/sign/publication.
