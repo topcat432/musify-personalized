@@ -358,7 +358,7 @@ jobs:
           control="$RUNNER_TEMP/musify-manual-preview-control-4104ccee"
           git fetch --no-tags --depth=1 origin 4104ccee8cf150e66026934629ee6ee22fe586a0
           git worktree add --detach "$control" 4104ccee8cf150e66026934629ee6ee22fe586a0
-          cp test/screens/spotify_manual_preview_ownership_test.dart "$control/test/screens/"
+          git show 84c488c930ca04bb391bc39d713f0cc43de4e818:test/screens/spotify_manual_preview_ownership_test.dart > "$control/test/screens/spotify_manual_preview_ownership_test.dart"
           cd "$control"
           flutter pub get --offline
           set +e
@@ -378,6 +378,35 @@ jobs:
         with:
           name: manual-preview-owner-control-${{ github.run_number }}
           path: manual-preview-owner-control.log
+          if-no-files-found: error
+          retention-days: 7
+      - name: Reproduce blocked manual preview recovery on exact prior source
+        shell: bash
+        run: |
+          set -euo pipefail
+          original="$GITHUB_WORKSPACE"
+          control="$RUNNER_TEMP/musify-manual-retirement-control-4aa4b161"
+          git fetch --no-tags --depth=1 origin 4aa4b161fea7538f5b457a44adfd5e90f7d53dc6
+          git worktree add --detach "$control" 4aa4b161fea7538f5b457a44adfd5e90f7d53dc6
+          cp test/screens/spotify_manual_preview_retirement_test.dart "$control/test/screens/"
+          cd "$control"
+          flutter pub get --offline
+          set +e
+          python3 "$original/tool/bounded_command_log.py" --log "$original/manual-preview-retirement-control.log" --timeout-seconds 180 -- flutter test --no-pub --reporter expanded -j 1 test/screens/spotify_manual_preview_retirement_test.dart --plain-name 'hung load retires before B and ignores late failure=false'
+          result=$?
+          set -e
+          test "$result" -eq 1
+          grep -Fq 'HUNG_MANUAL_PREVIEW_BLOCKED_SUCCESSOR' "$original/manual-preview-retirement-control.log"
+          grep -Fq 'Actual: []' "$original/manual-preview-retirement-control.log"
+          echo "Exact4aa4b161 control reproduced B blocked behind the unsettled native A load."
+          test "$(git -C "$original" rev-parse HEAD)" = "$SOURCE_SHA"
+
+      - name: Upload exact prior-source manual retirement control log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: manual-preview-retirement-control-${{ github.run_number }}
+          path: manual-preview-retirement-control.log
           if-no-files-found: error
           retention-days: 7
       - name: Prepare read-only empty-source formatting suggestions

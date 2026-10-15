@@ -1,6 +1,31 @@
 # Musify Personalized current state
 
 
+## Bounded manual-preview retirement,2026-10-15
+
+Independent review found a source-level recovery gap in84c488c: a native load or
+seek that never settled held the shared audio queue forever, blocking successor
+preview, Search and Save. No native occurrence of that hang has been observed.
+Manual preview now uses leases from one production-wide player pool. Native
+operations have an18-second deadline. Replacement, timeout, Search, Save and
+page disposal retire the old lease by disposing directly rather than queuing
+behind its pending operation. Teardown waits at most3seconds. No successor is
+allocated until actual disposal succeeds; an unconfirmed/failed disposal stays
+quarantined across page reopen. Late operations remain confined to their retired
+backend and cannot update or play the new owner. The defaults do not reuse an
+old player. This is not a native shutdown/availability acceptance claim.
+
+Eight new widget cases cover hanging load/seek with late success/error, automatic
+deadline, bounded Search, failed-disposal quarantine and real-writer Use match
+while native load/disposal remain pending, with saved choice/likes after reopen.
+The prior nine preview cases use distinct backend instances and retain their
+source/selection/cutoff assertions. Exact4aa4b161 control and successor checks
+are pending remote Linux CI. No provider request/local worker or schema change.
+The bounded folder-move rejection fix remains uncommitted and paused separately.
+Windows containment job remains uncreated/unrun pending owner exception reply;
+all8 native Windows cases remain unqualified.
+
+
 ## Manual preview request ownership,2026-10-15
 
 I06 manual preview source inspection found that a late resolver, native load or
@@ -17,7 +42,13 @@ Nine actual widget cases cover late resolver success/failure, native load
 success/failure, seek, replacement search, disposal, same-recording play failure
 and pause/resume/source reuse/30-second cutoff. All use synthetic injected
 resolvers/search/player; no provider traffic or local test worker is involved.
-Exact4104ccee prior-source control and successor qualification are pending Linux CI.
+Exact84c488c930ca04bb391bc39d713f0cc43de4e818 passed
+[Linux CI38697005131](https://github.com/topcat432/musify-personalized/actions/runs/38697005131):
+885 app tests including all9 preview and7 rescue cases,16+24 strict visuals,
+clean analysis,49/30/3310 helper checks and all required builds. Both exact
+prior-source controls reproduced their intended defects. Native/phone and the8
+Windows containment cases are not qualified. The source-level hang follow-up
+above supersedes the queue-based preview design.
 
 
 ## Rescue concurrent-owner preservation,2026-10-15
@@ -34,7 +65,8 @@ existing behavior; no schema, adapter, migration or provider request is added.
 Seven new Hive cases use the actual manual/No-match writers, an unchanged excluded
 row, typed/nested metadata conflicts, multiple successful checkpoints, a conflict
 after an intermediate checkpoint and pause/reopen/resume. Exact e2ebb0b8 control
-and successor qualification are pending remote Linux CI; no local worker launched.
+and successor qualification passed at84c488c/CI38697005131 (all7 new cases,
+885 aggregate tests and40 strict visuals); no local worker launched.
 The first successor5cf0b623 run38695966085 passed875 tests but failed the
 multiple-checkpoint regression. Hive cached the mutable working list, so the next
 batch changed live cache values before its guard. Checkpoint writes now use

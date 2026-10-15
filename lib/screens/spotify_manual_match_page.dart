@@ -47,13 +47,14 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
   static const Duration _timeout = Duration(seconds: 18);
   static const Duration _previewLength = Duration(seconds: 30);
 
-  late final ReviewSprintAudioPlayer _previewPlayer;
-  late final bool _ownsPlayer;
+  static final ManualPreviewPlayerPool _defaultPreviewPool =
+      ManualPreviewPlayerPool(() => JustAudioReviewSprintPlayer());
+  late final ManualPreviewPlayerPool _previewPool;
+  ManualPreviewPlayerLease? _previewLease;
   late final Future<String?> Function(String songId) _streamResolver;
   late final TextEditingController _queryController;
   StreamSubscription<ReviewSprintAudioState>? _playerStateSubscription;
   Timer? _previewTimer;
-  Future<void> _audioTail = Future<void>.value();
   int _previewGeneration = 0;
   List<Map<String, dynamic>> _results = [];
   bool _searching = false;
@@ -66,24 +67,22 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
   @override
   void initState() {
     super.initState();
-    _ownsPlayer = widget.audioPlayer == null;
-    _previewPlayer = widget.audioPlayer ?? JustAudioReviewSprintPlayer();
+    var suppliedPlayer = widget.audioPlayer;
+    _previewPool = widget.previewPool ?? (suppliedPlayer == null
+        ? _defaultPreviewPool
+        : ManualPreviewPlayerPool(() {
+            final player = suppliedPlayer;
+            if (player == null) {
+              throw StateError('A fresh preview player is required.');
+            }
+            suppliedPlayer = null;
+            return player;
+          }));
     _streamResolver = widget.streamResolver ??
         (songId) => fetchSongStreamUrl(songId, false);
     final artist = widget.item['sourceArtist']?.toString().trim() ?? '';
     final title = widget.item['sourceTitle']?.toString().trim() ?? '';
     _queryController = TextEditingController(text: '$artist $title'.trim());
-    _playerStateSubscription = _previewPlayer.stateStream.listen((state) {
-      if (!mounted || _previewingId == null) return;
-      final completed = state.completed;
-      setState(() {
-        _previewPlaying = state.playing && !completed;
-        if (completed) {
-          _previewingId = null;
-          _previewLoadingId = null;
-        }
-      });
-    });
     WidgetsBinding.instance.addPostFrameCallback((_) => _search());
   }
 
@@ -91,8 +90,10 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
   void dispose() {
     _previewGeneration++;
     _previewTimer?.cancel();
-    _playerStateSubscription?.cancel();
-    if (_ownsPlayer) unawaited(_previewPlayer.dispose());
+    unawaited(_playerStateSubscription?.cancel());
+    final lease = _previewLease;
+    _previewLease = null;
+    unawaited(_previewPool.release(lease));
     _queryController.dispose();
     super.dispose();
   }
@@ -222,10 +223,21 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
   bool _ownsPreview(int generation) =>
       mounted && generation == _previewGeneration;
 
-  Future<void> _runAudio(Future<void> Function() action) {
-    final next = _audioTail.then((_) => action());
-    _audioTail = next.then<void>((_) {}, onError: (Object _, StackTrace __) {});
-    return next;
+  bool _ownsLease(int generation, ManualPreviewPlayerLease lease) =>
+      _ownsPreview(generation) && identical(_previewLease, lease) && !lease.retired;
+
+  void _listenToPreview(ManualPreviewPlayerLease lease) {
+    _playerStateSubscription = lease.player.stateStream.listen((state) {
+      if (!mounted || !identical(_previewLease, lease) ||
+          lease.retired || _previewingId == null) return;
+      setState(() {
+        _previewPlaying = state.playing && !state.completed;
+        if (state.completed) {
+          _previewingId = null;
+          _previewLoadingId = null;
+        }
+      });
+    });
   }
 
   Future<void> _togglePreview(Map<String, dynamic> result) async {
@@ -237,15 +249,19 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
 
     if (_previewingId == songId) {
       final generation = ++_previewGeneration;
+      final lease = _previewLease;
+      if (lease == null) return;
       try {
         if (_previewPlaying) {
           _previewTimer?.cancel();
-          await _runAudio(() async {
-            if (_ownsPreview(generation)) await _previewPlayer.pause();
+          await lease.run(() async {
+            if (_ownsLease(generation, lease)) await lease.player.pause();
           });
         } else {
-          await _runAudio(() async {
-            if (_ownsPreview(generation)) _startPreviewPlayback(generation);
+          await lease.run(() async {
+            if (_ownsLease(generation, lease)) {
+              _startPreviewPlayback(generation, lease);
+            }
           });
         }
       } catch (error) {
@@ -255,58 +271,49 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
     }
 
     final generation = ++_previewGeneration;
-    _previewTimer?.cancel();
-    setState(() {
-      _previewLoadingId = songId;
-      _previewingId = null;
-      _previewPlaying = false;
-      _error = null;
-    });
     try {
-      await _runAudio(() async {
-        if (_ownsPreview(generation)) await _previewPlayer.stop();
-      });
+      await _stopPreview(invalidate: false, loadingId: songId);
       if (!_ownsPreview(generation)) return;
+      final lease = _previewPool.acquire();
+      _previewLease = lease;
+      _listenToPreview(lease);
       final streamUrl = await _streamResolver(songId).timeout(_timeout);
-      if (!_ownsPreview(generation)) return;
+      if (!_ownsLease(generation, lease)) return;
       if (streamUrl == null || streamUrl.isEmpty) {
         throw StateError('No playable audio stream was found for this result.');
       }
-      // Keep native load/seek/stop operations ordered. A late load must finish
-      // before the new owner's load, and may not play or change its labels.
-      await _runAudio(() async {
-        if (!_ownsPreview(generation)) return;
-        await _previewPlayer.setUrl(streamUrl);
-        if (!_ownsPreview(generation)) return;
+      await lease.run(() async {
+        if (!_ownsLease(generation, lease)) return;
+        await lease.player.setUrl(streamUrl);
+        if (!_ownsLease(generation, lease)) return;
         final durationSeconds = _asInt(candidate['duration']);
         if (durationSeconds != null && durationSeconds > 75) {
-          await _previewPlayer.seek(const Duration(seconds: 20));
+          await lease.player.seek(const Duration(seconds: 20));
         }
-        if (!_ownsPreview(generation)) return;
+        if (!_ownsLease(generation, lease)) return;
         setState(() {
           _previewingId = songId;
           _previewLoadingId = null;
         });
-        _startPreviewPlayback(generation);
+        _startPreviewPlayback(generation, lease);
       });
     } catch (error) {
       if (_ownsPreview(generation)) await _failPreview(error);
     }
   }
 
-  void _startPreviewPlayback(int generation) {
-    if (!_ownsPreview(generation)) return;
+  void _startPreviewPlayback(int generation, ManualPreviewPlayerLease lease) {
+    if (!_ownsLease(generation, lease)) return;
     try {
-      unawaited(_previewPlayer.play().catchError((Object error, StackTrace _) async {
-        if (_ownsPreview(generation)) await _failPreview(error);
+      unawaited(lease.player.play().catchError((Object error, StackTrace _) async {
+        if (_ownsLease(generation, lease)) await _failPreview(error);
       }));
-      // play completes on pause/stop/end, not when playback begins.
       _previewTimer?.cancel();
       _previewTimer = Timer(_previewLength, () {
-        if (_ownsPreview(generation)) unawaited(_stopPreview());
+        if (_ownsLease(generation, lease)) unawaited(_stopPreview());
       });
     } catch (error) {
-      if (_ownsPreview(generation)) unawaited(_failPreview(error));
+      if (_ownsLease(generation, lease)) unawaited(_failPreview(error));
     }
   }
 
@@ -315,25 +322,23 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
     return _stopPreview();
   }
 
-  Future<void> _stopPreview() {
-    final generation = ++_previewGeneration;
+  Future<void> _stopPreview({bool invalidate = true, String? loadingId}) {
+    if (invalidate) _previewGeneration++;
     _previewTimer?.cancel();
     _previewTimer = null;
+    unawaited(_playerStateSubscription?.cancel());
+    _playerStateSubscription = null;
+    final lease = _previewLease;
+    _previewLease = null;
     if (mounted) {
       setState(() {
         _previewingId = null;
-        _previewLoadingId = null;
+        _previewLoadingId = loadingId;
         _previewPlaying = false;
+        if (loadingId != null) _error = null;
       });
     }
-    return _runAudio(() async {
-      if (!_ownsPreview(generation)) return;
-      try {
-        await _previewPlayer.stop();
-      } catch (_) {
-        // A failed or disposed player needs no further recovery.
-      }
-    });
+    return _previewPool.release(lease);
   }
 
   Future<void> _save(Map<String, dynamic> result) async {

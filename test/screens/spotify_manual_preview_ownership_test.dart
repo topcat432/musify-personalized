@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:musify/screens/spotify_manual_match_page.dart';
 import 'package:musify/services/review_sprint_audio_player.dart';
+import 'package:musify/services/manual_preview_player_pool.dart';
 
 final _candidates = <Map<String, dynamic>>[
   {'ytid': 'owned-a', 'title': 'Candidate A', 'artist': 'Owned artist', 'duration': 180},
@@ -20,9 +21,14 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
+    var initial = true;
+    final pool = ManualPreviewPlayerPool(() {
+      if (initial) { initial = false; return player; }
+      return player.fresh();
+    });
     await tester.pumpWidget(MaterialApp(home: SpotifyManualMatchPage(
       item: const {'sourceTitle': 'Owned song', 'sourceArtist': 'Owned artist'},
-      audioPlayer: player, streamResolver: resolver,
+      audioPlayer: player, previewPool: pool, streamResolver: resolver,
       candidateSearch: (_) async => _candidates,
     )));
     await tester.pumpAndSettle();
@@ -57,7 +63,7 @@ void main() {
   }
 
   for (final failure in [false, true]) {
-    testWidgets('late native load is serialized before B: failure=$failure', (tester) async {
+    testWidgets('late native load stays isolated from B: failure=$failure', (tester) async {
       final pending = Completer<void>();
       player.loadGate = pending;
       await mount(tester, (id) async => id == 'owned-a' ? 'url-a' : 'url-b');
@@ -158,18 +164,34 @@ void main() {
   });
 }
 
-class _Player implements ReviewSprintAudioPlayer {
-  final _states = StreamController<ReviewSprintAudioState>.broadcast();
+class _History {
   final operations = <String>[];
   final loadedUrls = <String>[];
   final playedUrls = <String?>[];
+  final playFutures = <Completer<void>>[];
+  _Player? active;
+  int terminations = 0;
+  bool holdPlayCompletion = false;
+}
+
+class _Player implements ReviewSprintAudioPlayer {
+  _Player({_History? history}) : _history = history ?? _History();
+  final _History _history;
+  final _states = StreamController<ReviewSprintAudioState>.broadcast();
+  final _ownedPlays = <Completer<void>>[];
   Completer<void>? loadGate;
   Completer<void>? seekGate;
   Completer<void>? _playing;
-  final playFutures = <Completer<void>>[];
-  bool holdPlayCompletion = false;
-  String? currentUrl;
-  int stops = 0;
+  String? _loadedUrl;
+  Future<void>? _disposal;
+  _Player fresh() => _Player(history: _history);
+  List<String> get operations => _history.operations;
+  List<String> get loadedUrls => _history.loadedUrls;
+  List<String?> get playedUrls => _history.playedUrls;
+  List<Completer<void>> get playFutures => _history.playFutures;
+  String? get currentUrl => _history.active?._loadedUrl;
+  int get stops => _history.terminations;
+  set holdPlayCompletion(bool value) => _history.holdPlayCompletion = value;
 
   @override
   Stream<ReviewSprintAudioState> get stateStream => _states.stream;
@@ -177,7 +199,7 @@ class _Player implements ReviewSprintAudioPlayer {
   Future<void> setUrl(String url) async {
     operations.add('load:$url');
     if (url == 'url-a' && loadGate != null) await loadGate!.future;
-    currentUrl = url;
+    _loadedUrl = url;
     loadedUrls.add(url);
   }
   @override
@@ -187,15 +209,17 @@ class _Player implements ReviewSprintAudioPlayer {
   }
   @override
   Future<void> play() {
-    operations.add('play:$currentUrl');
-    playedUrls.add(currentUrl);
+    operations.add('play:$_loadedUrl');
+    _history.active = this;
+    playedUrls.add(_loadedUrl);
     _playing = Completer<void>();
+    _ownedPlays.add(_playing!);
     playFutures.add(_playing!);
     _states.add(const ReviewSprintAudioState(playing: true, completed: false));
     return _playing!.future;
   }
   void _finish() {
-    if (!holdPlayCompletion && _playing != null && !_playing!.isCompleted) _playing!.complete();
+    if (!_history.holdPlayCompletion && _playing != null && !_playing!.isCompleted) _playing!.complete();
     _playing = null;
   }
   @override
@@ -207,14 +231,17 @@ class _Player implements ReviewSprintAudioPlayer {
   @override
   Future<void> stop() async {
     operations.add('stop');
-    stops++;
+    _history.terminations++;
     _finish();
     _states.add(const ReviewSprintAudioState(playing: false, completed: false));
   }
   @override
-  Future<void> dispose() async {
+  Future<void> dispose() => _disposal ??= _dispose();
+  Future<void> _dispose() async {
+    operations.add('dispose');
+    _history.terminations++;
     _finish();
-    for (final play in playFutures) {
+    for (final play in _ownedPlays) {
       if (!play.isCompleted) play.complete();
     }
     await _states.close();
