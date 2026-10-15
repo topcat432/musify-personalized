@@ -12,12 +12,17 @@ routing are unchanged; no schema or migration is introduced.
 
 Three synthetic actual-page/writer cases cover unsearched edits, successful
 replacement search and failed replacement search, preserving the chosen recording,
-likes and unrelated data after Hive close/reopen. An exact60832f70 control must
-reproduce the original unsearched-query assertion. Corrected qualification is
-pending Linux CI; expected928 aggregate tests is not a pass claim.
+likes and unrelated data after Hive close/reopen. The exact60832f70 control
+reproduced saving Owned unsearched edit instead of Owned artist Owned song.
+Source83900212f051bb16aaffe2262dd8078728383810 passed
+[Linux CI38716618423](https://github.com/topcat432/musify-personalized/actions/runs/38716618423):
+928 aggregate tests,3 focused query cases,65 playlist cases,17 preview cases,
+40 strict Linux visuals,analysis,required Linux helper checks and all Android builds.
+The canonical acceptance ledger and existing lineage index retain terminal proof,
+all prior failure proofs and per-run artifact identities outside Git.
 
-At the preceding terminal milestone the host had12609015808 available bytes and
-134727217152/137271078912 committed bytes, with no identifiable Musify test/build/
+At the query terminal milestone the host had12125536256 available bytes and
+134915878912/137271078912 committed bytes, with no identifiable Musify test/build/
 emulator workers. Local tests/build/native remain unadmitted. Windows exception
 job remains uncreated/unrun; no provider, phone, signing, publication or merge work.
 
@@ -51,7 +56,7 @@ runs38712346268 (route fixture) and38713371035 (915 passed/10 old shared-map sor
 expectations failed) remain failures; the corrected Undo assertions independently
 verify sorted SongBars and original canonical order, retaining reopen/repeat checks.
 Accepted-move disk/device fault atomicity remains outside this pre-write guard.
-The separate manual-query provenance increment below is pending qualification.
+The qualified manual-query provenance increment is recorded above.
 Windows exception still awaits the owner; its job is uncreated/unrun. Native
 baseline recovery remains first after unchanged admission, then F01/F02.
 
