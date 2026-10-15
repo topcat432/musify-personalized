@@ -19,17 +19,20 @@ cases with zero skips. Windows tooling proof is not Android/device acceptance.
 | F01 flat TSV and existing CSV | Picker/preview/explicit Save; parser/session/widget/backup/reopen tests | F01 native picker/save/restart queue follows baseline5560 recovery | Not an absent adapter; no claim every producer's dialect is supported |
 | F02 saved-track JSON | Bounded YourLibrary saved-track schema, explicit preview/Save, session/backup/reopen tests | F02 native picker/save/restart after F01 | Other account-data schemas remain unsupported; this is not full account import |
 | F03 ZIP | Bounded stored/deflated parsing, integrity/row/transport limits, explicit entry selection; Dart/Java inflater and channel harnesses | Actual compressed archive decoding, Android resource/URI lifecycle and restart acceptance on the candidate | Unsupported codecs/account schemas are not silently flattened or treated as fulfilled |
-| F04 named source playlists | Precise compatible producer draft, durable ordered memberships/gaps, retained review, source-scoped unique-recording routing and explicit empty-source creation | Current-source Android picker/preview/routing/reopen; older signed c249 lacks these later features | Exact repeated-slot recreation and repeat-import synchronization have no production writer; the read-only occurrence planner is not fulfillment |
+| F04 named source playlists | Precise compatible producer draft, durable ordered memberships/gaps, retained review, source-scoped unique-recording routing and explicit empty-source creation | Current-source Android picker/preview/routing/reopen; older signed c249 lacks these later features | Full account Playlist.json compatibility remains unfulfilled; exact repeated-slot recreation and repeat-import synchronization have no production writer. The read-only occurrence planner is not fulfillment |
 | F05 Android share/open | Intent policy, actual-grant checks, bounded native catalog/reader, Dart inbox and explicit unsaved preview/Save route;49 reader/30 channel host checks | Real grants, cold/warm intents, provider cancellation/engine lifecycle and candidate restart remain runtime gates | No URI/grant persistence, broad storage permission or automatic import |
-| Existing library move preservation | Unique authoritative source, stale/ambiguous refusal, display/source-order isolation;65 focused playlist tests | Accepted-move write failures/reopen/newer-owner preservation is the next selected host qualification gap | The predecessor's three unawaited writes are replaced by destination-first acknowledgments and owner-only compensation; fault qualification is pending. No crash journal/power-loss atomicity is claimed |
+| Existing library move preservation | Unique authoritative source, stale/ambiguous refusal and source-order isolation, plus destination-first writes/owner-only compensation;43a185d4 passes105 focus including40 fault/composed cases | Physical disk faults, power-loss and current-source Android write-failure behavior remain unqualified | No durable move journal/general cross-key crash atomicity; uncertain copies remain explicit, not automatically reconciled |
 | Playback scope | D-017 YouTube plus saved audio, explicit Offline mode/source details; Spotify imports metadata without Premium | Sustained provider playback/download, real output/focus/accessories and actual-phone acceptance | D-018 in-app ad-free/no-Premium Spotify remains an unproven stretch; cold full-queue recovery is absent and not a current-version promise |
 | Direct Spotify adapter and canonical multi-source architecture | File import remains independent of accounts/cloud/Premium | No account/credential work is authorized by these tests | OAuth adapter, broad cross-source ownership architecture and synchronization require separate feasible designs/dependencies |
 | Release/device gates | Exact-source CI and documented hosted Windows exception | Baseline5560 recovery first, then F01/F02; phone only after owner readiness; signed/default-tip/data gates remain separate | No merge, signing/publication or live-phone action follows source-only qualification |
 
 Implemented-but-runtime-unqualified rows are not absent features. Automated proof
 is not runtime proof, and a read-only plan is not an implemented writer. The next
-bounded work is the accepted library-move failure path, with synthetic Hive faults;
-no new importer, provider request, schema or durable journal is selected here.
+bounded milestone is the accepted library-move exception path: source43a185d4
+passes40 new fault/composed cases,105 focus,968 aggregate and40 Linux visuals.
+Exact final-tip/build evidence is tracked by PR23 and the canonical ledger. This
+is modelled exception/reopen proof, not physical ENOSPC or crash atomicity. No new
+importer, provider request, schema or durable journal is selected here.
 
 
 ## Product contract

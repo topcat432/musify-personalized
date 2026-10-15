@@ -9,9 +9,12 @@ or Android intake are absent/future. D-017/D-018 settle baseline versus Spotify
 stretch scope; no new mode/queue architecture is inferred. f3947dd8 exact CI
 qualifies928 app tests,40 strict Linux visuals and8 hosted Windows tooling cases.
 Independent review closed playlist ownership/order, query provenance and hosted
-Windows containment. L02 accepted-move persistence failure/reopen is selected next;
-the predecessor's unawaited writes were not qualified by pre-write rejection tests.
-The awaited destination-first correction now requires separate fault/reopen proof.
+Windows containment. L02 accepted-move exception/reopen now has40 new synthetic
+fault/composed cases (105 focus) and a pinned predecessor membership0-versus1
+control. Source43a185d4 passes968 aggregate/40 Linux visuals/analysis. This proves
+modelled exception recovery, not physical ENOSPC or cross-key crash atomicity;
+no durable move journal/schema was added. Final-tip/build gates remain explicit
+in PR23 and the canonical ledger.
 Native baseline5560 recovery thenF01/F02 and phone readiness remain separate gates.
 
 
@@ -311,8 +314,8 @@ images were inspected and references unchanged. Receipt-only 6212e50d CI
 Exact 809cf56d CI [38321448856](https://github.com/topcat432/musify-personalized/actions/runs/38321448856)
 passes clean analysis, 391 tests, all 40 strict Linux visuals and Android boundaries.
 
-Current-version reconciliation (canonical acceptance rows below retain their exact
-historical source/evidence; these categories do not collapse device/release gates):
+Historical reconciliation at809cf56d (superseded by the canonical implementation
+map linked above; exact historical source/evidence below is retained):
 
 | Area | Implemented and independently verified | Genuine remaining capability or dependency |
 |---|---|---|

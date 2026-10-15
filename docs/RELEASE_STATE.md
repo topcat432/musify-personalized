@@ -5,32 +5,36 @@
 
 Independent review closed f3947dd8 ownership/order, manual provenance and hosted
 Windows8-case qualification. The canonical import roadmap now separates implemented
-host-tested adapters from runtime-only gates and absent production writers.
-The next selected L02 gap is accepted-move persistence: the predecessor publishes
-all live collections and returns success before three unawaited writes settle;
-folder-to-Library writes source removal before destination addition.
+host-tested adapters, runtime-only gates and absent production writers.
 
-Moves now await changed collections in destination-first order, block overlaps,
-verify complete live/stored ownership at every await, and publish only verified
-saved values. Exception compensation restores a removed source before undoing the
-destination addition, preserves key absence, and stops if restoration or any newer
-owner is uncertain. Uncertain saved state is retained with explicit reload advice;
-it is not a success or an automatic retry. UI callers await the result. No durable
-journal, schema or migration is added, and crash/power-loss atomicity is not claimed.
+The pinned f048cb41 control proves a product defect: folder-to-Library source
+removal persisted, destination writing failed, and reopen found membership0 rather
+than1. The old function also published live values and returned success before
+three unawaited writes settled. Moves now await destination-first changed-key
+writes, reject overlap, check complete live/stored ownership at every await and
+publish only verified stored owner maps. Exception compensation restores a removed
+source before undoing its destination, preserves key absence and stops at any
+newer owner or uncertain restoration. UI callers await the saved/error result.
+Uncertain actual state remains intact with reload advice; it is not a success.
 
-Forty synthetic Hive cases inject before/after real saves, compensation
-failure, stored/live owner edits, overlap, repeat and key absence; each reopens the
-fixture and checks membership/values. A pinned f048cb41 control must reproduce
-lost membership after a folder-to-root destination failure. Corrected source
-qualification is pending remote CI; no local workload or device action occurred.
-The exact f048cb41 control reproduced persisted membership0 instead of1 after
-reopen. Draft3b5c16a3 passed analysis and99 focused playlist cases, but source
-review found that copied publication/restoration maps would break existing
-selected-occurrence writer ownership. Publication now adopts verified stored map
-instances; owned restoration uses the unchanged live owner maps. Six composed
-move/fault -> rename -> remove -> one-shot Undo -> reopen cases protect those
-existing workflows. A pinned3b5c16a3 control must fail rename ownership; the
-40 new cases imply968 aggregate and105 playlist focus, still pending qualification.
+Source43a185d474c059a7841546171396cf108dcbceea in
+[CI38726704976](https://github.com/topcat432/musify-personalized/actions/runs/38726704976)
+passed analysis,968 app tests,105 focused playlist cases (40 new fault/composed
+cases),40 strict Linux visuals and8 hosted Windows lifecycle cases. Build and
+final-tip qualification are tracked by PR23 and the canonical evidence ledger.
+Both exact prior-source controls reproduced their intended defects. Draft3b5c16a3
+passed99 focus but source review caught copied owner maps breaking rename/Undo;
+its control returns null on rename. Verified stored-map publication and unchanged
+live-owner restoration preserve that API contract. Six composed move/fault ->
+rename -> remove -> one-shot Undo -> Hive reopen cases protect both workflows.
+
+Tests inject failures before/after real Hive saves, plus compensation failures,
+stored/live owner edits, overlap, repeat and absent keys. They prove modelled
+exception/reopen preservation, not physical ENOSPC, torn-file/power-loss or general
+cross-key crash atomicity. No durable move journal, schema or migration was added.
+Newer-owner edits and uncertain copies are retained, never compensated over or
+silently retried. Native baseline5560 recovery remains first after fresh admission,
+thenF01/F02; phone operations remain held for the owner's readiness check.
 
 ## Approved hosted Windows containment qualification,2026-10-15
 
