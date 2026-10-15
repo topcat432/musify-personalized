@@ -4,11 +4,16 @@ import 'dart:io';
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:musify/services/audio_service.dart';
-import 'package:musify/services/common_services.dart' show userRecentlyPlayed;
+import 'package:musify/services/common_services.dart'
+    show userRecentlyPlayed, userLikedSongsList;
+import 'package:musify/services/shared_song_metadata.dart';
 import 'package:musify/services/settings_manager.dart';
 import 'package:musify/utilities/sharing_intent.dart';
+import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 
 final _testPlayers = <_OwnedPlayer>[];
 
@@ -32,6 +37,7 @@ void main() {
   setUp(() async {
     _testPlayers.clear();
     userRecentlyPlayed.value = [];
+    userLikedSongsList.value = [];
     await Hive.box('user').put('recentlyPlayedSongs', []);
   });
 
@@ -711,6 +717,117 @@ void main() {
         },
       );
     }
+  }
+
+  test('saved exact-ID share skips metadata HTTP and preserves its original map', () async {
+    final player = _OwnedPlayer();
+    final handler = _SourceGateHandler(player);
+    var requests = 0;
+    final client = YoutubeExplode(httpClient: YoutubeHttpClient(MockClient((request) async {
+      requests++;
+      return http.Response('', 429, request: request);
+    })));
+    final metadata = SharedSongMetadataResolver((id) async {
+      await client.videos.get(id);
+      throw StateError('Denied fixture cannot supply metadata');
+    });
+    final original = song(a);
+    userLikedSongsList.value = [original];
+    try {
+      await consumeYoutubeSharedTextIntent('https://youtu.be/$a',
+        audioHandler: handler, metadataResolver: metadata,
+        onError: (error, stack) => fail('$error'));
+      expect(requests, 0);
+      expectSelection(handler, a);
+      expect(player.playedIds, [a]);
+      expect(original, song(a));
+    } finally {
+      client.close();
+      await handler.stop();
+      await player.dispose();
+    }
+  });
+
+  for (final sorry in [false, true]) {
+    test('concurrent shared metadata denial sorry=$sorry reports once without changing playback', () async {
+      final player = _OwnedPlayer();
+      final handler = _SourceGateHandler(player);
+      var requests = 0;
+      final client = YoutubeExplode(httpClient: YoutubeHttpClient(MockClient((request) async {
+        requests++;
+        return http.Response('', sorry ? 200 : 429,
+          request: sorry ? http.Request('GET', Uri.parse('https://www.google.com/sorry/index')) : request);
+      })));
+      final metadata = SharedSongMetadataResolver((id) async {
+        await client.videos.get(id);
+        throw StateError('Denied fixture cannot supply metadata');
+      });
+      final errors = <Object>[];
+      try {
+        await consumeYoutubeSharedTextIntent('https://youtu.be/$a',
+          audioHandler: handler, resolveSong: (_) async => song(a),
+          onError: (error, stack) => fail('$error'));
+        final first = consumeYoutubeSharedTextIntent('https://youtu.be/$b',
+          audioHandler: handler, metadataResolver: metadata,
+          onError: (error, stack) => errors.add(error));
+        final second = consumeYoutubeSharedTextIntent('https://youtu.be/$b',
+          audioHandler: handler, metadataResolver: metadata,
+          onError: (error, stack) => errors.add(error));
+        await Future.wait([first, second]);
+        expect(requests, 1);
+        expect(errors, hasLength(1));
+        expect(errors.single, isA<RequestLimitExceededException>());
+        expectSelection(handler, a);
+        expect(player.playedIds, [a]);
+        expect(player.playing, isTrue);
+        expect(userRecentlyPlayed.value.map((s) => s['ytid']), [a]);
+      } finally {
+        client.close();
+        await handler.stop();
+        await player.dispose();
+      }
+    });
+  }
+
+  for (final pause in [false, true]) {
+    test('coalesced shared metadata success preserves latest ownership pause=$pause', () async {
+      final player = _OwnedPlayer();
+      final handler = _SourceGateHandler(player);
+      final pending = Completer<Map>();
+      var calls = 0;
+      final metadata = SharedSongMetadataResolver((id) {
+        calls++;
+        return pending.future;
+      });
+      final errors = <Object>[];
+      Future<void>? first;
+      Future<void>? second;
+      try {
+        await consumeYoutubeSharedTextIntent('https://youtu.be/$a',
+          audioHandler: handler, resolveSong: (_) async => song(a),
+          onError: (error, stack) => fail('$error'));
+        first = consumeYoutubeSharedTextIntent('https://youtu.be/$b',
+          audioHandler: handler, metadataResolver: metadata,
+          onError: (error, stack) => errors.add(error));
+        second = consumeYoutubeSharedTextIntent('https://youtu.be/$b',
+          audioHandler: handler, metadataResolver: metadata,
+          onError: (error, stack) => errors.add(error));
+        if (pause) await handler.pause();
+        pending.complete(song(b));
+        await Future.wait([first, second]);
+        expect(calls, 1);
+        expect(errors, isEmpty);
+        expectSelection(handler, pause ? a : b);
+        expect(player.playedIds, pause ? [a] : [a, b]);
+        expect(player.playing, !pause);
+      } finally {
+        if (!pending.isCompleted) pending.complete(song(b));
+        if (first != null) await first;
+        if (second != null) await second;
+        await handler.stop();
+        await player.dispose();
+      }
+    });
   }
 
   tearDownAll(() async {

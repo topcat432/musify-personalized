@@ -21,9 +21,14 @@
 
 import 'package:musify/services/audio_service.dart';
 import 'package:musify/services/common_services.dart';
+import 'package:musify/services/playlists_manager.dart';
+import 'package:musify/services/shared_song_metadata.dart';
 import 'package:musify/utilities/formatter.dart';
 
 final _youtubeLinkRegex = RegExp(r'(youtube\.com|youtu\.be)');
+final _sharedSongMetadata = SharedSongMetadataResolver(
+  (id) => getSongDetails(0, id),
+);
 
 /// The platform text stream excludes the intent that launched the process.
 /// A later share or disposed owner must supersede a delayed initial read.
@@ -62,6 +67,7 @@ Future<void> handleYoutubeSharedTextIntent(
   required void Function(Object error, StackTrace stackTrace) onError,
   bool Function()? stillCurrent,
   Future<Map> Function(String songId)? resolveSong,
+  SharedSongMetadataResolver? metadataResolver,
 }) async {
   final isCurrent = stillCurrent ?? () => true;
   if (!isCurrent() || value == null || !_youtubeLinkRegex.hasMatch(value)) {
@@ -75,7 +81,19 @@ Future<void> handleYoutubeSharedTextIntent(
 
   try {
     await audioHandler.resolveAndPlayOwnedSong(
-      () => resolveSong?.call(songId) ?? getSongDetails(0, songId),
+      () => resolveSong?.call(songId) ??
+          (metadataResolver ?? _sharedSongMetadata).resolve(
+            songId,
+            knownSongs: [
+              audioHandler.currentSong,
+              ...userRecentlyPlayed.value,
+              ...userOfflineSongs.value,
+              ...userLikedSongsList.value,
+              ...globalSongs,
+              for (final playlist in userCustomPlaylists.value)
+                if (playlist['list'] is List) ...(playlist['list'] as List),
+            ],
+          ),
       stillCurrent: isCurrent,
     );
   } catch (e, stackTrace) {
@@ -89,6 +107,7 @@ Future<void> consumeYoutubeSharedTextIntent(
   required void Function(Object error, StackTrace stackTrace) onError,
   bool Function()? stillCurrent,
   Future<Map> Function(String songId)? resolveSong,
+  SharedSongMetadataResolver? metadataResolver,
 }) async {
   if (value == null || value.isEmpty) {
     return;
@@ -105,5 +124,6 @@ Future<void> consumeYoutubeSharedTextIntent(
     onError: onError,
     stillCurrent: stillCurrent,
     resolveSong: resolveSong,
+    metadataResolver: metadataResolver,
   );
 }

@@ -221,6 +221,7 @@ class StreamClient {
       } catch (e, s) {
         // A denied request cannot be repaired by repeating it or changing
         // client identity. Preserve that failure rather than falling back.
+        if (e is RequestLimitExceededException) rethrow;
         if (e is FatalFailureException && (e.statusCode == 403 || e.terminal))
           rethrow;
         _logger.severe(

@@ -43,6 +43,7 @@ import 'package:musify/services/playlist_sharing.dart';
 import 'package:musify/services/playlists_manager.dart';
 import 'package:musify/services/router_service.dart';
 import 'package:musify/services/settings_manager.dart';
+import 'package:musify/services/shared_song_metadata.dart';
 import 'package:musify/services/spotify_incoming_file_service.dart';
 import 'package:musify/services/update_manager.dart';
 import 'package:musify/theme/app_themes.dart';
@@ -50,6 +51,8 @@ import 'package:musify/utilities/flutter_toast.dart';
 import 'package:musify/utilities/language_utils.dart';
 import 'package:musify/utilities/playlist_utils.dart';
 import 'package:musify/utilities/sharing_intent.dart';
+import 'package:musify/widgets/mini_player.dart';
+import 'package:musify/widgets/shared_song_failure_notice.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 
@@ -87,6 +90,25 @@ class Musify extends StatefulWidget {
 class _MusifyState extends State<Musify> with WidgetsBindingObserver {
   bool _incomingInboxOpen = false;
   int _textShareGeneration = 0;
+  final _sharedSongFailures = ValueNotifier<SharedSongFailure?>(null);
+
+  void _reportSharedSongFailure(
+    Object error,
+    StackTrace stackTrace,
+    bool Function() stillCurrent,
+  ) {
+    if (!mounted || !stillCurrent()) return;
+    logger.log(
+      'Shared song failed',
+      error: sharedSongFailureDiagnostic(error),
+      stackTrace: stackTrace,
+    );
+    final ownsAction = audioHandler.capturePlaybackActionOwner();
+    _sharedSongFailures.value = SharedSongFailure(
+      sharedSongFailureMessage(error),
+      () => mounted && stillCurrent() && ownsAction(),
+    );
+  }
 
   Future<void> _reviewIncomingFiles() async {
     final service = SpotifyIncomingFileService.instance;
@@ -161,13 +183,10 @@ class _MusifyState extends State<Musify> with WidgetsBindingObserver {
           audioHandler: audioHandler,
           stillCurrent: () =>
               mounted && _textShareGeneration == shareGeneration,
-          onError: (error, stackTrace) {
-            logger.log(
-              'Error while playing shared song:',
-              error: error,
-              stackTrace: stackTrace,
-            );
-          },
+          onError: (error, stackTrace) => _reportSharedSongFailure(
+            error, stackTrace,
+            () => mounted && _textShareGeneration == shareGeneration,
+          ),
         );
       },
       onError: (err) {
@@ -185,10 +204,9 @@ class _MusifyState extends State<Musify> with WidgetsBindingObserver {
         audioHandler: audioHandler,
         stillCurrent: () =>
             mounted && _textShareGeneration == initialShareGeneration,
-        onError: (error, stackTrace) => logger.log(
-          'Error while playing initial shared song:',
-          error: error,
-          stackTrace: stackTrace,
+        onError: (error, stackTrace) => _reportSharedSongFailure(
+          error, stackTrace,
+          () => mounted && _textShareGeneration == initialShareGeneration,
         ),
       ),
       onError: (error, stackTrace) => logger.log(
@@ -264,6 +282,7 @@ class _MusifyState extends State<Musify> with WidgetsBindingObserver {
 
     Hive.close();
     sharingIntentSubscription.cancel();
+    _sharedSongFailures.dispose();
     SpotifyIncomingFileService.instance.dispose();
     super.dispose();
   }
@@ -322,7 +341,12 @@ class _MusifyState extends State<Musify> with WidgetsBindingObserver {
               return Stack(
                 fit: StackFit.expand,
                 children: [
-                  display,
+                  SharedSongFailureNotice(
+                    failures: _sharedSongFailures,
+                    bottomInset: () => audioHandler.mediaItem.value == null
+                        ? 0 : MiniPlayer.playerHeight,
+                    child: display,
+                  ),
                   Positioned(
                     top: 0,
                     left: 0,

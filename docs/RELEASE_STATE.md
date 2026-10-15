@@ -1,5 +1,41 @@
 # Musify Personalized current state
 
+## Phone evidence and bounded metadata correction,2026-10-15
+
+Frozen6138d9860c7a93b807cb470d4053820213dd2217 passed
+[exact CI38768063632](https://github.com/topcat432/musify-personalized/actions/runs/38768063632).
+Its single retained signed APK,code300000017,was installed in place on the
+approved Samsung. Actual installed/pulled APK hash,retained signer,version and
+unchanged UID verified. Launch,cold restart and Home/Library/Settings passed.
+Fresh pre/post app-saved exports independently reopened with complete exported
+user/settings inventories equal. Independent disposable restore/restart and
+original-profile recovery passed; no phone restore,uninstall or clear-data.
+
+The owner separately reported one full song,seek/resume and repeat working on
+code17. This is OWNER_OBSERVED evidence,not automated background,focus,accessory,
+offline or catalog qualification. A distinct warm-share attempt at19:27UTC
+failed in watch-page metadata resolution before a media item or queue existed.
+The retained RequestLimitExceededException does not establish numericHTTP429:
+the pinned library also uses it for a Google/sorry response. Two app log records
+are producer/rethrow logging,not proof of duplicate share delivery or wire count.
+After bounded Musify-only cleanup,no further provider request or phone operation
+followed. No identity/proxy/account change occurred; the owner's subsequent
+session remains undisturbed.
+
+The bounded candidate correction stops this denial without internal retry or
+manifest-client fallback,preserves sanitized status/Retry-After diagnostics and
+shows one ownership-checked failure notice without replacing current playback.
+Validated exact-ID metadata from existing local/search/library state avoids an
+unnecessary watch-page fetch; concurrent metadata lookups share one pending
+operation. No schema,migration,persistent metadata cache or source substitution
+is introduced. Synthetic fixtures reproduced three denied watch requests before
+the correction. All 96 focused cases, clean analysis and all 1,080 local app tests
+pass. Both strict Windows visual suites remain FAIL (16+24); all 40 actual PNGs
+are byte-identical to the retained Windows control, and references are unchanged.
+One combined source/coverage verdict, exact Linux CI and native qualification
+remain separate gates before any replacement artifact.
+Unknown-recording provider availability is not established by this repair.
+
 ## Consolidated request-entry boundary,2026-10-15
 
 abd9d2e3 exactCI38762075833 passed but is withheld for the reviewed initial-read

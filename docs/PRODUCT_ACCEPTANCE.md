@@ -1,5 +1,21 @@
 # Product acceptance ledger
 
+## Phone baseline and metadata denial,2026-10-15
+
+Code300000017/source6138d986 was installed in place with actual APK/signer/UID
+verification,successful launch/cold restart and exact full exported user/settings
+inventory preservation. Independent disposable restore/restart also passed.
+OWNER_OBSERVED full-song playback,seek/resume and repeat are recorded separately;
+they do not qualify background,focus,accessories,offline playback or the catalog.
+One warm-share metadata denial produced no media item; numeric status and wire
+attempt count were not captured. The pinned retry defect is reproduced offline
+and corrected alongside exact-ID local metadata reuse,coalescing,sanitized
+diagnostics and a visible owned failure notice. All 96 focused cases, clean
+analysis and all 1,080 local app tests pass. Strict Windows visuals remain FAIL
+(16+24), with all 40 actuals byte-identical to retained Windows controls and no
+reference changes. Combined review, exact Linux CI and native proof remain gates;
+the phone retains code17. See RELEASE_STATE for the current evidence boundaries.
+
 ## Consolidated entry and identity coverage,2026-10-15
 
 Initial platform reads observe controls from before the read; metadata and queue

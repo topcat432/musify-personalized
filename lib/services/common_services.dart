@@ -35,6 +35,7 @@ import 'package:musify/services/online_audio_source.dart';
 import 'package:musify/services/playlists_manager.dart';
 import 'package:musify/services/proxy_manager.dart';
 import 'package:musify/services/settings_manager.dart';
+import 'package:musify/services/shared_song_metadata.dart';
 import 'package:musify/services/stream_request_context.dart';
 import 'package:musify/services/stream_url_validation.dart';
 import 'package:musify/utilities/app_utils.dart';
@@ -685,8 +686,8 @@ Future<Map<String, dynamic>> getSongDetails(
     return returnSongLayout(songIndex, song);
   } catch (e, stackTrace) {
     logger.log(
-      'Error while getting song details',
-      error: e,
+      'Song metadata fetch failed',
+      error: sharedSongFailureDiagnostic(e, phase: 'watch-metadata'),
       stackTrace: stackTrace,
     );
     rethrow;
