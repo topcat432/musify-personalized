@@ -12,7 +12,9 @@ permanent row is silently repaired, deleted or reactivated.
 
 Manual save now delegates to the same guarded existing-format writer, retaining
 its manual search/URL audit and selected alternative without adding review-sprint
-ISRC propagation. Its UI locks before awaiting preview stop. Checkpoints reject
+ISRC propagation. Its UI locks before awaiting preview stop. Shared routing-state
+copying explicitly preserves legacy typed bytes rather than converting them into
+ordinary lists; manual-save reopen verifies bytes and UTC metadata. Checkpoints reject
 stale proposals that alter/drop a currently excluded row, including a row added
 by a newer owner; explicit repeated exclusion remains allowed. Counts distinguish
 authoritatively excluded partial rows without rewriting their retained source

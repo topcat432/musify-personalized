@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:musify/services/spotify_review_workflow_service.dart';
@@ -18,7 +19,9 @@ void main() {
       final row = <String, dynamic>{'sourceRow': 7, 'sourceTitle': 'Owned song',
         'sourceArtist': 'Owned artist', 'sourceIsrc': 'USOWN2600001', 'status': 'needs_review'};
       await box.put('spotifyMatchResults', [row, {...row, 'sourceRow': 8}]);
-      await box.put('spotifyImportMetadata', <String, dynamic>{});
+      await box.put('spotifyImportMetadata', <String, dynamic>{
+        'routingHistory': [{'owner': 'retain', 'bytes': Uint8List.fromList([1, 2]), 'at': DateTime.utc(2026, 1, 1)}],
+      });
       await box.put('likedSongs', [{'ytid': 'owned-liked'}]);
       final stale = (await service.loadUnresolvedItems()).first;
       if (state == 'excluded') await service.excludeItem(item: stale);
@@ -44,6 +47,10 @@ void main() {
       }
       await Hive.close(); Hive.init(root.path); await Hive.openBox('user');
       expect(Hive.box('user').get('likedSongs'), [{'ytid': 'owned-liked'}]);
+      final routing = (Hive.box('user').get('spotifyImportMetadata') as Map)['routingHistory'] as List;
+      expect(routing.single['bytes'], isA<Uint8List>());
+      expect(routing.single['bytes'], [1, 2]);
+      expect((routing.single['at'] as DateTime).isUtc, isTrue);
       final saved = (Hive.box('user').get('spotifyMatchResults') as List).first as Map;
       expect(saved['status'], state == 'excluded' ? 'excluded' : state == 'allowed' ? 'manually_matched' : 'needs_review');
     });

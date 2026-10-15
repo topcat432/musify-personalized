@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 const importRoutingBaselineKey = 'routingResolutionBaseline';
 const importRoutingPendingKey = 'routingInProgress';
@@ -18,6 +19,7 @@ bool hasStableImportSessionIdentity(Map<String, dynamic> metadata) =>
     DateTime.tryParse(metadata['importedAt']?.toString() ?? '') != null;
 
 Object? copyImportRoutingValue(dynamic value) {
+  if (value is Uint8List) return Uint8List.fromList(value);
   if (value is Map) {
     return {
       for (final entry in value.entries)
