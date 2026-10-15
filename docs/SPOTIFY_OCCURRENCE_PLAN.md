@@ -115,3 +115,15 @@ Synthetic pure tests cover alternatives, repeats, retry, source reorder/new sess
 edits/removals, legacy uncertainty, collisions, changed choices, invalid dates,
 unsupported/pending sources and oversize evidence. Successor qualification is
 recorded in RELEASE_STATE and exact CI receipts.
+
+## Removal sorting prerequisite,2026-10-15
+
+One visible deletion previously removed all equal recording IDs from the page's
+original-order backup. The successor tracks original positions only in memory,
+including while sorting by title/artist, and removes the selected slot alone.
+Default/Date added cycles retain other repeated slots in source/reversed order;
+root/folder saved lists reopen with their persisted post-removal order and no
+new fields. Six new widget cases plus five existing playlist cases pass locally.
+Exact successor CI remains required. This fixes the page baseline; ordinary
+recording-level deduplication and the separate repeated-slot Undo limitation are
+unchanged. No durable occurrence creation/ownership writer is enabled.

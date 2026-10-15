@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -6,7 +7,11 @@ import 'package:hive/hive.dart';
 import 'package:musify/main.dart' show audioHandler;
 import 'package:musify/screens/playlist_page.dart';
 import 'package:musify/services/audio_service.dart';
-import 'package:musify/services/settings_manager.dart' show shuffleNotifier;
+import 'package:musify/services/settings_manager.dart'
+    show shuffleNotifier, playlistSortSetting;
+import 'package:musify/services/playlists_manager.dart';
+import 'package:musify/widgets/song_bar.dart';
+import 'package:musify/widgets/sort_chips.dart';
 
 import '../../tool/visual_review_harness.dart';
 
@@ -21,6 +26,7 @@ void main() {
     await initPriorityReviewHive();
     resetPriorityReviewGlobals();
     shuffleNotifier.value = false;
+    playlistSortSetting = 'default_';
     handler = _CaptureQueueHandler();
     audioHandler = handler;
     await Future<void>.delayed(Duration.zero);
@@ -163,6 +169,165 @@ void main() {
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
     });
+  }
+  for (final mode in PlaylistSortType.values) {
+    for (final folder in [
+      false,
+      if (mode == PlaylistSortType.dateAdded) true,
+    ]) {
+      for (final shared in [
+        false,
+        if (mode == PlaylistSortType.default_ && !folder) true,
+      ]) {
+        testWidgets(
+          'one repeated slot survives sort cycles and reopen: ${mode.name} folder=$folder shared=$shared',
+          (tester) async {
+            tester.view
+              ..physicalSize = const Size(800, 1600)
+              ..devicePixelRatio = 1;
+            addTearDown(tester.view.resetPhysicalSize);
+            addTearDown(tester.view.resetDevicePixelRatio);
+            playlistSortSetting = mode.name;
+            final repeated = {'ytid': 'repeat', 'title': 'Zulu', 'artist': 'Z'};
+            final playlist = <String, dynamic>{
+              'ytid': 'customId-remove-repeat',
+              'title': 'Repeated slots',
+              'source': 'user-created',
+              'image': '',
+              'list': [
+                repeated,
+                {'ytid': 'bridge', 'title': 'Bridge', 'artist': 'B'},
+                {'ytid': 'repeat', 'title': 'Alpha', 'artist': 'A'},
+                {'ytid': 'tail', 'title': 'Tail', 'artist': 'T'},
+                repeated,
+              ],
+            };
+            final key = folder ? 'playlistFolders' : 'customPlaylists';
+            final collection = folder
+                ? <Map>[
+                    {
+                      'id': 'folder',
+                      'name': 'Fixture folder',
+                      'playlists': [playlist],
+                    },
+                  ]
+                : <Map>[playlist];
+            if (folder) {
+              userPlaylistFolders.value = collection;
+            } else {
+              userCustomPlaylists.value = collection;
+            }
+            await tester.runAsync(
+              () => Zone.root.run(() async {
+                await Hive.box('user').put(key, collection);
+                await Hive.box('user').put('unrelatedFixture', {'keep': true});
+              }),
+            );
+            await tester.pumpWidget(
+              priorityReviewApp(
+                brightness: Brightness.dark,
+                child: PlaylistPage(playlistData: playlist),
+              ),
+            );
+            await tester.pump();
+            final removeRow = tester
+                .widgetList<SongBar>(find.byType(SongBar))
+                .where(
+                  (row) => row.song['title'] == (shared ? 'Zulu' : 'Alpha'),
+                )
+                .last;
+            Zone.root.run(removeRow.onRemove!);
+            await tester.pump();
+            final savedTitles = (playlist['list'] as List)
+                .map((song) => song['title'])
+                .toList();
+            expect(
+              savedTitles.where((title) => title == 'Zulu').length,
+              shared ? 1 : 2,
+            );
+            expect(savedTitles.contains('Alpha'), shared);
+            await tester.runAsync(
+              () => Zone.root.run(() => Hive.box('user').flush()),
+            );
+            Future<void> sort(PlaylistSortType type) async {
+              final chips = tester.widget<SortChips<PlaylistSortType>>(
+                find.byType(SortChips<PlaylistSortType>),
+              );
+              final chip = find.widgetWithText(
+                FilterChip,
+                chips.sortTypeToString(type),
+              );
+              await tester.ensureVisible(chip);
+              // The production callback owns real Hive writes; keep them outside
+              // Flutter's fake-clock zone, like the existing source-route fixtures.
+              Zone.root.run(() => chips.onSelected(type));
+              await tester.pump();
+              await tester.runAsync(
+                () => Zone.root.run(() async {
+                  // Drain the callback's open-box continuation before flush/close.
+                  await Future<void>.delayed(Duration.zero);
+                  await Hive.box('settings').flush();
+                  await Hive.box('user').flush();
+                }),
+              );
+            }
+
+            for (final type in [
+              PlaylistSortType.default_,
+              PlaylistSortType.dateAdded,
+              PlaylistSortType.default_,
+            ]) {
+              await sort(type);
+              final expected = shared
+                  ? ['Zulu', 'Bridge', 'Alpha', 'Tail']
+                  : ['Zulu', 'Bridge', 'Tail', 'Zulu'];
+              expect(
+                (playlist['list'] as List).map((song) => song['title']),
+                type == PlaylistSortType.dateAdded
+                    ? expected.reversed
+                    : expected,
+              );
+            }
+            await tester.pumpWidget(const SizedBox.shrink());
+            await tester.runAsync(
+              () => Zone.root.run(() async {
+                await Hive.close();
+                Hive.init(hiveRoot.path);
+                await initPriorityReviewHive();
+              }),
+            );
+            final storedCollection = Hive.box('user').get(key) as List;
+            final stored = folder
+                ? (storedCollection.single['playlists'] as List).single
+                : storedCollection.single;
+            expect(
+              (stored['list'] as List).map((song) => song['title']),
+              savedTitles,
+            );
+            expect((stored as Map).keys.toSet(), {
+              'ytid',
+              'title',
+              'source',
+              'image',
+              'list',
+            });
+            expect(
+              (stored['list'] as List).every(
+                (song) => (song as Map).keys.toSet().difference({
+                  'ytid',
+                  'title',
+                  'artist',
+                }).isEmpty,
+              ),
+              isTrue,
+            );
+            expect(Hive.box('user').get('unrelatedFixture'), {'keep': true});
+            expect(tester.takeException(), isNull);
+          },
+          timeout: const Timeout(Duration(seconds: 25)),
+        );
+      }
+    }
   }
 }
 

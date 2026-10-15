@@ -73,6 +73,7 @@ class PlaylistPage extends StatefulWidget {
 class _PlaylistPageState extends State<PlaylistPage> {
   dynamic _playlist;
   late List<dynamic> _originalPlaylistList; // Keep original order separately
+  List<int> _playlistSourceOrder = []; // Runtime slots, never stored in songs.
 
   late final playlistLikeStatus = ValueNotifier<bool>(
     isPlaylistAlreadyLiked(_resolvedPlaylistId),
@@ -170,7 +171,7 @@ class _PlaylistPageState extends State<PlaylistPage> {
       }
 
       if (_playlist != null && _playlist['list'] != null) {
-        _originalPlaylistList = List<dynamic>.from(_playlist['list'] as List);
+        _capturePlaylistOrder();
         _sortPlaylist(_sortType);
         _syncPlaylistLikeStatus();
       }
@@ -709,14 +710,19 @@ class _PlaylistPageState extends State<PlaylistPage> {
       setState(() {
         _playlist = updated;
         if (_playlist['list'] != null) {
-          _originalPlaylistList = List<dynamic>.from(_playlist['list'] as List);
+          _capturePlaylistOrder();
         }
       });
     }
   }
 
   void _updateSongsListOnRemove(int indexOfRemovedSong, dynamic songToRemove) {
-    _originalPlaylistList.removeWhere((s) => s['ytid'] == songToRemove['ytid']);
+    final sourceIndex = _playlistSourceOrder.removeAt(indexOfRemovedSong);
+    _originalPlaylistList.removeAt(sourceIndex);
+    _playlistSourceOrder = [
+      for (final index in _playlistSourceOrder)
+        index > sourceIndex ? index - 1 : index,
+    ];
     final playlistId = _playlist['ytid'];
     if (mounted) {
       setState(() {});
@@ -754,28 +760,62 @@ class _PlaylistPageState extends State<PlaylistPage> {
     }
   }
 
+  void _capturePlaylistOrder() {
+    _originalPlaylistList = List<dynamic>.from(_playlist['list'] as List);
+    _playlistSourceOrder = List.generate(
+      _originalPlaylistList.length,
+      (i) => i,
+    );
+  }
+
+  void _syncOriginalSongValues() {
+    final current = _playlist['list'] as List;
+    if (current.length != _playlistSourceOrder.length) {
+      // A topology change outside this removal flow establishes a fresh view.
+      _capturePlaylistOrder();
+      return;
+    }
+    for (var i = 0; i < current.length; i++) {
+      _originalPlaylistList[_playlistSourceOrder[i]] = current[i];
+    }
+  }
+
   void _sortPlaylist(PlaylistSortType type) {
     if (_playlist == null || _playlist['list'] == null) return;
-
+    _syncOriginalSongValues();
     switch (type) {
       case PlaylistSortType.default_:
-        // Restore original order from backup
-        _playlist['list'] = List<dynamic>.from(_originalPlaylistList);
+        _playlistSourceOrder = List.generate(
+          _originalPlaylistList.length,
+          (i) => i,
+        );
         break;
       case PlaylistSortType.title:
-        final playlist = List<dynamic>.from(_playlist['list']);
-        sortSongsByKey(playlist, 'title');
-        _playlist['list'] = playlist;
-        break;
       case PlaylistSortType.artist:
-        final playlist = List<dynamic>.from(_playlist['list']);
-        sortSongsByKey(playlist, 'artist');
-        _playlist['list'] = playlist;
+        final slots = <dynamic>[
+          for (final index in _playlistSourceOrder)
+            {
+              'index': index,
+              'title': _originalPlaylistList[index]['title'],
+              'artist': _originalPlaylistList[index]['artist'],
+            },
+        ];
+        sortSongsByKey(
+          slots,
+          type == PlaylistSortType.title ? 'title' : 'artist',
+        );
+        _playlistSourceOrder = [for (final slot in slots) slot['index'] as int];
         break;
       case PlaylistSortType.dateAdded:
-        _playlist['list'] = List<dynamic>.from(_originalPlaylistList.reversed);
+        _playlistSourceOrder = List.generate(
+          _originalPlaylistList.length,
+          (i) => _originalPlaylistList.length - 1 - i,
+        );
         break;
     }
+    _playlist['list'] = [
+      for (final index in _playlistSourceOrder) _originalPlaylistList[index],
+    ];
   }
 
   Widget _buildSongListItem(
@@ -796,6 +836,7 @@ class _PlaylistPageState extends State<PlaylistPage> {
       key: listItemKey('playlist_song', index, song),
       onRemove: (isRemovable && !isSearching)
           ? () {
+              _syncOriginalSongValues();
               if (removeSongFromPlaylist(
                 _playlist,
                 song,

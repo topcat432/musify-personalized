@@ -1,5 +1,40 @@
 # Musify Personalized current state
 
+## One-slot deletion across sort changes,2026-10-15
+
+Predecessor36c389260772fdb5e9ca7fe18f842506489c93b3 passed
+[exact CI38670791363](https://github.com/topcat432/musify-personalized/actions/runs/38670791363):
+analysis,787 aggregate tests,16+24 strict Linux visuals,nine logger tests,
+49 reader/30 channel/3310 inflater checks and all required Android builds.
+Independent review closed its filtered repeated-slot playback correction.
+
+Review found a pre-existing removal defect: deleting one visible slot persisted
+that one deletion, but the page removed every equal recording ID from its original
+sort baseline. Default/Date added could therefore hide retained repetitions.
+The successor keeps an in-memory displayed-slot-to-original-position mapping,
+sorts those positions with the existing title/artist comparator, and removes only
+the selected original position. Runtime positions never enter stored song maps.
+It refreshes current song values before reordering and recaptures the visible
+baseline after an outside list-length change. No new durable identity, adapter,
+backup format, dependency or service writer is introduced.
+
+Five exact-predecessor callback regressions reproduce retained slots disappearing
+across all sort modes/root and folder storage. Corrected focused tests PASS11,
+including a sixth case deleting a later shared-map instance, Default/Date added
+cycles, disk close/reopen, retained order, unrelated values and stored-key checks.
+Fixture callbacks own real Hive writes outside Flutter's fake clock; queued
+open-box continuations drain before close. Earlier timed-out fixture attempts and
+exact PID/creation-time owned cleanup evidence remain outside Git. No timeout or
+fixture failure is counted as product proof. Analysis and793 aggregate tests PASS; strict Windows FAIL16+24 with all40 actuals byte-exact to the retained control.
+Reference/actual/isolated diff inspected; no golden/comparator changed. Exact
+successor Linux CI remains pending. Repeated-slot Undo still uses deduplicating
+addition and is a separate unqualified boundary; this is not playlist recreation.
+
+Native baseline recovery on5560 remains outstanding behind unchanged physical/
+commit admission controls. Empty-export evidence and original5558 are preserved;
+F01/F02 native work stays queued after recovery. No current-source installation,
+provider request, phone operation, signing/publication or merge occurred.
+
 ## Isolated empty-export proof and playlist slot correction,2026-10-15
 
 Current candidate predecessor b0f5d4ffcee3939311ee7218e91b520c757fe3b8 passed
