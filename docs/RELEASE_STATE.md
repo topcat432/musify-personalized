@@ -10,8 +10,13 @@ resolved source occurrences and selected alternatives. The existing map/list
 format supports these slots; idempotent recovery needs explicit additive optional
 proof. See [minimum protocol and recovery boundaries](SPOTIFY_SOURCE_PLAYLIST_COPY.md).
 No legacy adoption, song tags, automatic migration or synchronization is selected.
-The first codec/classifier and actual-proof Hive/backup/restore tests are added;
-no production writer/UI is enabled in this prerequisite. Exact CI is pending.
+Source82f1837c/CI38741239983 passed42 focused codec/classifier and actual-proof
+Hive/backup/restore tests, but failed sort_constructors_first; aggregate/visuals/
+builds were unrun. The constructor-order lint is corrected. The next service
+writer/fault/restart tests are added with explicit pending ownership, guarded
+awaited writes and no unique-routing baseline advance. No UI entry is enabled
+until its own confirmation/lifecycle tests are added. Exact qualification is
+tracked in PR23 and the canonical ledger; the failed prerequisite is not a pass.
 Local native admission remains unsafe; baseline5560 recovery thenF01/F02 is first
 when unchanged commit/physical/storage requirements pass. No phone/release action.
 

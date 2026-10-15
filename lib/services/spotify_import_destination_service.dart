@@ -8,16 +8,21 @@
  */
 
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:hive/hive.dart';
 import 'package:musify/services/common_services.dart';
 import 'package:musify/services/data_manager.dart';
 import 'package:musify/services/playlists_manager.dart';
 import 'package:musify/services/spotify_import_routing_state.dart';
+import 'package:musify/services/spotify_playlist_copy_proof.dart';
+import 'package:musify/services/spotify_source_occurrence_plan.dart';
 import 'package:musify/services/spotify_source_playlist.dart';
 import 'package:musify/services/spotify_source_playlist_projection.dart';
 import 'package:musify/services/spotify_whole_source_readiness.dart';
 import 'package:musify/utilities/playlist_utils.dart';
+
+part 'spotify_source_playlist_copy.dart';
 
 enum SpotifyImportSelectionKind { all, firstCount, individual, newlyResolved }
 
@@ -598,6 +603,10 @@ class SpotifyImportDestinationService {
     Set<String> selectedRecordingIds = const {},
     bool requireWholeSource = false,
   }) async {
+    final pendingCopy = _readMap(Hive.box('user').get('spotifyImportMetadata'))[importRoutingPendingKey];
+    if (pendingCopy is Map && pendingCopy['action'] == SpotifyPlaylistCopyProof.action) {
+      throw StateError('An earlier source copy needs review. Open its source-copy preview before transferring recordings.');
+    }
     _validateCurrentSnapshot(snapshot, requireWholeSource: requireWholeSource);
     final confirmedSnapshot = snapshot.sourcePlaylistPosition == null
         ? await loadSnapshot()

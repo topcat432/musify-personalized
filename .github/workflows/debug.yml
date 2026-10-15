@@ -70,7 +70,7 @@ jobs:
         run: flutter pub get
 
       - name: Verify source-copy ownership codec and existing-format recovery
-        run: python3 tool/bounded_command_log.py --log source-copy-proof-focused.log --timeout-seconds 120 -- flutter test --no-pub --reporter expanded -j 1 test/services/spotify_playlist_copy_proof_test.dart test/services/spotify_playlist_copy_storage_test.dart
+        run: python3 tool/bounded_command_log.py --log source-copy-proof-focused.log --timeout-seconds 120 -- flutter test --no-pub --reporter expanded -j 1 test/services/spotify_playlist_copy_proof_test.dart test/services/spotify_playlist_copy_storage_test.dart test/services/spotify_source_playlist_copy_test.dart
 
       - name: Upload focused source-copy ownership proof
         if: always()
@@ -639,6 +639,9 @@ jobs:
             lib/services/spotify_playlist_draft.dart
             lib/services/spotify_account_playlist_adapter.dart
             lib/services/spotify_playlist_copy_proof.dart
+            lib/services/spotify_source_playlist_copy.dart
+            test/services/spotify_source_playlist_copy_test.dart
+            test/support/spotify_source_copy_fixture.dart
             test/services/spotify_playlist_copy_proof_test.dart
             test/services/spotify_playlist_copy_storage_test.dart
             test/services/spotify_account_playlist_test.dart
