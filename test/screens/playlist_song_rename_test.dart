@@ -157,7 +157,9 @@ void main() {
           menu.onSelected('rename');
           await tester.pump(const Duration(milliseconds: 300));
           if (cancel) {
-            await tester.tap(find.descendant(of: find.byType(RenameSongDialog), matching: find.byType(OutlinedButton)));
+            final cancelButton = tester.widget<OutlinedButton>(find.descendant(of: find.byType(RenameSongDialog), matching: find.byType(OutlinedButton)));
+            Zone.root.run(cancelButton.onPressed!);
+            Zone.root.run(cancelButton.onPressed!);
           } else {
             playlist['list'] = [first, {...selected, 'title': 'Owner pending'}];
             final fields = find.descendant(of: find.byType(RenameSongDialog), matching: find.byType(TextField));
@@ -170,6 +172,7 @@ void main() {
           expect((playlist['list'] as List).map((s) => s['title']), ['First', cancel ? 'Selected' : 'Owner pending']);
           final after = await tester.runAsync(() => File('${root.path}/user.hive').readAsBytes());
           expect(after, before);
+          expect(find.byType(PlaylistPage), findsOneWidget);
           expect(tester.takeException(), isNull);
         } finally {
           await tester.pumpWidget(const SizedBox.shrink());

@@ -140,7 +140,11 @@ class _RenameSongDialogState extends State<RenameSongDialog> {
       actionsAlignment: MainAxisAlignment.center,
       actions: <Widget>[
         OutlinedButton(
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () {
+            if (_submitted) return;
+            _submitted = true;
+            Navigator.of(context).pop();
+          },
           style: OutlinedButton.styleFrom(
             side: BorderSide(color: colorScheme.outline),
             shape: RoundedRectangleBorder(
