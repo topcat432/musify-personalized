@@ -337,9 +337,10 @@ class _PlaylistFolderPageState extends State<PlaylistFolderPage> {
                     iconColor: colorScheme.tertiary,
                     iconBgColor: colorScheme.tertiaryContainer,
                     label: playlist['title'] ?? '',
-                    onTap: () {
+                    onTap: () async {
                       Navigator.pop(context);
-                      movePlaylistToFolder(playlist, widget.folderId, context);
+                      final result = await movePlaylistToFolder(playlist, widget.folderId, this.context);
+                      if (mounted) showToast(this.context, result);
                     },
                   ),
                 );
@@ -364,9 +365,10 @@ class _PlaylistFolderPageState extends State<PlaylistFolderPage> {
         submitMessage: context.l10n!.remove,
         confirmationMessage: context.l10n!.removeFromFolder,
         onCancel: () => Navigator.of(context).pop(),
-        onSubmit: () {
+        onSubmit: () async {
           Navigator.of(context).pop();
-          movePlaylistToFolder(playlist, null, context);
+          final result = await movePlaylistToFolder(playlist, null, this.context);
+          if (mounted) showToast(this.context, result);
         },
       ),
     );

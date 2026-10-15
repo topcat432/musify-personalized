@@ -555,12 +555,43 @@ jobs:
           path: manual-query-control.log
           if-no-files-found: error
           retention-days: 7
+      - name: Reproduce accepted move membership loss after write failure on exact prior source
+        shell: bash
+        run: |
+          set -euo pipefail
+          original="$GITHUB_WORKSPACE"
+          control="$RUNNER_TEMP/musify-folder-write-failure-control-f048cb41"
+          git fetch --no-tags --depth=1 origin f048cb41ed2301d5b9d18b243d2e5d6890d56b83
+          git worktree add --detach "$control" f048cb41ed2301d5b9d18b243d2e5d6890d56b83
+          cp test/services/playlist_move_write_failure_test.dart "$control/test/services/playlist_move_write_failure_test.dart"
+          cd "$control"
+          flutter pub get --offline
+          set +e
+          python3 "$original/tool/bounded_command_log.py" --log "$original/folder-write-failure-control.log" --timeout-seconds 180 -- flutter test --no-pub --reporter expanded -j 1 test/services/playlist_move_write_failure_test.dart --plain-name 'folder-to-root failure retains original membership after reopen'
+          result=$?
+          set -e
+          test "$result" -eq 1
+          grep -Fq 'MOVE_FAILURE_LOST_SOURCE_MEMBERSHIP' "$original/folder-write-failure-control.log"
+          grep -Fq 'Expected:' "$original/folder-write-failure-control.log"
+          echo "Exactf048cb41 control reproduced accepted move membership loss after write failure."
+          test "$(git -C "$original" rev-parse HEAD)" = "$SOURCE_SHA"
+
+      - name: Upload exact prior-source folder-write-failure-control
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: folder-write-failure-control-${{ github.run_number }}
+          path: folder-write-failure-control.log
+          if-no-files-found: error
+          retention-days: 7
       - name: Prepare read-only empty-source formatting suggestions
         shell: bash
         run: |
           set -euo pipefail
           output="$RUNNER_TEMP/musify-empty-source-format"
           files=(
+            lib/services/playlists_manager.dart
+            test/services/playlist_move_write_failure_test.dart
             lib/screens/spotify_import_page.dart
             lib/screens/spotify_source_playlists_page.dart
             lib/services/spotify_import_destination_service.dart
@@ -637,7 +668,7 @@ jobs:
           retention-days: 7
 
       - name: Verify bounded canonical playlist ownership and display regressions
-        run: python3 tool/bounded_command_log.py --log playlist-source-focused.log --timeout-seconds 180 -- flutter test --no-pub --reporter expanded -j 1 test/services/playlist_folder_move_preservation_test.dart test/screens/playlist_folder_source_picker_test.dart test/screens/playlist_move_source_order_test.dart test/screens/playlist_page_test.dart test/screens/playlist_song_rename_test.dart test/screens/playlist_slot_undo_test.dart
+        run: python3 tool/bounded_command_log.py --log playlist-source-focused.log --timeout-seconds 180 -- flutter test --no-pub --reporter expanded -j 1 test/services/playlist_folder_move_preservation_test.dart test/screens/playlist_folder_source_picker_test.dart test/screens/playlist_move_source_order_test.dart test/screens/playlist_page_test.dart test/screens/playlist_song_rename_test.dart test/screens/playlist_slot_undo_test.dart test/services/playlist_move_write_failure_test.dart
 
       - name: Upload focused canonical playlist regression log
         if: always()

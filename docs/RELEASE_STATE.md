@@ -1,6 +1,29 @@
 # Musify Personalized current state
 
 
+## Accepted playlist-move persistence boundary,2026-10-15
+
+Independent review closed f3947dd8 ownership/order, manual provenance and hosted
+Windows8-case qualification. The canonical import roadmap now separates implemented
+host-tested adapters from runtime-only gates and absent production writers.
+The next selected L02 gap is accepted-move persistence: the predecessor publishes
+all live collections and returns success before three unawaited writes settle;
+folder-to-Library writes source removal before destination addition.
+
+Moves now await changed collections in destination-first order, block overlaps,
+verify complete live/stored ownership at every await, and publish only verified
+saved values. Exception compensation restores a removed source before undoing the
+destination addition, preserves key absence, and stops if restoration or any newer
+owner is uncertain. Uncertain saved state is retained with explicit reload advice;
+it is not a success or an automatic retry. UI callers await the result. No durable
+journal, schema or migration is added, and crash/power-loss atomicity is not claimed.
+
+Thirty-four synthetic Hive cases inject before/after real saves, compensation
+failure, stored/live owner edits, overlap, repeat and key absence; each reopens the
+fixture and checks membership/values. A pinned f048cb41 control must reproduce
+lost membership after a folder-to-root destination failure. Corrected source
+qualification is pending remote CI; no local workload or device action occurred.
+
 ## Approved hosted Windows containment qualification,2026-10-15
 
 The owner approved a bounded disposable windows-2022 exception at10:12 UTC for

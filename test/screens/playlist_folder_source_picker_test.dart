@@ -2,12 +2,16 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
+import 'package:musify/main.dart' show audioHandler;
 import 'package:musify/screens/playlist_folder_page.dart';
+import 'package:musify/services/audio_service.dart';
 import 'package:musify/services/playlists_manager.dart';
 import 'package:musify/widgets/dialog_item.dart';
+import 'package:rxdart/rxdart.dart';
 
 import '../../tool/visual_review_harness.dart';
 
@@ -20,12 +24,14 @@ dynamic _copy(dynamic value) {
 
 void main() {
   late Directory root;
+  late _MoveToastHandler handler;
   setUpAll(initPriorityReviewTestPlugins);
   setUp(() async {
     root = await Directory.systemTemp.createTemp('owned-source-picker-');
     Hive.init(root.path); await initPriorityReviewHive(); resetPriorityReviewGlobals();
+    handler = _MoveToastHandler(); audioHandler = handler;
   });
-  tearDown(() async { await Hive.close(); await root.delete(recursive: true); });
+  tearDown(() async { await handler.mediaItem.close(); await Hive.close(); await root.delete(recursive: true); });
 
   for (final change in ['changed', 'deleted', 'ambiguous']) {
     testWidgets('retained folder picker preserves current source: $change', (tester) async {
@@ -93,4 +99,9 @@ void main() {
       });
     }, timeout: const Timeout(Duration(seconds: 25)));
   }
+}
+
+class _MoveToastHandler extends Fake implements MusifyAudioHandler {
+  @override
+  final mediaItem = BehaviorSubject<MediaItem?>.seeded(null);
 }

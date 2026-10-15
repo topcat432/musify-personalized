@@ -86,7 +86,7 @@ void main() {
         userCustomPlaylists.addListener(notified);
         userPlaylists.addListener(notified);
         try {
-          final result = movePlaylistToFolder(selected, invalid == 'missing' ? 'deleted-target' : 'target', context);
+          final result = await movePlaylistToFolder(selected, invalid == 'missing' ? 'deleted-target' : 'target', context);
           expect(result, context.l10n!.error);
           expect(snapshot(), before, reason: 'REJECTED_FOLDER_MOVE_CHANGED_MEMBERSHIP');
           expect(notifications, 0);
@@ -110,10 +110,7 @@ void main() {
         final oldFolders = userPlaylistFolders.value;
         final oldSnapshot = _copy(oldFolders);
         final toRoot = mode == 'folder-to-root';
-        final changed = Hive.box('user').watch().where((event) =>
-          ['playlistFolders', 'customPlaylists', 'playlists'].contains(event.key)).take(3).toList();
-        expect(movePlaylistToFolder(selected, toRoot ? null : 'target', context), '${context.l10n!.addedSuccess}!');
-        await changed.timeout(const Duration(seconds: 3));
+        expect(await movePlaylistToFolder(selected, toRoot ? null : 'target', context), '${context.l10n!.addedSuccess}!');
         await Hive.box('user').flush();
         expect(oldFolders, oldSnapshot);
         final folders = userPlaylistFolders.value;
@@ -207,7 +204,7 @@ void main() {
         await Hive.box('user').flush();
         final before = snapshot();
         final bytes = await File('${root.path}/user.hive').readAsBytes();
-        expect(movePlaylistToFolder(requested, 'target', context), context.l10n!.error,
+        expect(await movePlaylistToFolder(requested, 'target', context), context.l10n!.error,
           reason: 'STALE_SOURCE_MOVE_MUST_REFUSE');
         expect(snapshot(), before);
         await Hive.box('user').flush();
@@ -226,10 +223,7 @@ void main() {
       await seed(inRoot: true);
       final requested = _copy(selected) as Map;
       for (var attempt = 0; attempt < 2; attempt++) {
-        final writes = Hive.box('user').watch().where((event) =>
-          ['playlistFolders', 'customPlaylists', 'playlists'].contains(event.key)).take(3).toList();
-        expect(movePlaylistToFolder(requested, 'target', context), '${context.l10n!.addedSuccess}!');
-        await writes.timeout(const Duration(seconds: 3));
+        expect(await movePlaylistToFolder(requested, 'target', context), '${context.l10n!.addedSuccess}!');
         await Hive.box('user').flush();
       }
       final target = userPlaylistFolders.value[1]['playlists'] as List;

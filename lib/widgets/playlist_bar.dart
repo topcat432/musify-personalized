@@ -412,6 +412,7 @@ class PlaylistBar extends StatelessWidget {
   }
 
   void _showMoveToFolderDialog(BuildContext context) {
+    final ownerContext = context;
     showDialog(
       context: context,
       builder: (context) {
@@ -487,10 +488,11 @@ class PlaylistBar extends StatelessWidget {
                         iconColor: colorScheme.primary,
                         iconBgColor: colorScheme.primaryContainer,
                         label: context.l10n!.library,
-                        onTap: () {
+                        onTap: () async {
                           Navigator.pop(context);
                           if (playlistData != null) {
-                            movePlaylistToFolder(playlistData!, null, context);
+                            final result = await movePlaylistToFolder(playlistData!, null, ownerContext);
+                            if (ownerContext.mounted) showToast(ownerContext, result);
                           }
                         },
                       ),
@@ -500,14 +502,13 @@ class PlaylistBar extends StatelessWidget {
                         iconColor: colorScheme.secondary,
                         iconBgColor: colorScheme.secondaryContainer,
                         label: folder['name'] as String,
-                        onTap: () {
+                        onTap: () async {
                           Navigator.pop(context);
                           if (playlistData != null) {
-                            movePlaylistToFolder(
-                              playlistData!,
-                              folder['id'],
-                              context,
+                            final result = await movePlaylistToFolder(
+                              playlistData!, folder['id'], ownerContext,
                             );
+                            if (ownerContext.mounted) showToast(ownerContext, result);
                           }
                         },
                       ),

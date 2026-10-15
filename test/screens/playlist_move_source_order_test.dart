@@ -97,10 +97,8 @@ void main() {
           await Future<void>.delayed(Duration.zero); await Hive.box('settings').flush();
           final current = getUserCustomPlaylists().singleWhere((p) => p['ytid'] == 'customId-source-order');
           final beforeMove = _copy(current);
-          final written = Hive.box('user').watch().where((event) =>
-            ['playlistFolders', 'customPlaylists', 'playlists'].contains(event.key)).take(3).toList();
-          expect(movePlaylistToFolder(current, 'target', libraryContext), '${libraryContext.l10n!.addedSuccess}!');
-          await written.timeout(const Duration(seconds: 3)); await Hive.box('user').flush();
+          expect(await movePlaylistToFolder(current, 'target', libraryContext), '${libraryContext.l10n!.addedSuccess}!');
+          await Hive.box('user').flush();
           await Hive.close(); Hive.init(root.path); await initPriorityReviewHive();
           final target = (Hive.box('user').get('playlistFolders') as List).singleWhere((f) => f['id'] == 'target');
           final saved = (target['playlists'] as List).single as Map;

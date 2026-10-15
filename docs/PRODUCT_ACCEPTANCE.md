@@ -10,7 +10,8 @@ stretch scope; no new mode/queue architecture is inferred. f3947dd8 exact CI
 qualifies928 app tests,40 strict Linux visuals and8 hosted Windows tooling cases.
 Independent review closed playlist ownership/order, query provenance and hosted
 Windows containment. L02 accepted-move persistence failure/reopen is selected next;
-its current unawaited writes are not qualified by the pre-write rejection tests.
+the predecessor's unawaited writes were not qualified by pre-write rejection tests.
+The awaited destination-first correction now requires separate fault/reopen proof.
 Native baseline5560 recovery thenF01/F02 and phone readiness remain separate gates.
 
 
