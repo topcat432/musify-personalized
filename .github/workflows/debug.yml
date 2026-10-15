@@ -877,6 +877,34 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ env.SOURCE_SHA }}
+      - name: Reproduce Windows descendant survival on exact prior logger
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ((git rev-parse HEAD) -ne $env:SOURCE_SHA) { throw 'Wrong candidate checkout' }
+          git fetch --no-tags --depth=1 origin b81ac04976e2d9675ae214db2521e9c2fc4dedeb
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to fetch pinned prior logger source' }
+          $oldLogger = "$env:RUNNER_TEMP/windows-prior-logger.py"
+          $python = (Get-Command python -CommandType Application -ErrorAction Stop).Source
+          & $python -c 'import pathlib,subprocess,sys;pathlib.Path(sys.argv[1]).write_bytes(subprocess.check_output(["git","show","b81ac04976e2d9675ae214db2521e9c2fc4dedeb:tool/bounded_command_log.py"]))' $oldLogger
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to preserve exact prior logger bytes' }
+          $priorOverride = $env:MUSIFY_LOGGER_UNDER_TEST
+          $priorNativeErrorPreference = $PSNativeCommandUseErrorActionPreference
+          $PSNativeCommandUseErrorActionPreference = $false
+          try {
+            $env:MUSIFY_LOGGER_UNDER_TEST = $oldLogger
+            $log = "$env:RUNNER_TEMP/windows-owned-control.log"
+            & $python tool/bounded_command_log.py --log $log --max-bytes 10485760 --timeout-seconds 60 -- $python -m unittest discover -s tool -p 'windows_owned_command_test.py' -k test_exited_leader_pipe_holding_descendant -v
+            $result = $LASTEXITCODE
+          } finally {
+            $env:MUSIFY_LOGGER_UNDER_TEST = $priorOverride
+            $PSNativeCommandUseErrorActionPreference = $priorNativeErrorPreference
+          }
+          $text = [IO.File]::ReadAllText($log)
+          if ($result -ne 1 -or $text -notmatch 'OWNED_WINDOWS_DESCENDANT_SURVIVED' -or $text -notmatch 'FAILED \(failures=1\)') {
+            throw 'Pinned prior logger must fail its descendant-survival assertion'
+          }
+          Write-Output 'Exact b81ac049 Windows control reproduced descendant survival.'
       - name: Verify candidate and run bounded native Windows contracts
         shell: pwsh
         run: |
@@ -896,7 +924,9 @@ jobs:
             [pscustomobject]@{ Path=$file; Sha256=(Get-FileHash -Algorithm SHA256 -LiteralPath $file).Hash.ToLowerInvariant() }
           })
           $receipt = [ordered]@{ SourceSha=$env:SOURCE_SHA; NativeWindowsCases=8; Skipped=0;
-            Result='PASS'; Python=$python; SourceFiles=$hashes; LogBytes=(Get-Item -LiteralPath $log).Length }
+            Result='PASS'; Python=$python; SourceFiles=$hashes; LogBytes=(Get-Item -LiteralPath $log).Length;
+            PriorLoggerSource='b81ac04976e2d9675ae214db2521e9c2fc4dedeb';
+            PriorLoggerSha256=(Get-FileHash -Algorithm SHA256 -LiteralPath "$env:RUNNER_TEMP/windows-prior-logger.py").Hash.ToLowerInvariant() }
           $json = $receipt | ConvertTo-Json -Depth 5
           if ([Text.Encoding]::UTF8.GetByteCount($json) -gt 16384) { throw 'Result receipt exceeded its bound' }
           [IO.File]::WriteAllText("$env:RUNNER_TEMP/windows-owned-result.json", $json)
@@ -907,6 +937,7 @@ jobs:
           name: windows-owned-command-${{ github.run_number }}
           path: |
             ${{ runner.temp }}/windows-owned-command.log
+            ${{ runner.temp }}/windows-owned-control.log
             ${{ runner.temp }}/windows-owned-admission.json
             ${{ runner.temp }}/windows-owned-result.json
           if-no-files-found: ignore

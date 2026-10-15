@@ -72,12 +72,26 @@ class WindowsOwnedCommandTest(unittest.TestCase):
     def alive(self, handle):
         return handle is not None and self.api.WaitForSingleObject(handle, 0) == 258
 
+    def wait_stopped(self, handle):
+        if handle is None:
+            return True
+        # Termination is asynchronous; the exact opened process handle must signal.
+        # https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-terminateprocess
+        status = self.api.WaitForSingleObject(handle, 3000)
+        if status not in (0, 258):
+            raise ctypes.WinError(ctypes.get_last_error())
+        return status == 0
+
     def clean_fixture(self, handle):
         if handle is not None:
             try:
                 if self.alive(handle):
-                    self.assertTrue(self.api.TerminateProcess(handle, 99))
-                    self.assertEqual(self.api.WaitForSingleObject(handle, 3000), 0)
+                    terminated = self.api.TerminateProcess(handle, 99)
+                    error = ctypes.get_last_error() if not terminated else 0
+                    # A concurrent Job termination may win this cleanup race.
+                    # Only an actually signalled handle counts as successful cleanup.
+                    self.assertTrue(self.wait_stopped(handle),
+                                    f'Owned fixture cleanup did not finish; TerminateProcess error={error}')
             finally:
                 self.api.CloseHandle(handle)
 
@@ -137,8 +151,14 @@ class WindowsOwnedCommandTest(unittest.TestCase):
                 except subprocess.TimeoutExpired:
                     hung = True
                     output, errors = b'', b''
-                stopped = not self.alive(child_handle) and not self.alive(logger_handle)
+                wait_started = time.monotonic()
+                child_stopped = self.wait_stopped(child_handle)
+                logger_stopped = self.wait_stopped(logger_handle)
+                stopped = child_stopped and logger_stopped
                 sentinel_alive = sentinel.poll() is None
+                print(f'Owned teardown {mode}: childStopped={child_stopped} '
+                      f'loggerStopped={logger_stopped} sentinelAlive={sentinel_alive} '
+                      f'waitSeconds={time.monotonic() - wait_started:.3f}', flush=True)
                 if not hung and mode not in ('kill-runner', 'kill-owner'):
                     self.assertEqual(top.returncode, 125 if mode == 'overflow' else 7 if mode == 'normal' else 124,
                                      errors.decode(errors='replace'))

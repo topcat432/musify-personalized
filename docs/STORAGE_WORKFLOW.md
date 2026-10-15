@@ -112,9 +112,14 @@ and keeps2GiB available physical memory after that forecast. An absent/unknown
 volume or unavailable memory limit refuses the job. Receipts record measurements,
 allowances, source/workflow SHA and the eight-case result with source-file hashes.
 
-The job uses only existing Python, has an8-minute job limit and120-second owned
-command deadline, enforces a10MiB single-generation log and16KiB receipts, requires
-all eight Windows cases to execute/pass without skips, and retains evidence7days.
+The job uses only existing Python, has an8-minute job limit, a60-second pinned
+old-logger control and120-second positive-suite deadline. Each owned command has
+a10MiB single-generation log; receipts are capped at16KiB. The positive suite requires
+all eight Windows cases to execute/pass without skips, and evidence is retained7days.
+The prior logger must fail the same pipe-descendant survival assertion. Native
+termination is confirmed by an at-most3-second wait on each identity-checked
+process handle before measuring survival, with sentinel and survivor assertions
+unchanged; fixture cleanup cannot turn a failed survival measurement into a pass.
 No SDK/dependency installation, snapshots, paid service, credentials, persistent
 access, emulator, phone, signing, publication or security change is authorized by
 this exception. Home-PC session hashing, C:/V: reserves, admission thresholds,

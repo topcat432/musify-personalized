@@ -11,6 +11,13 @@ and pass without skips. The admission/result receipts and bounded log are retain
 seven days. See STORAGE_WORKFLOW.md for the narrow resource policy; home-PC
 controls, tool setup and security are unchanged. Qualification is pending the
 exact-source Windows/Linux CI run; prior Linux skips are not a Windows pass.
+The first admitted hosted run38719099292 executed all eight: six passed and two
+cancellation cases failed inside fixture cleanup at TerminateProcess. The revised
+fixture waits at most3seconds on each exact process handle before recording
+survival, preserving the independent sentinel and survivor assertions; cleanup
+waits for actual exit and reports native errors. A pinned b81ac049 old-logger
+control must still demonstrate a surviving descendant after that bound. The
+production containment helper is unchanged; revised native qualification is pending.
 
 
 ## Manual choice query provenance preservation,2026-10-15
