@@ -5,7 +5,8 @@ if ($workloadAction -notin @('test','visual','verify','build')) { throw 'Invalid
 . (Join-Path $PSScriptRoot 'dev.ps1') setup
 $flutterExecutable = (Get-Command flutter).Source
 function Invoke-FlutterCheck([string[]]$Arguments) {
-    & $flutterExecutable --no-version-check --suppress-analytics @Arguments
+    $deadlineSeconds = if ($workloadAction -eq 'build') { 1800 } else { 600 }
+    & $pythonExecutable $ownedCommand --timeout-seconds $deadlineSeconds -- $flutterExecutable --no-version-check --suppress-analytics @Arguments
     if ($LASTEXITCODE -ne 0) { throw "Flutter check failed with exit $LASTEXITCODE." }
 }
 Invoke-FlutterCheck -Arguments @('pub','get')

@@ -65,6 +65,42 @@ verified V: junction destinations. Keep V: available; do not change global
 GRADLE_USER_HOME/TEMP, SDK locations, paging, hibernation, security or other agents.
 V: is striped working storage, not an established independent recovery backup.
 
+## Owned Windows command lifetime
+
+The October13 TSV/JSON acceptance harnesses launched Flutter directly; their
+five surviving tester identities matched the exact checkout and guarded storage
+sessions, with absent parents. Their parent exit causes were not retained.
+They predate the bounded logger, whose Windows cleanup also only terminated an
+immediate live leader. Normal dev commands had no descendant lifetime owner.
+The original harnesses/manifests remain lineage evidence, not reusable launchers.
+
+Normal dev/setup commands and bounded logging now share an owned launcher.
+On Windows it creates an unnamed, non-inheritable kill-on-close Job, starts only
+its new command suspended, assigns that exact process handle, then resumes its
+verified initial thread. Assignment/identity failure refuses before user code.
+It neither enumerates processes to adopt nor signals the caller/shared tools.
+The caller's held process handle is watched for exit; runner death closes the
+Job through the OS. Cleanup closes the Job even after a leader already exited,
+so pipe-holding or redirected descendants do not survive a successful/failed
+command. A separately launched sentinel is part of the native acceptance proof.
+The mechanism follows [Microsoft's Job lifecycle](https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects).
+
+The console entrypoint writes no application-managed log; saved output still
+requires the enforcing bounded logger. Its child deadlines are60s for version
+queries,600s for checks and1800s for unsigned builds. Storage admission, declared
+writes/commit, V: lookup and outer harness hashing are unchanged. Python must
+already exist; no tool installation/global environment change is performed.
+Ad-hoc future harnesses must likewise wrap their new commands (or whole harness)
+with the owned entrypoint inside the admitted storage session. Do not rerun the
+historical direct-launch scripts as current guarded commands.
+
+This containment helper does not replace the emulator lease and verified graceful
+finally shutdown, and must not be used to bypass native rehearsal controls.
+Linux process-group behavior remains covered separately. Native Windows proof is
+pending: local workers remain unadmitted, and the proposed disposable hosted-CI
+storage exception requires explicit approval before adding/executing that job.
+Mocks or Linux skips do not qualify the native Job implementation.
+
 ## Logs and canonical evidence
 
 Any owned logger persisting debug output must implement10MiB per file and no

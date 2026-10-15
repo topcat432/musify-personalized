@@ -239,7 +239,8 @@ jobs:
         run: |
           set -euo pipefail
           original="$GITHUB_WORKSPACE"
-          python3 -m unittest discover -s "$original/tool" -p bounded_command_log_test.py -v
+          python3 -m py_compile tool/windows_owned_job.py tool/owned_command.py
+          python3 -m unittest discover -s "$original/tool" -p '*command*test.py' -v
           control="$RUNNER_TEMP/musify-logger-cleanup-control-1192aa56"
           git fetch --no-tags --depth=1 origin 1192aa56bfb428499d236f665922e93f9015206e
           git worktree add --detach "$control" 1192aa56bfb428499d236f665922e93f9015206e

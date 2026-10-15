@@ -12,6 +12,13 @@ import time
 MAX_BYTES = 10 * 1024 * 1024
 
 
+def launch_owned(command, **options):
+    if os.name == 'nt':
+        from windows_owned_job import start_owned_process
+        return start_owned_process(command, **options)
+    return subprocess.Popen(command, start_new_session=True, **options)
+
+
 def stop_owned(process):
     # Popen created a private session/group; never signal the caller's group.
     if os.name == 'posix':
@@ -31,21 +38,20 @@ def stop_owned(process):
                 time.sleep(.02)
             # A pipe-holding descendant may remain after its leader has exited.
             send(signal.SIGKILL)
-    elif process.poll() is None:
-        process.terminate()
-        try:
-            process.wait(timeout=.5)
-        except subprocess.TimeoutExpired:
-            process.kill()
+    else:
+        job = getattr(process, '_owned_job', None)
+        if job is None:
+            raise RuntimeError('Refusing cleanup of an unowned Windows process')
+        # Close even after the leader exits: descendants can hold pipes/state.
+        job.close()
     process.wait(timeout=5)
 
 
 def run(command, log_path, maximum, timeout):
     # Exclusive creation retains earlier evidence; one generation per invocation.
     with Path(log_path).open('xb') as log:
-        process = subprocess.Popen(command, stdout=subprocess.PIPE,
-                                   stderr=subprocess.STDOUT,
-                                   start_new_session=os.name == 'posix')
+        process = launch_owned(command, stdout=subprocess.PIPE,
+                               stderr=subprocess.STDOUT)
         chunks = queue.Queue(maxsize=4)
 
         def read():

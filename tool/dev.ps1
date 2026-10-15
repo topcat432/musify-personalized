@@ -16,11 +16,15 @@ $toolPaths = @((Split-Path -Parent $flutterExecutable))
 if ($env:JAVA_HOME) { $toolPaths += Join-Path $env:JAVA_HOME 'bin' }
 if ($env:ANDROID_SDK_ROOT) { $toolPaths += Join-Path $env:ANDROID_SDK_ROOT 'platform-tools' }
 $env:Path = ($toolPaths -join [IO.Path]::PathSeparator) + [IO.Path]::PathSeparator + $env:Path
+$pythonCommand = Get-Command python -ErrorAction SilentlyContinue
+if (-not $pythonCommand) { throw 'Python is missing; the owned launcher does not install it.' }
+$pythonExecutable = $pythonCommand.Source
+$ownedCommand = Join-Path $PSScriptRoot 'owned_command.py'
 function Invoke-FlutterCheck([string[]]$Arguments) {
-    & $flutterExecutable @Arguments
+    & $pythonExecutable $ownedCommand --timeout-seconds 600 -- $flutterExecutable @Arguments
     if ($LASTEXITCODE -ne 0) { throw "Flutter check failed with exit $($LASTEXITCODE): $($Arguments -join ' ')" }
 }
-$versionText = & $flutterExecutable --no-version-check --suppress-analytics --version --machine
+$versionText = & $pythonExecutable $ownedCommand --timeout-seconds 60 -- $flutterExecutable --no-version-check --suppress-analytics --version --machine
 if ($LASTEXITCODE -ne 0) { throw 'Unable to read Flutter version.' }
 $version = ($versionText -join [Environment]::NewLine) | ConvertFrom-Json
 if ($version.frameworkVersion -ne '3.44.5') { throw "Expected Flutter 3.44.5; found $($version.frameworkVersion)." }

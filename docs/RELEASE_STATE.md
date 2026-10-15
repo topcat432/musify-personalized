@@ -1,5 +1,38 @@
 # Musify Personalized current state
 
+## Windows command ownership correction,2026-10-15
+
+Five exact October13 Musify TSV/JSON test runners survived their direct launchers;
+all parents were gone, and the initiating interruption cause was not retained.
+They predate the later bounded logger. Both current console dev launches and the
+logger's immediate-leader-only Windows cleanup left the same ownership hole.
+The five were previously identity-verified and stopped with their console children;
+all original session/manifests and cleanup receipt remain outside Git.
+
+The successor introduces a shared Windows kill-on-close Job launcher. Its own
+new command is suspended until exact-handle assignment, then its verified initial
+thread is resumed. It watches the caller's held identity and refuses setup errors;
+no existing/foreign process is adopted. It covers both bounded logging and normal
+console dev/version queries, including normal exit, deadline/overflow, exited
+leaders, runner/caller death and failure before assignment. No persistent console
+log is added; existing log caps/resource admission/V: and native lease controls
+remain unchanged. Native rehearsal still requires graceful finally shutdown.
+
+Three portable console contracts join the existing nine logger contracts; eight
+native Windows cases cover owned descendant cleanup and unaffected sentinels,
+batch launch, both cancellation layers and fail-closed assignment. Linux skips
+are not Windows proof. The hosted Windows CI policy exception is pending explicit
+approval; no local worker was started under critical pressure. Exact-source
+Linux/native-Windows qualification remains pending.
+
+Rename sourceb81ac04976e2d9675ae214db2521e9c2fc4dedeb passed
+[exact CI38685349416](https://github.com/topcat432/musify-personalized/actions/runs/38685349416):
+850 aggregate tests, all12 rename dialog/view and20 writer cases,16+24 strict
+Linux visuals,analysis,nine logger tests,49 reader/30 channel/3310 inflater
+contracts and required Android builds. Rename implementation is unchanged while
+independent review proceeds. Native baseline recovery stays first, then F01/F02;
+no phone, merge, publication, signing or provider request occurred.
+
 ## Selected-occurrence playlist rename correction,2026-10-15
 
 The existing custom-playlist rename writer selected the first matching recording
