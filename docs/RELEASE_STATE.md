@@ -1,5 +1,26 @@
 # Musify Personalized current state
 
+
+## Rescue concurrent-owner preservation,2026-10-15
+
+Independent I08 review found a separate pre-existing conflict: rescue protected
+excluded rows but could replace a newer non-excluded manual decision and metadata
+with its older whole-list snapshot. Rescue now captures a deep typed baseline of
+the existing results, metadata and exclusion-history keys. Every checkpoint
+refuses changed owner state before writing. A successful checkpoint advances only
+from its own exact proposal, never a fresh read after an await that could adopt
+someone else's intervening write. Explicit manual/review writers retain their
+existing behavior; no schema, adapter, migration or provider request is added.
+
+Seven new Hive cases use the actual manual/No-match writers, an unchanged excluded
+row, typed/nested metadata conflicts, multiple successful checkpoints, a conflict
+after an intermediate checkpoint and pause/reopen/resume. Exact e2ebb0b8 control
+and successor qualification are pending remote Linux CI; no local worker launched.
+The manual-preview ownership gap is selected next but its guard is paused while
+this review repair takes priority. Its existing player adapter/search/resolver
+seam is present; default provider behavior is unchanged, and no preview fix is
+claimed yet. The eight Windows containment cases remain unqualified.
+
 ## Permanent exclusion review boundary,2026-10-15
 
 I08 source inspection found that a retained review/manual card could validate the
@@ -27,8 +48,13 @@ ambiguous source rows, explicit
 exclude repeat, manual provenance/no duplicate propagation, rejection byte checks,
 reopen and unrelated library retention. All fixtures are synthetic; rescue cases
 use existing local review-evidence branches and make no provider requests.
-Exact2ef03a12 prior-source control and corrected qualification are pending in the
-required Linux workflow. This is not a completed feature acceptance claim.
+Exact e2ebb0b82a0ef88a42b9ded2220ed886bed559e4 passed
+[Linux CI38693634925](https://github.com/topcat432/musify-personalized/actions/runs/38693634925):
+869 app tests, all19 new Hive cases,16+24 strict Linux visuals, clean analysis,
+49/30/3310 helper checks and all required Android builds. The exact2ef03a12 control
+reproduced stale No-match returning a result instead of refusing. Independent
+review then identified the distinct concurrent rescue-owner gap recorded above.
+Native/phone acceptance and Windows containment are not implied by Linux CI.
 
 Owned-command source2ef03a12cbd48cc4aef922efc66f4ff30762d490 passed
 [Linux CI38688684631](https://github.com/topcat432/musify-personalized/actions/runs/38688684631):
