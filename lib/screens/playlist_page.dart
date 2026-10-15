@@ -886,7 +886,16 @@ class _PlaylistPageState extends State<PlaylistPage> {
       },
       borderRadius: borderRadius,
       playlistId: playlistId,
-      onRenamed: () => setState(() {}),
+      playlist: isUserCreatedPlaylist ? _playlist as Map : null,
+      playlistSongIndex: fullIndex,
+      playlistSourceOrder: _playlistSourceOrder,
+      onRenamed: (renamed) {
+        if (!mounted) return;
+        _playlist = renamed;
+        _capturePlaylistOrder();
+        _sortPlaylist(_sortType);
+        setState(() {});
+      },
     );
   }
 }

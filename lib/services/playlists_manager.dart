@@ -1235,61 +1235,6 @@ Future updatePlaylistList(BuildContext context, String playlistId) async {
   }
 }
 
-Future<void> renameSongInPlaylist(
-  dynamic playlistId,
-  dynamic songId,
-  String newTitle,
-  String newArtist,
-) async {
-  try {
-    final found = _findCustomPlaylist(playlistId.toString());
-    final playlist = found?.playlist;
-    final isFromFolder = found?.isFromFolder ?? false;
-
-    if (playlist != null && playlist['list'] != null) {
-      final songIndex = (playlist['list'] as List).indexWhere(
-        (song) => song['ytid'] == songId,
-      );
-
-      if (songIndex != -1) {
-        final updatedSongs = List<dynamic>.from(playlist['list'] as List);
-        updatedSongs[songIndex] =
-            Map<String, dynamic>.from(updatedSongs[songIndex] as Map)
-              ..['title'] = newTitle
-              ..['artist'] = newArtist;
-
-        playlist['list'] = updatedSongs;
-
-        if (isFromFolder) {
-          userPlaylistFolders.value = List<Map>.from(userPlaylistFolders.value);
-          unawaited(
-            addOrUpdateData<List>(
-              'user',
-              'playlistFolders',
-              userPlaylistFolders.value,
-            ),
-          );
-        } else {
-          final updatedPlaylists = userCustomPlaylists.value
-              .map((p) => p['ytid'] == playlistId ? playlist : p)
-              .toList();
-          userCustomPlaylists.value = updatedPlaylists;
-          unawaited(
-            addOrUpdateData<List>('user', 'customPlaylists', updatedPlaylists),
-          );
-        }
-      }
-    }
-  } catch (e, stackTrace) {
-    logger.log(
-      'Error renaming song in playlist',
-      error: e,
-      stackTrace: stackTrace,
-    );
-    rethrow;
-  }
-}
-
 Future<void> updatePlaylistLikeStatus(
   String playlistId,
   bool add, {

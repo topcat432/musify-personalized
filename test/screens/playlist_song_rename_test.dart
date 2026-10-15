@@ -116,7 +116,7 @@ void main() {
           await tester.runAsync(() => Zone.root.run(() async { await Hive.close(); Hive.init(root.path); await initPriorityReviewHive(); }));
           final stored = Hive.box('user').get(key) as List;
           final children = folder ? stored.single['playlists'] as List : stored;
-          expect((children.first['list'] as List).where((s) => s['title'] == 'Renamed'), hasLength(1));
+          expect((children.first['list'] as List).map((s) => s['title']), expected);
           expect(children.last, other);
           expect((children.first as Map).keys.toSet(), playlist.keys.toSet());
           expect(tester.takeException(), isNull);

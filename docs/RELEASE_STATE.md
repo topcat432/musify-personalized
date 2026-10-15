@@ -1,5 +1,52 @@
 # Musify Personalized current state
 
+## Selected-occurrence playlist rename correction,2026-10-15
+
+The existing custom-playlist rename writer selected the first matching recording
+ID while SongBar subsequently mutated the selected map. Repeated recordings or
+shared map references could therefore rename other occurrences. The callback also
+used the dialog context after it closed and could omit the page refresh.
+
+The successor captures the selected full-list index and full source values when
+opening the dialog. Its one-shot writer stages a separate existing collection,
+refuses stale/ambiguous source or live/stored collection divergence before writing,
+and awaits the save before ownership revalidation and publication. It retains
+actual saved values after uncertainty/newer owner writes without compensation or
+replay. Only the captured occurrence's title/artist changes; alternatives, typed
+metadata, all other occurrences, source order, folder metadata and unrelated
+playlists are retained. The runtime sort permutation is inverted before saving,
+so a rename in Date added/Name/Artist view retains original source order after
+restart; the page then reapplies the current view sort in memory. The page adopts the saved target and resynchronizes its
+runtime sort/source mapping. No persistent identity, field, adapter, migration,
+backup-format, dependency or rendering change; liked-song semantics are unchanged.
+
+The initial test-only27e74dc3 run was cancelled after a disk/fake-clock fixture
+stall and is non-qualifying. The actual dialog Confirm callback now runs in the
+root zone, retaining field validation/close and all data assertions. Corrected
+test-only predecessorfd65eccb09b5bc271a3b28595f6bcbb049416415
+[CI38683871748](https://github.com/topcat432/musify-personalized/actions/runs/38683871748)
+PASS analysis and820 tests, including Cancel in both locations; eight repeated-row
+views and both stale-dialog cases FAIL at their intended preservation assertions.
+Default view renamed two occurrences instead of one; stale views renamed the
+first row after the selected row changed. No timeout counts as defect evidence.
+Successor qualification is pending. The successor additionally
+covers dialog Cancel/stale source and twenty Hive-backed writer boundaries.
+
+Undo source300fe46bfff94dcbed18b828d0d0bb09a3ed404d passed
+[exact CI38681704615](https://github.com/topcat432/musify-personalized/actions/runs/38681704615):
+818 aggregate tests,16+24 strict Linux visuals,analysis,nine logger tests,
+49 reader/30 channel/3310 inflater checks and all required Android builds.
+Its implementation remains unchanged during independent review.
+
+Five verified orphaned October13 Musify Flutter test runners had absent parents,
+exact checkout/storage-session paths and only same-launch console children.
+Their identities were saved outside Git, rechecked before stopping, and all ten
+processes were verified absent. No unrelated process or retained evidence was
+removed. Host commit remains above97% with less1GiB physical memory available;
+no local worker/emulator was launched. Native signed-baseline recovery remains
+first when unchanged admission permits, then F01/F02. No device/provider request,
+phone, merge, signing or publication action.
+
 ## Pre-write collection divergence guard,2026-10-15
 
 Independent review found that the preceding live-publication guard only covered

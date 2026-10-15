@@ -30,6 +30,7 @@ import 'package:go_router/go_router.dart';
 import 'package:musify/extensions/l10n.dart';
 import 'package:musify/main.dart';
 import 'package:musify/services/common_services.dart';
+import 'package:musify/services/playlist_song_rename.dart';
 import 'package:musify/services/playlists_manager.dart';
 import 'package:musify/services/router_service.dart';
 import 'package:musify/services/settings_manager.dart';
@@ -341,6 +342,9 @@ class SongBar extends StatefulWidget {
     this.showQueueActions = true,
     this.showPlayTime = false,
     this.playlistId,
+    this.playlist,
+    this.playlistSongIndex,
+    this.playlistSourceOrder,
     this.onRenamed,
     this.rank,
     this.barPadding,
@@ -359,7 +363,10 @@ class SongBar extends StatefulWidget {
   final bool isFromLikedSongs;
   final bool showQueueActions;
   final String? playlistId;
-  final VoidCallback? onRenamed;
+  final Map? playlist;
+  final int? playlistSongIndex;
+  final List<int>? playlistSourceOrder;
+  final ValueChanged<Map>? onRenamed;
   final EdgeInsetsGeometry? barPadding;
   final int? rank;
   @override
@@ -559,13 +566,21 @@ class _SongBarState extends State<SongBar> {
   }
 
   void _handleRenameSong(BuildContext context) {
+    final rename = widget.playlist == null || widget.playlistSongIndex == null
+        ? null
+        : PlaylistSongRename(
+            widget.playlist!,
+            sourceIndex: widget.playlistSongIndex!,
+            expectedSong: widget.song as Map,
+            sourceOrder: widget.playlistSourceOrder,
+          );
     showDialog(
       context: context,
-      builder: (context) => RenameSongDialog(
+      builder: (_) => RenameSongDialog(
         currentTitle: _songTitle,
         currentArtist: _songArtist,
         onRename: (newTitle, newArtist) {
-          _renameSong(newTitle, newArtist, context);
+          _renameSong(newTitle, newArtist, context, rename);
         },
       ),
     );
@@ -575,7 +590,10 @@ class _SongBarState extends State<SongBar> {
     String newTitle,
     String newArtist,
     BuildContext context,
+    PlaylistSongRename? rename,
   ) async {
+    if (!mounted) return;
+    final onRenamed = widget.onRenamed;
     try {
       if (widget.isFromLikedSongs) {
         await renameSongInLikedSongs(_ytid, newTitle, newArtist);
@@ -589,21 +607,15 @@ class _SongBarState extends State<SongBar> {
           showToast(context, context.l10n!.settingChangedMsg);
         }
       } else if (widget.playlistId != null) {
-        await renameSongInPlaylist(
-          widget.playlistId,
-          _ytid,
-          newTitle,
-          newArtist,
-        );
-        widget.song['title'] = newTitle;
-        widget.song['artist'] = newArtist;
-        if (context.mounted) {
+        final renamed = await rename?.apply(title: newTitle, artist: newArtist);
+        if (renamed == null) throw StateError('Playlist rename became stale');
+        onRenamed?.call(renamed);
+        if (mounted && context.mounted) {
           setState(() {
             _songTitle = newTitle;
             _songArtist = newArtist;
           });
           showToast(context, context.l10n!.settingChangedMsg);
-          widget.onRenamed?.call();
         }
       }
     } catch (e, stackTrace) {
