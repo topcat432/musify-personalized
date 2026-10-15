@@ -1,5 +1,49 @@
 # Musify Personalized current state
 
+## One-shot repeated-slot Undo,2026-10-15
+
+Predecessor bb4cbdb78b9a9d7ecbef8f118e673964668a7e35 passed
+[exact CI38673559643](https://github.com/topcat432/musify-personalized/actions/runs/38673559643):
+analysis,793 aggregate tests,16+24 strict Linux visuals,nine logger tests,
+49 reader/30 channel/3310 inflater checks and all required Android builds.
+Independent review closed its deletion/sort preservation correction.
+
+Its Undo callback still used deduplicating addition and the deleted row's old
+visible index. The successor captures one removed song's full value and original
+position in memory. It validates the remaining source and exact live/stored
+custom destination, rejects ambiguity/replacement/partial legacy containers,
+and restores only a complete permutation of those retained slots plus that one
+captured occurrence. It recomputes the current Default/Date added/Name/Artist
+order independently of the old visible or filtered index. No song or playlist
+field, adapter, backup format, dependency or durable Undo journal is added.
+Ordinary add-song and recording-level destination deduplication stay unchanged.
+
+The token is consumed before awaiting its sole write. A separately staged copy
+of the existing collection preserves old Hive values on pre-write failure;
+post-save uncertainty or a newer owner write never triggers compensation over
+actual saved data. Success requires live and stored revalidation before updating
+library/page references. Unverified attempts show the existing error and do not
+automatically replay. Runtime Undo expires with the page/restart; restored data
+uses the existing persistent list format.
+
+Focused PASS30: ten widget cases change sort between deletion and Undo, keep
+search active, cover shared-map repeats/direct/folder lists, double/overlapping
+Undo, subsequent Default/Date added cycles and disk reopen; nine service cases
+cover frozen alternatives/typed legacy fields/metadata changes, stale/replaced/ambiguous targets,
+raw unrelated playlists, invalid positions, failed/after-save writes and late
+owner edits; eleven prior playlist checks remain PASS. The asymmetric Default
+case requires slot3 instead of old slot1. All ten final widget controls fail on
+byte-exact bb4cbdb7 UI copied outside the checkout; no dirty source was replaced.
+Analysis and812 aggregate tests PASS. Strict Windows FAIL16+24; all40 actual PNGs match the retained control exactly.
+Reference/actual/isolated diff inspected; no golden/comparator change. Exact
+successor Linux CI remains pending.
+
+Native baseline recovery remains outstanding behind unchanged admission; original
+5558,5560 configuration/comparison evidence and empty export remain preserved.
+Six checksum-indexed host-only native F01/F02 inputs are validated against byte-
+exact signed c249 parser blob8a63cc802dd6fc7326ec2bc1fc15bdf76b3b4fc5. No device
+copy, provider request, phone operation, signing/publication or merge occurred.
+
 ## One-slot deletion across sort changes,2026-10-15
 
 Predecessor36c389260772fdb5e9ca7fe18f842506489c93b3 passed

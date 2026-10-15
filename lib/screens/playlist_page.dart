@@ -32,6 +32,7 @@ import 'package:musify/services/common_services.dart';
 import 'package:musify/services/data_manager.dart';
 import 'package:musify/services/playlist_download_service.dart';
 import 'package:musify/services/playlist_sharing.dart';
+import 'package:musify/services/playlist_slot_undo.dart';
 import 'package:musify/services/playlists_manager.dart';
 import 'package:musify/services/settings_manager.dart';
 import 'package:musify/utilities/app_utils.dart';
@@ -723,21 +724,49 @@ class _PlaylistPageState extends State<PlaylistPage> {
       for (final index in _playlistSourceOrder)
         index > sourceIndex ? index - 1 : index,
     ];
-    final playlistId = _playlist['ytid'];
+    final undo = PlaylistSlotUndo(
+      _playlist,
+      remainingSourceSongs: _originalPlaylistList,
+      removedSong: songToRemove,
+      sourceIndex: sourceIndex,
+    );
     if (mounted) {
       setState(() {});
       showToastWithButton(
         context,
         context.l10n!.songRemoved,
         context.l10n!.undo.toUpperCase(),
-        () {
-          addSongInCustomPlaylist(
-            context,
-            playlistId,
-            songToRemove,
-            indexToInsert: indexOfRemovedSong,
+        () async {
+          if (!mounted || undo.used) return;
+          _syncOriginalSongValues();
+          final restoredSource = undo.restoredSource(_originalPlaylistList);
+          if (restoredSource == null) {
+            showToast(context, context.l10n!.error);
+            return;
+          }
+          // Recompute from original slots using the current sort, never an old
+          // displayed/filtered index captured when the row was deleted.
+          final order = _sortedSourceOrder(
+            _sortType,
+            restoredSource,
+            List.generate(restoredSource.length, (i) => i),
           );
-          if (mounted) setState(() {});
+          final restored = await undo.apply(
+            expectedCurrentSongs: List<dynamic>.from(_playlist['list'] as List),
+            currentSourceOrder: List<int>.from(_playlistSourceOrder),
+            restoredOrder: order,
+          );
+          if (!mounted) return;
+          if (restored == null) {
+            showToast(context, context.l10n!.error);
+            return;
+          }
+          setState(() {
+            _playlist = restored;
+            _originalPlaylistList = restoredSource;
+            _playlistSourceOrder = order;
+            _sortPlaylist(_sortType);
+          });
         },
       );
     } else {
@@ -783,39 +812,42 @@ class _PlaylistPageState extends State<PlaylistPage> {
   void _sortPlaylist(PlaylistSortType type) {
     if (_playlist == null || _playlist['list'] == null) return;
     _syncOriginalSongValues();
+    _playlistSourceOrder = _sortedSourceOrder(
+      type,
+      _originalPlaylistList,
+      _playlistSourceOrder,
+    );
+    _playlist['list'] = [
+      for (final index in _playlistSourceOrder) _originalPlaylistList[index],
+    ];
+  }
+
+  List<int> _sortedSourceOrder(
+    PlaylistSortType type,
+    List<dynamic> source,
+    List<int> currentOrder,
+  ) {
     switch (type) {
       case PlaylistSortType.default_:
-        _playlistSourceOrder = List.generate(
-          _originalPlaylistList.length,
-          (i) => i,
-        );
-        break;
+        return List.generate(source.length, (i) => i);
       case PlaylistSortType.title:
       case PlaylistSortType.artist:
         final slots = <dynamic>[
-          for (final index in _playlistSourceOrder)
+          for (final index in currentOrder)
             {
               'index': index,
-              'title': _originalPlaylistList[index]['title'],
-              'artist': _originalPlaylistList[index]['artist'],
+              'title': source[index]['title'],
+              'artist': source[index]['artist'],
             },
         ];
         sortSongsByKey(
           slots,
           type == PlaylistSortType.title ? 'title' : 'artist',
         );
-        _playlistSourceOrder = [for (final slot in slots) slot['index'] as int];
-        break;
+        return [for (final slot in slots) slot['index'] as int];
       case PlaylistSortType.dateAdded:
-        _playlistSourceOrder = List.generate(
-          _originalPlaylistList.length,
-          (i) => _originalPlaylistList.length - 1 - i,
-        );
-        break;
+        return List.generate(source.length, (i) => source.length - 1 - i);
     }
-    _playlist['list'] = [
-      for (final index in _playlistSourceOrder) _originalPlaylistList[index],
-    ];
   }
 
   Widget _buildSongListItem(

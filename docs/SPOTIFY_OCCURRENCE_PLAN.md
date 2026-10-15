@@ -127,3 +127,21 @@ new fields. Six new widget cases plus five existing playlist cases pass locally.
 Exact successor CI remains required. This fixes the page baseline; ordinary
 recording-level deduplication and the separate repeated-slot Undo limitation are
 unchanged. No durable occurrence creation/ownership writer is enabled.
+
+
+## Explicit one-slot Undo,2026-10-15
+
+Undo now has a live-page one-shot token, separate from ordinary deduplicating
+addition. It captures the removed value/original position, validates remaining
+values and exact unique live/stored destination, and permits only a complete
+position permutation with that one occurrence restored. The page computes the
+current sort anew, including when search is active. Runtime positions/tokens do
+not enter saved songs or playlist metadata. Existing collection staging is a
+single explicit Undo write, not an occurrence creation/ownership protocol.
+
+Focused widget/service checks cover sort changes, shared repeats, root/folder
+save/reopen, overlap, stale/ambiguous/partial state, typed legacy values, failure
+before/after a save and preserving newer owner edits. A consumed/uncertain token
+never retries or compensates over actual saved data. This closes the earlier
+Undo prerequisite only after exact successor CI; native qualification remains
+separate. No durable cross-restart Undo or playlist recreation is claimed.
