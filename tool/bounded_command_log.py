@@ -51,7 +51,7 @@ def run(command, log_path, maximum, timeout):
         def read():
             try:
                 while True:
-                    chunk = process.stdout.read(8192)
+                    chunk = process.stdout.read1(8192)
                     chunks.put(chunk)
                     if not chunk:
                         break

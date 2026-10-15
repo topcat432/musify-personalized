@@ -120,6 +120,14 @@ class BoundedCommandLogTest(unittest.TestCase):
         except FileNotFoundError:
             return False
 
+    def test_timeout_preserves_flushed_partial_output(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            result = self.run_owned(root, "import time;print('flushed prefix',flush=True);time.sleep(30)",
+                                    '--timeout-seconds', '1')
+            self.assertEqual(result.returncode, 124)
+            self.assertIn(b'flushed prefix', (root / 'owned.log').read_bytes())
+
     def test_deadline_stops_silent_owned_writer(self):
         with tempfile.TemporaryDirectory() as directory:
             root = pathlib.Path(directory)

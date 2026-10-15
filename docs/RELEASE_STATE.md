@@ -2250,3 +2250,9 @@ audit correctly refuses it. Four normal-debug Hives were restored byte-exact.
 Read-only verification found no owned emulator process and the lease available
 without abandonment. A new complete owned rehearsal and audit are required;
 About/Back remains independently PASS. Current source is not installed.
+
+4d720732 exactCI38663178136 terminal FAIL in the new logger contracts before
+aggregate checks: owned writer cleanup passed, but the exited leader's flushed
+prefix was lost while buffered read waited for8192 bytes. Successor consumes
+available chunks with read1 and adds a cross-platform short-output timeout
+regression. No deadline, output bound, cleanup or data assertion is weakened.
