@@ -1,6 +1,25 @@
 # Musify Personalized current state
 
 
+## Rejected folder-move membership preservation,2026-10-15
+
+L02 source inspection found that moving to a stale/deleted destination first
+removed the playlist from shallow-copied live folder maps, then returned Error.
+A malformed later folder had the same partial-mutation path. Rejected moves
+now validate a unique destination before removal and stage folder containers in
+separate maps. No root/folder notifier or persistence call is reached on those
+rejections. This is a pre-write rejection fix, not a new atomic multi-key writer
+or a proof of recovery from disk/device failures during an accepted move.
+
+Eight controlled cases cover missing/ambiguous/malformed rejection, unchanged
+notifiers/live values/raw Hive bytes/reopen, and valid folder/root custom/YouTube
+moves preserving source order/repeated recordings, typed payload, likes/pins and
+unrelated fields after reopen. The exact84c488c9 negative control and successor
+qualification are pending Linux CI. No schema, migration, UI, dependency, provider
+request or native workload is added. Preview retirement's focused gate remains
+before aggregate tests; its production implementation is unchanged by this fix.
+
+
 ## Bounded manual-preview retirement,2026-10-15
 
 Independent review found a source-level recovery gap in84c488c: a native load or
@@ -28,9 +47,13 @@ Futures were re-awaited by real-clock fixture teardown after their fake clock
 stopped. Cleanup no longer registers that late listener; already owned disposal
 remains the widget's responsibility. Assertions/production behavior are unchanged.
 A focused120-second existing bounded-logger check now precedes the aggregate run.
-These failed/cancelled runs are not qualification. Exact4aa4b161 control and successor checks
+These failed/cancelled runs are not qualification. The corrected087e532e focused
+run38704042690 completed with16 of17 cases passing, including real-writer
+Save/reopen. Its quarantine test checked the error message before the injected
+100ms teardown wait elapsed; the test now advances150ms and retains the same
+no-allocation/recovery assertions. No production behavior changed for that fix. Exact4aa4b161 control and successor checks
 are pending remote Linux CI. No provider request/local worker or schema change.
-The bounded folder-move rejection fix remains uncommitted and paused separately.
+The separate bounded folder-move rejection fix is included above with8 tests.
 Windows containment job remains uncreated/unrun pending owner exception reply;
 all8 native Windows cases remain unqualified.
 

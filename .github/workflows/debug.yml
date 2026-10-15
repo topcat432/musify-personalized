@@ -410,6 +410,35 @@ jobs:
           path: manual-preview-retirement-control.log
           if-no-files-found: error
           retention-days: 7
+      - name: Reproduce rejected folder move membership loss on exact prior source
+        shell: bash
+        run: |
+          set -euo pipefail
+          original="$GITHUB_WORKSPACE"
+          control="$RUNNER_TEMP/musify-folder-move-control-84c488c9"
+          git fetch --no-tags --depth=1 origin 84c488c930ca04bb391bc39d713f0cc43de4e818
+          git worktree add --detach "$control" 84c488c930ca04bb391bc39d713f0cc43de4e818
+          cp test/services/playlist_folder_move_preservation_test.dart "$control/test/services/"
+          cd "$control"
+          flutter pub get --offline
+          set +e
+          python3 "$original/tool/bounded_command_log.py" --log "$original/folder-move-control.log" --timeout-seconds 180 -- flutter test --no-pub --reporter expanded -j 1 test/services/playlist_folder_move_preservation_test.dart --plain-name 'rejected folder move preserves membership and stored bytes: missing'
+          result=$?
+          set -e
+          test "$result" -eq 1
+          grep -Fq 'REJECTED_FOLDER_MOVE_CHANGED_MEMBERSHIP' "$original/folder-move-control.log"
+          grep -Fq 'Expected:' "$original/folder-move-control.log"
+          echo "Exact84c488c9 control reproduced live membership mutation after a rejected move."
+          test "$(git -C "$original" rev-parse HEAD)" = "$SOURCE_SHA"
+
+      - name: Upload exact prior-source folder move control log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: folder-move-control-${{ github.run_number }}
+          path: folder-move-control.log
+          if-no-files-found: error
+          retention-days: 7
       - name: Prepare read-only empty-source formatting suggestions
         shell: bash
         run: |

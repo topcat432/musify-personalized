@@ -664,7 +664,14 @@ String movePlaylistToFolder(
   BuildContext context,
 ) {
   try {
-    final updatedFolders = List<Map>.from(userPlaylistFolders.value);
+    final updatedFolders = userPlaylistFolders.value
+        .map((folder) => Map<dynamic, dynamic>.from(folder))
+        .toList();
+    // A stale picker must refuse before removing any current membership.
+    if (folderId != null &&
+        updatedFolders.where((folder) => folder['id'] == folderId).length != 1) {
+      return context.l10n!.error;
+    }
     final updatedCustomPlaylists = List<Map>.from(userCustomPlaylists.value);
     final updatedYoutubePlaylists = List<String>.from(userPlaylists.value);
 
