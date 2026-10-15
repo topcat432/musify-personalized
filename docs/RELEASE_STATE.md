@@ -1,6 +1,27 @@
 # Musify Personalized current state
 
 
+## Manual choice query provenance preservation,2026-10-15
+
+I05/I06 source inspection found that Use match persisted the editable search box,
+so unsearched edits or a failed replacement search could attach an unrelated
+query/URL to the selected result. Successful results now retain their captured
+query. Save snapshots that provenance before preview teardown and refuses a
+retained action while a new search is pending. Candidate identity, ranking and
+routing are unchanged; no schema or migration is introduced.
+
+Three synthetic actual-page/writer cases cover unsearched edits, successful
+replacement search and failed replacement search, preserving the chosen recording,
+likes and unrelated data after Hive close/reopen. An exact60832f70 control must
+reproduce the original unsearched-query assertion. Corrected qualification is
+pending Linux CI; expected928 aggregate tests is not a pass claim.
+
+At the preceding terminal milestone the host had12609015808 available bytes and
+134727217152/137271078912 committed bytes, with no identifiable Musify test/build/
+emulator workers. Local tests/build/native remain unadmitted. Windows exception
+job remains uncreated/unrun; no provider, phone, signing, publication or merge work.
+
+
 ## Authoritative playlist move source and display order,2026-10-15
 
 Independent review closed invalid-destination rejection, then identified two
@@ -21,9 +42,16 @@ canonical collection, rather than treating a mutated shared map as the display.
 Fifteen service cases cover stale/deleted/ambiguous/typed/divergent ownership and
 safe repeat, three actual pending-picker cases and six Title/Artist/Date-added
 widget-to-move/reopen cases cover root/folder sources and repeated recording slots.
-Exact prior-source controls and corrected qualification are pending Linux CI.
+Source60832f706b6902a6a49d30d49468a15f9733d6e9 passed
+[Linux CI38714677956](https://github.com/topcat432/musify-personalized/actions/runs/38714677956):
+925 aggregate tests,65 focused playlist cases including Undo,17 focused preview
+cases,40 strict Linux visuals,analysis,required helper checks and all Android builds.
+All three exact prior-source controls reproduced the intended defects. Earlier
+runs38712346268 (route fixture) and38713371035 (915 passed/10 old shared-map sort
+expectations failed) remain failures; the corrected Undo assertions independently
+verify sorted SongBars and original canonical order, retaining reopen/repeat checks.
 Accepted-move disk/device fault atomicity remains outside this pre-write guard.
-The separate21-line manual-query provenance patch remains uncommitted and paused.
+The separate manual-query provenance increment below is pending qualification.
 Windows exception still awaits the owner; its job is uncreated/unrun. Native
 baseline recovery remains first after unchanged admission, then F01/F02.
 

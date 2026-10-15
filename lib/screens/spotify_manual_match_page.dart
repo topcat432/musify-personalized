@@ -57,6 +57,7 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
   Timer? _previewTimer;
   int _previewGeneration = 0;
   List<Map<String, dynamic>> _results = [];
+  String _resultsQuery = '';
   bool _searching = false;
   bool _saving = false;
   bool _previewPlaying = false;
@@ -113,7 +114,10 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
       if (candidateSearch != null) {
         final candidates = await candidateSearch(query);
         if (!mounted) return;
-        setState(() => _results = candidates.map(_rankCandidate).toList());
+        setState(() {
+          _results = candidates.map(_rankCandidate).toList();
+          _resultsQuery = query;
+        });
         return;
       }
       final exactVideoId = SpotifyManualSourceService.parseExactVideoId(query);
@@ -132,7 +136,10 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
         }
         final result = _rankCandidate(candidate, isDirectUrl: true);
         if (!mounted) return;
-        setState(() => _results = [result]);
+        setState(() {
+          _results = [result];
+          _resultsQuery = query;
+        });
         return;
       }
 
@@ -191,7 +198,10 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
       );
 
       if (!mounted) return;
-      setState(() => _results = ranked.toList(growable: false));
+      setState(() {
+        _results = ranked.toList(growable: false);
+        _resultsQuery = query;
+      });
     } catch (error) {
       if (!mounted) return;
       setState(() => _error = error.toString());
@@ -342,7 +352,8 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
   }
 
   Future<void> _save(Map<String, dynamic> result) async {
-    if (_saving) return;
+    if (_saving || _searching) return;
+    final query = _resultsQuery;
     final candidate = result['candidate'];
     if (candidate is! Map) return;
     setState(() {
@@ -355,7 +366,7 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
       await const SpotifyReviewWorkflowService().resolveManualItem(
         item: widget.item,
         selectedAlternative: result,
-        query: _queryController.text.trim(),
+        query: query,
         isDirectUrl: result['isDirectUrl'] == true,
       );
       if (!mounted) return;

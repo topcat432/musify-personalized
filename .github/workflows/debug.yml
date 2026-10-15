@@ -526,6 +526,35 @@ jobs:
           path: folder-source-order-control.log
           if-no-files-found: error
           retention-days: 7
+      - name: Reproduce manual choice query provenance loss on exact prior source
+        shell: bash
+        run: |
+          set -euo pipefail
+          original="$GITHUB_WORKSPACE"
+          control="$RUNNER_TEMP/musify-manual-query-control-60832f70"
+          git fetch --no-tags --depth=1 origin 60832f706b6902a6a49d30d49468a15f9733d6e9
+          git worktree add --detach "$control" 60832f706b6902a6a49d30d49468a15f9733d6e9
+          cp test/screens/spotify_manual_query_provenance_test.dart "$control/test/screens/spotify_manual_query_provenance_test.dart"
+          cd "$control"
+          flutter pub get --offline
+          set +e
+          python3 "$original/tool/bounded_command_log.py" --log "$original/manual-query-control.log" --timeout-seconds 180 -- flutter test --no-pub --reporter expanded -j 1 test/screens/spotify_manual_query_provenance_test.dart --plain-name 'manual choice retains the result query after edited search text'
+          result=$?
+          set -e
+          test "$result" -eq 1
+          grep -Fq 'MANUAL_CHOICE_SAVED_UNSEARCHED_QUERY' "$original/manual-query-control.log"
+          grep -Fq 'Expected:' "$original/manual-query-control.log"
+          echo "Exact60832f70 control reproduced manual choice query provenance loss."
+          test "$(git -C "$original" rev-parse HEAD)" = "$SOURCE_SHA"
+
+      - name: Upload exact prior-source manual-query-control
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: manual-query-control-${{ github.run_number }}
+          path: manual-query-control.log
+          if-no-files-found: error
+          retention-days: 7
       - name: Prepare read-only empty-source formatting suggestions
         shell: bash
         run: |
@@ -592,6 +621,18 @@ jobs:
         with:
           name: manual-preview-focused-${{ github.run_number }}
           path: manual-preview-focused.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Verify bounded manual query provenance regressions
+        run: python3 tool/bounded_command_log.py --log manual-query-focused.log --timeout-seconds 90 -- flutter test --no-pub --reporter expanded -j 1 test/screens/spotify_manual_query_provenance_test.dart
+
+      - name: Upload focused manual query provenance log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: manual-query-focused-${{ github.run_number }}
+          path: manual-query-focused.log
           if-no-files-found: ignore
           retention-days: 7
 
