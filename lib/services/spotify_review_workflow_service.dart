@@ -801,17 +801,22 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
       ..['lastMatchingCheckpointAt'] = DateTime.now().toUtc().toIso8601String();
     // Advance from this write's exact proposal. Rereading after await could
     // accidentally adopt a different owner's intervening write as our baseline.
+    // Hive caches the supplied values. Detach the write from the working list
+    // so processing the next batch cannot mutate the live cache before its guard.
+    final resultWrite = copyImportRoutingValue(results);
+    final metadataWrite = copyImportRoutingValue(metadata);
+    final exclusionWrite = copyImportRoutingValue(excludedRows);
     final nextState = expectedState == null ? null : <String, Object?>{
       ..._captureCheckpointState(box),
-      'spotifyMatchResults': copyImportRoutingValue(results),
-      'spotifyImportMetadata': copyImportRoutingValue(metadata),
+      'spotifyMatchResults': copyImportRoutingValue(resultWrite),
+      'spotifyImportMetadata': copyImportRoutingValue(metadataWrite),
       if (excludedRows != null)
-        'spotifyExcludedImportRows': copyImportRoutingValue(excludedRows),
+        'spotifyExcludedImportRows': copyImportRoutingValue(exclusionWrite),
     };
     await box.putAll({
-      'spotifyMatchResults': results,
-      'spotifyImportMetadata': metadata,
-      if (excludedRows != null) 'spotifyExcludedImportRows': excludedRows,
+      'spotifyMatchResults': resultWrite,
+      'spotifyImportMetadata': metadataWrite,
+      if (excludedRows != null) 'spotifyExcludedImportRows': exclusionWrite,
     });
     if (expectedState != null && nextState != null) {
       expectedState
