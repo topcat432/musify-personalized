@@ -11,9 +11,8 @@ import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:just_audio/just_audio.dart';
 import 'package:musify/services/common_services.dart';
-import 'package:musify/services/online_audio_source.dart';
+import 'package:musify/services/review_sprint_audio_player.dart';
 import 'package:musify/services/spotify_manual_source_service.dart';
 import 'package:musify/services/spotify_match_scoring.dart';
 import 'package:musify/services/spotify_review_workflow_service.dart';
@@ -21,9 +20,18 @@ import 'package:musify/widgets/personalized_ui.dart';
 import 'package:youtube_music_explode_dart/youtube_music_explode_dart.dart';
 
 class SpotifyManualMatchPage extends StatefulWidget {
-  const SpotifyManualMatchPage({required this.item, super.key});
+  const SpotifyManualMatchPage({
+    required this.item,
+    super.key,
+    this.audioPlayer,
+    this.streamResolver,
+    this.candidateSearch,
+  });
 
   final Map<String, dynamic> item;
+  final ReviewSprintAudioPlayer? audioPlayer;
+  final Future<String?> Function(String songId)? streamResolver;
+  final Future<List<Map<String, dynamic>>> Function(String query)? candidateSearch;
 
   @override
   State<SpotifyManualMatchPage> createState() => _SpotifyManualMatchPageState();
@@ -36,11 +44,11 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
   static const Duration _timeout = Duration(seconds: 18);
   static const Duration _previewLength = Duration(seconds: 30);
 
-  final AudioPlayer _previewPlayer = AudioPlayer(
-    useProxyForRequestHeaders: false,
-  );
+  late final ReviewSprintAudioPlayer _previewPlayer;
+  late final bool _ownsPlayer;
+  late final Future<String?> Function(String songId) _streamResolver;
   late final TextEditingController _queryController;
-  StreamSubscription<PlayerState>? _playerStateSubscription;
+  StreamSubscription<ReviewSprintAudioState>? _playerStateSubscription;
   Timer? _previewTimer;
   List<Map<String, dynamic>> _results = [];
   bool _searching = false;
@@ -53,12 +61,16 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
   @override
   void initState() {
     super.initState();
+    _ownsPlayer = widget.audioPlayer == null;
+    _previewPlayer = widget.audioPlayer ?? JustAudioReviewSprintPlayer();
+    _streamResolver = widget.streamResolver ??
+        (songId) => fetchSongStreamUrl(songId, false);
     final artist = widget.item['sourceArtist']?.toString().trim() ?? '';
     final title = widget.item['sourceTitle']?.toString().trim() ?? '';
     _queryController = TextEditingController(text: '$artist $title'.trim());
-    _playerStateSubscription = _previewPlayer.playerStateStream.listen((state) {
+    _playerStateSubscription = _previewPlayer.stateStream.listen((state) {
       if (!mounted) return;
-      final completed = state.processingState == ProcessingState.completed;
+      final completed = state.completed;
       setState(() {
         _previewPlaying = state.playing && !completed;
         if (completed) {
@@ -74,7 +86,7 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
   void dispose() {
     _previewTimer?.cancel();
     _playerStateSubscription?.cancel();
-    unawaited(_previewPlayer.dispose());
+    if (_ownsPlayer) unawaited(_previewPlayer.dispose());
     _queryController.dispose();
     super.dispose();
   }
@@ -91,6 +103,13 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
     });
 
     try {
+      final candidateSearch = widget.candidateSearch;
+      if (candidateSearch != null) {
+        final candidates = await candidateSearch(query);
+        if (!mounted) return;
+        setState(() => _results = candidates.map(_rankCandidate).toList());
+        return;
+      }
       final exactVideoId = SpotifyManualSourceService.parseExactVideoId(query);
       if (exactVideoId != null) {
         final candidate = await _manualSourceService
@@ -220,12 +239,12 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
     });
 
     try {
-      final streamUrl = await fetchSongStreamUrl(songId, false);
+      final streamUrl = await _streamResolver(songId);
       if (streamUrl == null || streamUrl.isEmpty) {
         throw StateError('No playable audio stream was found for this result.');
       }
 
-      await _previewPlayer.setAudioSource(onlineAudioSource(streamUrl));
+      await _previewPlayer.setUrl(streamUrl);
       final durationSeconds = _asInt(candidate['duration']);
       final previewStart = durationSeconds != null && durationSeconds > 75
           ? const Duration(seconds: 20)
