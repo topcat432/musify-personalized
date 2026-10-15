@@ -358,6 +358,7 @@ jobs:
           control="$RUNNER_TEMP/musify-manual-preview-control-4104ccee"
           git fetch --no-tags --depth=1 origin 4104ccee8cf150e66026934629ee6ee22fe586a0
           git worktree add --detach "$control" 4104ccee8cf150e66026934629ee6ee22fe586a0
+          git fetch --no-tags --depth=1 origin 84c488c930ca04bb391bc39d713f0cc43de4e818
           git show 84c488c930ca04bb391bc39d713f0cc43de4e818:test/screens/spotify_manual_preview_ownership_test.dart > "$control/test/screens/spotify_manual_preview_ownership_test.dart"
           cd "$control"
           flutter pub get --offline
