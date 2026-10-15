@@ -2273,3 +2273,10 @@ verified. Source wrapper adds explicit isolated cold-boot mapping and fixes
 single-object process counting on PowerShell5;15 offline lifecycle contracts PASS.
 Creation/native qualification remain pending in the private canonical ledger.
 No app, phone, signing or publication change. See STORAGE_WORKFLOW for the map.
+
+The isolated creation used self-contained QCOW2 images after raw conversion failed
+at2GiB; that partial raw file is retained and hashed. The original source hashes
+match before/after creation, and the cloned active userdata/encryption images must
+pass logical qemu-img comparison without backing dependencies before native boot.
+This changes disk representation and rendering environment, not application data
+or the installed c249 APK. Native qualification remains separate from clone proof.

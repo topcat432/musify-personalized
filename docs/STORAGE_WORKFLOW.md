@@ -110,8 +110,8 @@ Original/saved profiles and their5556/5558 paths/renderer remain unchanged.
 
 The comparison uses the same API35 image, four guest CPUs and configured2G RAM,
 with720x1280/density320 and the installed emulator's supported swiftshader mode.
-Current userdata/encryption overlays are flattened offline into separate raw
-images; no snapshots/cache/locks are copied, and original hashes must match
+Current userdata/encryption overlays are flattened offline into separate self-contained
+QCOW2 images; no snapshots/cache/locks are copied, and original hashes must match
 before/after creation. It is working storage, not an independent backup. No new
 APK installation, phone operation, signing, schema migration or guest permission
 change is implied. The profile is unqualified until exact package/hash/UID,
