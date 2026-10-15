@@ -98,6 +98,7 @@ class MusifyAudioHandler extends BaseAudioHandler {
   int _currentQueueIndex = 0;
   int _currentLoadingIndex = -1;
   int _currentLoadingTransitionId = -1;
+  final Map<int, bool Function()> _songTransitionOwners = {};
   bool _isUpdatingState = false;
   bool _pendingPlaybackStateUpdate = false;
   int _songTransitionCounter = 0;
@@ -1939,13 +1940,41 @@ class MusifyAudioHandler extends BaseAudioHandler {
     return false;
   }
 
-  /// Check if the given transitionId is stale (outdated by a newer request).
+  /// Starts an explicitly owned load using the same transition checks as queues.
+  /// Ownership remains observable through source resolution and native loading.
+  Future<bool> playOwnedSong(
+    Map song, {
+    required bool Function() stillCurrent,
+  }) async {
+    if (!stillCurrent()) return false;
+    final transitionId = ++_songTransitionCounter;
+    _currentLoadingTransitionId = transitionId;
+    _currentLoadingIndex = -1;
+    _explicitlyStopped = false;
+    _visiblePlaybackError = null;
+    _failedAudioSource = null;
+    _songTransitionOwners[transitionId] = stillCurrent;
+    try {
+      return await playSong(song, transitionId: transitionId);
+    } finally {
+      _songTransitionOwners.remove(transitionId);
+      if (_currentLoadingTransitionId == transitionId) {
+        _currentLoadingTransitionId = -1;
+        _currentLoadingIndex = -1;
+      }
+    }
+  }
+
+  /// Check queue generation and any lifecycle owner of an explicitly owned load.
   bool _isStaleTransition(int? transitionId) {
-    return transitionId != null && transitionId != _currentLoadingTransitionId;
+    return transitionId != null &&
+        (transitionId != _currentLoadingTransitionId ||
+            _songTransitionOwners[transitionId]?.call() == false);
   }
 
   Future<bool> playSong(Map song, {String? mediaId, int? transitionId}) async {
     try {
+      if (_isStaleTransition(transitionId)) return false;
       final songData = cloneMap(song);
 
       if (songData['ytid'] == null || songData['ytid'].toString().isEmpty) {
@@ -1961,6 +1990,7 @@ class MusifyAudioHandler extends BaseAudioHandler {
         await audioPlayer.pause();
       }
 
+      if (_isStaleTransition(transitionId)) return false;
       final playback = await _resolvePlaybackSource(songData);
 
       // Abort if a newer song was requested while we were fetching the stream URL.
@@ -2013,6 +2043,7 @@ class MusifyAudioHandler extends BaseAudioHandler {
         transitionId: transitionId,
       );
     } catch (e, stackTrace) {
+      if (_isStaleTransition(transitionId)) return false;
       logger.log('Error playing song', error: e, stackTrace: stackTrace);
       _lastError = e.toString();
       return false;

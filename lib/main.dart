@@ -155,10 +155,12 @@ class _MusifyState extends State<Musify> with WidgetsBindingObserver {
     final initialShareGeneration = _textShareGeneration;
     sharingIntentSubscription = ReceiveSharingIntent.getTextStream().listen(
       (String? value) async {
-        _textShareGeneration++;
+        final shareGeneration = ++_textShareGeneration;
         await consumeYoutubeSharedTextIntent(
           value,
           audioHandler: audioHandler,
+          stillCurrent: () =>
+              mounted && _textShareGeneration == shareGeneration,
           onError: (error, stackTrace) {
             logger.log(
               'Error while playing shared song:',
@@ -180,6 +182,8 @@ class _MusifyState extends State<Musify> with WidgetsBindingObserver {
       consume: (value) => consumeYoutubeSharedTextIntent(
         value,
         audioHandler: audioHandler,
+        stillCurrent: () =>
+            mounted && _textShareGeneration == initialShareGeneration,
         onError: (error, stackTrace) => logger.log(
           'Error while playing initial shared song:',
           error: error,

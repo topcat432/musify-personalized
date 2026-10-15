@@ -1,5 +1,19 @@
 # Musify Personalized current state
 
+## Shared-intent asynchronous ownership repair,2026-10-15
+
+Independent review found that aa935dc5's platform-read guard did not cover pending
+metadata or playback loads; it is withheld from signing despite its CI results.
+Five controlled resolver/source/native-load cases reproduced stale replacement,
+playback after disposal and duplicate replay of the newer song. The repair checks
+ownership after metadata and gives each shared playback request a non-null audio
+transition linked to its live generation/lifecycle predicate. Existing source,
+native-load and fallback staleness checks now observe that predicate; ownership
+is removed on completion. Both initial and warm shares carry their own generation.
+The five cases pass after repair; clean analysis and all1006 local app tests pass.
+Exact CI/sign/native acceptance must qualify the resulting tip. No provider request, durable schema,
+phone operation, publication or deferred roadmap feature is added by this repair.
+
 ## Native baseline and cold-start share repair,2026-10-15
 
 Frozen predecessor3e5b7cad693016c10a2d027f5e7418144b80705d passed exact

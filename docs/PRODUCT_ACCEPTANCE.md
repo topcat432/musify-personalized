@@ -1,5 +1,17 @@
 # Product acceptance ledger
 
+## Share ownership review closure work,2026-10-15
+
+aa935dc5 remains unqualified for signing: its initial-read predicate did not span
+metadata resolution or asynchronous audio loading. Five controlled cases first
+failed and now pass: initial metadata A versus warm B, disposal during metadata,
+source load A versus B/disposal, and late native load A replaying B. Shared
+requests now recheck after metadata and retain an owned non-null audio transition
+through stream/source/native-load checks. Initial/warm UI callers forward their
+captured generation and mounted state. Clean analysis/all1006 local app tests pass;
+exact resulting-tip CI,
+signing and owned5560 runtime acceptance remain required; no phone/publication.
+
 ## Native playback/startup evidence,2026-10-15
 
 Frozen3e5b7cad exact CI38750331039 and sign-only38752702527 passed; the

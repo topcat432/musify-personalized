@@ -47,8 +47,11 @@ Future<void> handleYoutubeSharedTextIntent(
   String? value, {
   required MusifyAudioHandler audioHandler,
   required void Function(Object error, StackTrace stackTrace) onError,
+  bool Function()? stillCurrent,
+  Future<Map> Function(String songId)? resolveSong,
 }) async {
-  if (value == null || !_youtubeLinkRegex.hasMatch(value)) {
+  final isCurrent = stillCurrent ?? () => true;
+  if (!isCurrent() || value == null || !_youtubeLinkRegex.hasMatch(value)) {
     return;
   }
 
@@ -58,10 +61,11 @@ Future<void> handleYoutubeSharedTextIntent(
   }
 
   try {
-    final song = await getSongDetails(0, songId);
-    await audioHandler.playSong(song);
+    final song = await (resolveSong?.call(songId) ?? getSongDetails(0, songId));
+    if (!isCurrent()) return;
+    await audioHandler.playOwnedSong(song, stillCurrent: isCurrent);
   } catch (e, stackTrace) {
-    onError(e, stackTrace);
+    if (isCurrent()) onError(e, stackTrace);
   }
 }
 
@@ -69,6 +73,8 @@ Future<void> consumeYoutubeSharedTextIntent(
   String? value, {
   required MusifyAudioHandler audioHandler,
   required void Function(Object error, StackTrace stackTrace) onError,
+  bool Function()? stillCurrent,
+  Future<Map> Function(String songId)? resolveSong,
 }) async {
   if (value == null || value.isEmpty) {
     return;
@@ -83,5 +89,7 @@ Future<void> consumeYoutubeSharedTextIntent(
     normalizedValue,
     audioHandler: audioHandler,
     onError: onError,
+    stillCurrent: stillCurrent,
+    resolveSong: resolveSong,
   );
 }
