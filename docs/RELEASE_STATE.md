@@ -1,6 +1,20 @@
 # Musify Personalized current state
 
 
+## Source-order copy ownership design/test prerequisite,2026-10-15
+
+Account JSON0100aa33 is queued for independent review and remains exact-CI
+qualified (992 aggregate/39 parser focus/40 Linux visuals/all required builds).
+The next approved F04 gap is a separately confirmed new playlist preserving all
+resolved source occurrences and selected alternatives. The existing map/list
+format supports these slots; idempotent recovery needs explicit additive optional
+proof. See [minimum protocol and recovery boundaries](SPOTIFY_SOURCE_PLAYLIST_COPY.md).
+No legacy adoption, song tags, automatic migration or synchronization is selected.
+The first codec/classifier and actual-proof Hive/backup/restore tests are added;
+no production writer/UI is enabled in this prerequisite. Exact CI is pending.
+Local native admission remains unsafe; baseline5560 recovery thenF01/F02 is first
+when unchanged commit/physical/storage requirements pass. No phone/release action.
+
 ## Account Playlist JSON compatibility source milestone,2026-10-15
 
 Independent review closed105ad478 modelled move exception/reopen recovery;
