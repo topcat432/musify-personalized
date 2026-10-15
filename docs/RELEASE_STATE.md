@@ -33,8 +33,11 @@ PASS analysis and820 tests, including Cancel in both locations; eight repeated-r
 views and both stale-dialog cases FAIL at their intended preservation assertions.
 Default view renamed two occurrences instead of one; stale views renamed the
 first row after the selected row changed. No timeout counts as defect evidence.
-Successor qualification is pending. The successor additionally
-covers dialog Cancel/stale source and twenty Hive-backed writer boundaries.
+Successora88ce255 stopped at analysis for a cascade style issue and an unused
+manager import; both are corrected without changing runtime behavior. Its tests,
+visuals and builds did not run and are not inferred. Corrected exact-source
+qualification remains pending, including twelve dialog/view cases and twenty
+Hive-backed writer boundaries.
 
 Undo source300fe46bfff94dcbed18b828d0d0bb09a3ed404d passed
 [exact CI38681704615](https://github.com/topcat432/musify-personalized/actions/runs/38681704615):

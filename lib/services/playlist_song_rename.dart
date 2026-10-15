@@ -129,8 +129,7 @@ class PlaylistSongRename {
           : (staged[location.outer]['playlists'] as List)[location.inner!]
                 as Map;
       final viewSongs = target['list'] as List;
-      final selected = viewSongs[sourceIndex] as Map;
-      selected
+      (viewSongs[sourceIndex] as Map)
         ..['title'] = title.trim()
         ..['artist'] = artist.trim();
       final sourceSongs = List<dynamic>.filled(viewSongs.length, null);
