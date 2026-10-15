@@ -189,6 +189,208 @@ void main() {
     }
   });
 
+  for (final stop in [false, true]) {
+    test(
+      'cold metadata A yields to normal ${stop ? 'Stop' : 'queue B'}',
+      () async {
+        final player = _OwnedPlayer();
+        final handler = _SourceGateHandler(player);
+        final pendingA = Completer<Map>();
+        final resolvingA = Completer<void>();
+        const current = 'CCCCCCCCCCC';
+        await handler.addPlaylistToQueue(
+          [song(current)],
+          replace: true,
+          startIndex: 0,
+        );
+        final request = consumeInitialSharedTextIntent(
+          readInitialText: () async => 'https://youtu.be/$a',
+          stillCurrent: () => true,
+          consume: (value) => consumeYoutubeSharedTextIntent(
+            value,
+            audioHandler: handler,
+            stillCurrent: () => true,
+            resolveSong: (_) {
+              resolvingA.complete();
+              return pendingA.future;
+            },
+            onError: (error, stack) => fail('$error'),
+          ),
+          onError: (error, stack) => fail('$error'),
+        );
+        try {
+          await resolvingA.future;
+          expect(
+            player.playing,
+            isTrue,
+            reason: 'Metadata must not interrupt C',
+          );
+          expect(player.loadedIds, [current]);
+          if (stop) {
+            await handler.stop();
+          } else {
+            await handler.addPlaylistToQueue(
+              [song(b)],
+              replace: true,
+              startIndex: 0,
+            );
+          }
+          pendingA.complete(song(a));
+          await request;
+          expect(player.loadedIds, stop ? [current] : [current, b]);
+          expect(player.playedIds, stop ? [current] : [current, b]);
+          expect(player.playing, !stop);
+        } finally {
+          if (!pendingA.isCompleted) pendingA.complete(song(a));
+          await request;
+          await handler.stop();
+          await player.dispose();
+        }
+      },
+    );
+  }
+
+  for (final phase in ['metadata', 'source', 'native']) {
+    for (final action in ['warm', 'queue', 'stop', 'pause', 'dispose']) {
+      for (final lateError in [false, true]) {
+        test(
+          '$phase / $action / late ${lateError ? 'error' : 'success'} preserves user intent',
+          () async {
+            final player = _OwnedPlayer()..gateNativeA = phase == 'native';
+            final handler = _SourceGateHandler(player)
+              ..gateA = phase == 'source';
+            final metadata = Completer<Map>();
+            final metadataStarted = Completer<void>();
+            final errors = <Object>[];
+            var mounted = true;
+            var generation = 0;
+            const current = 'CCCCCCCCCCC';
+            const healthy = 'DDDDDDDDDDD';
+            await handler.addPlaylistToQueue(
+              [song(current)],
+              replace: true,
+              startIndex: 0,
+            );
+            final request = consumeInitialSharedTextIntent(
+              readInitialText: () async => 'https://youtu.be/$a',
+              stillCurrent: () => mounted && generation == 0,
+              consume: (value) => consumeYoutubeSharedTextIntent(
+                value,
+                audioHandler: handler,
+                stillCurrent: () => mounted && generation == 0,
+                resolveSong: (_) {
+                  metadataStarted.complete();
+                  return phase == 'metadata'
+                      ? metadata.future
+                      : Future.value(song(a));
+                },
+                onError: (error, stack) => errors.add(error),
+              ),
+              onError: (error, stack) => errors.add(error),
+            );
+            void release() {
+              final error = StateError('synthetic stale $phase failure');
+              if (phase == 'metadata' && !metadata.isCompleted) {
+                lateError
+                    ? metadata.completeError(error)
+                    : metadata.complete(song(a));
+              } else if (phase == 'source' &&
+                  !handler.releaseSource.isCompleted) {
+                lateError
+                    ? handler.releaseSource.completeError(error)
+                    : handler.releaseSource.complete();
+              } else if (phase == 'native' &&
+                  !player.releaseNative.isCompleted) {
+                lateError
+                    ? player.releaseNative.completeError(error)
+                    : player.releaseNative.complete();
+              }
+            }
+
+            try {
+              if (phase == 'metadata') {
+                await metadataStarted.future;
+                expect(
+                  player.playing,
+                  isTrue,
+                  reason: 'Metadata leaves current audio alone',
+                );
+              } else if (phase == 'source') {
+                await handler.sourceStarted.future;
+              } else {
+                await player.nativeStarted.future;
+              }
+              switch (action) {
+                case 'warm':
+                  generation++;
+                  await consumeYoutubeSharedTextIntent(
+                    'https://youtu.be/$b',
+                    audioHandler: handler,
+                    stillCurrent: () => mounted && generation == 1,
+                    resolveSong: (_) async => song(b),
+                    onError: (error, stack) => errors.add(error),
+                  );
+                case 'queue':
+                  await handler.addPlaylistToQueue(
+                    [song(b)],
+                    replace: true,
+                    startIndex: 0,
+                  );
+                case 'stop':
+                  await handler.stop();
+                case 'pause':
+                  await handler.pause();
+                case 'dispose':
+                  mounted = false;
+              }
+              final playedAtControl = List<String>.from(player.playedIds);
+              release();
+              await request;
+              expect(errors, isEmpty, reason: 'Stale failure must not escape');
+              expect(
+                player.playedIds,
+                playedAtControl,
+                reason: 'No stale autoplay/replay',
+              );
+              expect(
+                player.playing,
+                action == 'warm' ||
+                    action == 'queue' ||
+                    (action == 'dispose' && phase == 'metadata'),
+              );
+              expect(handler.playbackState.value.errorMessage, isNull);
+              await handler.addPlaylistToQueue(
+                [song(healthy)],
+                replace: true,
+                startIndex: 0,
+              );
+              final loads = List<String>.from(player.loadedIds);
+              await handler.pause();
+              expect(player.playing, isFalse);
+              await handler.play();
+              expect(
+                player.playing,
+                isTrue,
+                reason: 'Later healthy explicit Play must work',
+              );
+              expect(player.playedIds.last, healthy);
+              expect(
+                player.loadedIds,
+                loads,
+                reason: 'Healthy resume does not reload',
+              );
+            } finally {
+              release();
+              await request;
+              await handler.stop();
+              await player.dispose();
+            }
+          },
+        );
+      }
+    }
+  }
+
   tearDownAll(() async {
     await Future<void>.delayed(const Duration(milliseconds: 2100));
     await Hive.close();

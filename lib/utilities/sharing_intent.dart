@@ -61,9 +61,10 @@ Future<void> handleYoutubeSharedTextIntent(
   }
 
   try {
-    final song = await (resolveSong?.call(songId) ?? getSongDetails(0, songId));
-    if (!isCurrent()) return;
-    await audioHandler.playOwnedSong(song, stillCurrent: isCurrent);
+    await audioHandler.resolveAndPlayOwnedSong(
+      () => resolveSong?.call(songId) ?? getSongDetails(0, songId),
+      stillCurrent: isCurrent,
+    );
   } catch (e, stackTrace) {
     if (isCurrent()) onError(e, stackTrace);
   }

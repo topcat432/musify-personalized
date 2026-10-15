@@ -1,5 +1,28 @@
 # Musify Personalized current state
 
+## User controls during shared-song resolution,2026-10-15
+
+33e27833's five share-versus-share/disposal cases are independently source-closed,
+but it is withheld from qualification: queue selection/Stop during metadata and
+explicit Pause during pending work still needed ownership. Metadata resolution
+now captures the normal audio transition counter without pausing current audio;
+it yields if that counter or the UI owner changes before the playback handoff.
+Explicit Pause invalidates pending loads/completion work. Internal runtime-error
+and healthy-completion pauses retain their transition instead of cancelling their
+own result. Later explicit healthy Play remains supported.
+
+All37 controlled cases pass: the original five, two cold metadata queue/Stop
+regressions, plus a30-case metadata/source/native-load matrix against newer warm
+share, normal queue, Stop, Pause and disposal, with stale success/error completion
+and later healthy Pause/Play in every cell. Four Pause failures were retained
+before the correction. Clean analysis and all1038 local app tests pass, including
+the existing retry/completion cases. Their one-pause assertions now spy on the
+actual player pause boundary rather than only the public user action. The first
+full-run fixture failures remain retained. Exact CI/sign/native gates stay separate.
+The earlier five-failure predecessor/resolver-seam log, runner/session and honestly
+labelled reconstructed patch are retained outside Git; no packaging rerun occurred.
+No new provider request, data schema, phone operation, merge or publication.
+
 ## Shared-intent asynchronous ownership repair,2026-10-15
 
 Independent review found that aa935dc5's platform-read guard did not cover pending

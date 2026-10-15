@@ -1,5 +1,19 @@
 # Product acceptance ledger
 
+## Explicit control ownership matrix,2026-10-15
+
+Metadata now observes the audio action counter from request start without
+interrupting current playback. A newer queue selection or Stop invalidates it.
+Explicit Pause invalidates pending metadata/source/native loads and completion
+work, while internal failure/completion pauses retain their existing owner.
+All37 focused cases pass: five original races, two cold metadata queue/Stop cases,
+and30 metadata/source/native x warm/queue/Stop/Pause/disposal x late success/error
+cases, each proving later healthy explicit Pause/Play. Four pre-fix Pause failures
+remain retained. Clean analysis/all1038 local app tests pass; existing one-pause
+assertions observe the actual player boundary after separating internal pauses.
+33e27833 is withheld for these control gaps; exact resulting-tip CI/sign and
+owned5560 native acceptance remain required.
+
 ## Share ownership review closure work,2026-10-15
 
 aa935dc5 remains unqualified for signing: its initial-read predicate did not span

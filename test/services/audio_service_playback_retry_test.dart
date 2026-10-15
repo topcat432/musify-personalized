@@ -284,15 +284,26 @@ void main() {
 }
 
 class _ControlledHandler extends MusifyAudioHandler {
-  _ControlledHandler(this.playback);
+  _ControlledHandler(Future<bool> Function(Map) playback)
+    : this._(playback, _PauseSpyPlayer());
+  _ControlledHandler._(this.playback, this.pausePlayer)
+    : super(player: pausePlayer);
   final Future<bool> Function(Map) playback;
+  final _PauseSpyPlayer pausePlayer;
+  int get pauseCalls => pausePlayer.pauseCalls;
+
+  @override
+  Future<bool> playSong(Map song, {String? mediaId, int? transitionId}) =>
+      playback(song);
+}
+
+// Observe the real pause boundary shared by user and internal pauses. Spying
+// on the public user action would miss deliberate internal transition retention.
+class _PauseSpyPlayer extends AudioPlayer {
+  _PauseSpyPlayer() : super(handleAudioSessionActivation: false);
   int pauseCalls = 0;
   @override
   Future<void> pause() async {
     pauseCalls++;
   }
-
-  @override
-  Future<bool> playSong(Map song, {String? mediaId, int? transitionId}) =>
-      playback(song);
 }

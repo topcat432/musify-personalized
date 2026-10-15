@@ -703,12 +703,12 @@ class MusifyAudioHandler extends BaseAudioHandler {
           wasPlaying: true,
         );
 
-        if (!sleepTimerExpired && !_completionEventPending) {
+        if (!sleepTimerExpired && !_explicitlyStopped && !_completionEventPending) {
           _completionEventPending = true;
 
           Future.microtask(() async {
             try {
-              if (!sleepTimerExpired && _completionEventPending) {
+              if (!sleepTimerExpired && !_explicitlyStopped && _completionEventPending) {
                 await handleSongCompletion();
               }
             } finally {
@@ -781,7 +781,7 @@ class MusifyAudioHandler extends BaseAudioHandler {
               : null,
         },
       );
-      await pause();
+      await _pausePlayer();
       if (transition != _songTransitionCounter ||
           !identical(failedSource, audioPlayer.audioSource))
         return;
@@ -893,7 +893,7 @@ class MusifyAudioHandler extends BaseAudioHandler {
           (!playNextSongAutomatically.value || offlineMode.value)) {
         // just_audio keeps playing=true after completion until explicitly
         // paused. Publish a stopped tail without changing its song or queue.
-        await pause();
+        await _pausePlayer();
       } else {
         // For all other cases (next song, repeat all, auto-play), skipToNext handles it
         await skipToNext();
@@ -1813,6 +1813,21 @@ class MusifyAudioHandler extends BaseAudioHandler {
 
   @override
   Future<void> pause() async {
+    // Explicit user Pause owns the boundary just like Stop. Metadata, source
+    // loads and late completion events may not autoplay after this action.
+    _explicitlyStopped = true;
+    _songTransitionCounter++;
+    _currentLoadingTransitionId = -1;
+    _currentLoadingIndex = -1;
+    _debounceTimer?.cancel();
+    _completionEventPending = false;
+    _completionHandlerLoadStarted = false;
+    await _pausePlayer();
+  }
+
+  // Internal failure/completion handling must pause without invalidating the
+  // transition that is still responsible for publishing its result.
+  Future<void> _pausePlayer() async {
     try {
       listeningStatsService.recordListeningSessionProgress(
         wasPlaying: audioPlayer.playing,
@@ -1938,6 +1953,27 @@ class MusifyAudioHandler extends BaseAudioHandler {
     } catch (_) {}
 
     return false;
+  }
+
+  /// Resolves metadata without interrupting the current player. A queue action
+  /// or Stop during resolution supersedes this request, even if its UI owner
+  /// remains mounted and no newer share arrived.
+  Future<bool> resolveAndPlayOwnedSong(
+    Future<Map> Function() resolveSong, {
+    required bool Function() stillCurrent,
+  }) async {
+    final requestedAtTransition = _songTransitionCounter;
+    bool ownsResolution() =>
+        stillCurrent() && requestedAtTransition == _songTransitionCounter;
+    if (!ownsResolution()) return false;
+    try {
+      final song = await resolveSong();
+      if (!ownsResolution()) return false;
+      return await playOwnedSong(song, stillCurrent: stillCurrent);
+    } catch (_) {
+      if (!ownsResolution()) return false;
+      rethrow;
+    }
   }
 
   /// Starts an explicitly owned load using the same transition checks as queues.
