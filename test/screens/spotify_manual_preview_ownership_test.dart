@@ -14,7 +14,7 @@ final _candidates = <Map<String, dynamic>>[
 void main() {
   late _Player player;
   setUp(() => player = _Player());
-  tearDown(() => player.dispose());
+  tearDown(() => player.closeFixture());
 
   Future<void> mount(WidgetTester tester, Future<String?> Function(String) resolver) async {
     tester.view.physicalSize = const Size(1100, 1800);
@@ -237,6 +237,11 @@ class _Player implements ReviewSprintAudioPlayer {
   }
   @override
   Future<void> dispose() => _disposal ??= _dispose();
+  Future<void> closeFixture() async {
+    // A lease already disposed by the widget owns a fake-clock Future. Do not
+    // register a late listener on it after that clock has stopped.
+    if (_disposal == null) await dispose();
+  }
   Future<void> _dispose() async {
     operations.add('dispose');
     _history.terminations++;

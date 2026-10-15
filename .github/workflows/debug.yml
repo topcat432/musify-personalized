@@ -467,6 +467,18 @@ jobs:
         if: steps.analyze.outputs.status != '0'
         run: exit 1
 
+      - name: Verify bounded manual preview ownership and retirement regressions
+        run: python3 tool/bounded_command_log.py --log manual-preview-focused.log --timeout-seconds 120 -- flutter test --no-pub --reporter expanded -j 1 test/screens/spotify_manual_preview_ownership_test.dart test/screens/spotify_manual_preview_retirement_test.dart
+
+      - name: Upload focused manual preview regression log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: manual-preview-focused-${{ github.run_number }}
+          path: manual-preview-focused.log
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Run tests
         id: tests
         shell: bash

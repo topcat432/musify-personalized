@@ -30,8 +30,8 @@ void main() {
   });
   tearDown(() async {
     first.finishPending(); second.finishPending();
-    await first.dispose().catchError((Object _) {});
-    await second.dispose().catchError((Object _) {});
+    await first.closeFixture();
+    await second.closeFixture();
   });
 
   Widget page() => SpotifyManualMatchPage(item: _item,
@@ -212,6 +212,11 @@ class _Backend implements ReviewSprintAudioPlayer {
   Future<void> stop() async {}
   @override
   Future<void> dispose() => _disposal ??= _dispose();
+  Future<void> closeFixture() async {
+    // Disposal already requested in the widget's fake clock is not awaited
+    // again from real-clock teardown (including its deliberate error Future).
+    if (_disposal == null) await dispose().catchError((Object _) {});
+  }
   Future<void> _dispose() async {
     disposals++;
     if (disposeGate != null) await disposeGate!.future;

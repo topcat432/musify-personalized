@@ -19,7 +19,16 @@ Eight new widget cases cover hanging load/seek with late success/error, automati
 deadline, bounded Search, failed-disposal quarantine and real-writer Use match
 while native load/disposal remain pending, with saved choice/likes after reopen.
 The prior nine preview cases use distinct backend instances and retain their
-source/selection/cutoff assertions. Exact4aa4b161 control and successor checks
+source/selection/cutoff assertions.
+The initial855dc995 run passed its old-source control but failed one constructor
+tearoff analyzer diagnostic before app tests. Corrected61eb8ec8 passed analysis
+and controls, then both preview files timed out on their first widget case;
+CI38701429881 was cancelled to retrieve partial logs. The new cached disposal
+Futures were re-awaited by real-clock fixture teardown after their fake clock
+stopped. Cleanup no longer registers that late listener; already owned disposal
+remains the widget's responsibility. Assertions/production behavior are unchanged.
+A focused120-second existing bounded-logger check now precedes the aggregate run.
+These failed/cancelled runs are not qualification. Exact4aa4b161 control and successor checks
 are pending remote Linux CI. No provider request/local worker or schema change.
 The bounded folder-move rejection fix remains uncommitted and paused separately.
 Windows containment job remains uncreated/unrun pending owner exception reply;
