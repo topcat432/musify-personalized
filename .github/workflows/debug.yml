@@ -584,6 +584,35 @@ jobs:
           path: folder-write-failure-control.log
           if-no-files-found: error
           retention-days: 7
+      - name: Reproduce post-move occurrence writer ownership loss on exact prior source
+        shell: bash
+        run: |
+          set -euo pipefail
+          original="$GITHUB_WORKSPACE"
+          control="$RUNNER_TEMP/musify-folder-move-owner-control-3b5c16a3"
+          git fetch --no-tags --depth=1 origin 3b5c16a3c1dc7c74e59bd27508b53a0eb6b21891
+          git worktree add --detach "$control" 3b5c16a3c1dc7c74e59bd27508b53a0eb6b21891
+          cp test/services/playlist_move_write_failure_test.dart "$control/test/services/playlist_move_write_failure_test.dart"
+          cd "$control"
+          flutter pub get --offline
+          set +e
+          python3 "$original/tool/bounded_command_log.py" --log "$original/folder-move-owner-control.log" --timeout-seconds 180 -- flutter test --no-pub --reporter expanded -j 1 test/services/playlist_move_write_failure_test.dart --plain-name 'move keeps rename and Undo usable: custom-root-folder failed=false'
+          result=$?
+          set -e
+          test "$result" -eq 1
+          grep -Fq 'MOVE_PUBLICATION_LOST_WRITER_OWNERSHIP' "$original/folder-move-owner-control.log"
+          grep -Fq 'Expected:' "$original/folder-move-owner-control.log"
+          echo "Exact3b5c16a3 control reproduced post-move occurrence writer ownership loss."
+          test "$(git -C "$original" rev-parse HEAD)" = "$SOURCE_SHA"
+
+      - name: Upload exact prior-source folder-move-owner-control
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: folder-move-owner-control-${{ github.run_number }}
+          path: folder-move-owner-control.log
+          if-no-files-found: error
+          retention-days: 7
       - name: Prepare read-only empty-source formatting suggestions
         shell: bash
         run: |

@@ -755,7 +755,9 @@ Future<bool?> _persistPlaylistMove(
   final box = Hive.box('user');
   final before = <String, List<dynamic>>{
     for (final key in staged.keys)
-      key: _copyPlaylistMoveValue(box.get(key, defaultValue: const [])) as List<dynamic>,
+      key:
+          _copyPlaylistMoveValue(box.get(key, defaultValue: const []))
+              as List<dynamic>,
   };
   // Before/staged values are private frozen copies. Expected maps can share
   // those values; callbacks and published collections receive separate copies.
@@ -770,17 +772,25 @@ Future<bool?> _persistPlaylistMove(
   ].where((key) => !_samePlaylistMoveValue(before[key], staged[key])).toList();
   Future<void> persist(String key, List<dynamic>? value) => write != null
       ? write(key, value)
-      : value == null ? box.delete(key) : box.put(key, value);
-  bool liveMatches(Map value) => _samePlaylistMoveValue(_livePlaylistMoveCollections(), value);
+      : value == null
+      ? box.delete(key)
+      : box.put(key, value);
+  bool liveMatches(Map value) =>
+      _samePlaylistMoveValue(_livePlaylistMoveCollections(), value);
   bool storedKeyMatches(String key, dynamic value, bool exists) =>
       box.containsKey(key) == exists &&
       _samePlaylistMoveValue(box.get(key, defaultValue: const []), value);
   bool storedMatches(Map values, Map<String, bool> exists) => staged.keys.every(
     (key) => storedKeyMatches(key, values[key], exists[key]!),
   );
-  bool ownedFailureState() => liveMatches(beforeLive) && staged.keys.every((key) =>
-      storedKeyMatches(key, before[key], present[key]!) ||
-      (attempted.contains(key) && storedKeyMatches(key, staged[key], true)));
+  bool ownedFailureState() =>
+      liveMatches(beforeLive) &&
+      staged.keys.every(
+        (key) =>
+            storedKeyMatches(key, before[key], present[key]!) ||
+            (attempted.contains(key) &&
+                storedKeyMatches(key, staged[key], true)),
+      );
   Future<bool> restoreOwned() async {
     // Restore a removed source before undoing the destination addition. If any
     // owner or restoration becomes uncertain, retain the destination copy.
@@ -788,7 +798,9 @@ Future<bool?> _persistPlaylistMove(
       if (!ownedFailureState()) return false;
       if (storedKeyMatches(key, before[key], present[key]!)) continue;
       try {
-        await persist(key, present[key]! ? _copyPlaylistMoveValue(before[key]) as List<dynamic> : null);
+        // The unchanged live owner supplies its original object identities;
+        // selected-occurrence writers require those same stored map instances.
+        await persist(key, present[key]! ? _livePlaylistMoveCollections()[key]! : null);
       } catch (_) {
         // A post-save failure is accepted only after checking the actual value.
       }
@@ -800,31 +812,51 @@ Future<bool?> _persistPlaylistMove(
   if (!liveMatches(before) || !storedMatches(before, present)) return false;
   try {
     for (final key in changed) {
-      if (!liveMatches(beforeLive) || !storedMatches(expected, expectedPresence)) return null;
+      if (!liveMatches(beforeLive) ||
+          !storedMatches(expected, expectedPresence))
+        return null;
       attempted.add(key);
       await persist(key, _copyPlaylistMoveValue(staged[key]) as List<dynamic>);
       expected[key] = staged[key]!;
       expectedPresence[key] = true;
-      if (!liveMatches(beforeLive) || !storedMatches(expected, expectedPresence)) return null;
+      if (!liveMatches(beforeLive) ||
+          !storedMatches(expected, expectedPresence))
+        return null;
     }
   } catch (error, stackTrace) {
-    logger.log('Error persisting playlist move', error: error, stackTrace: stackTrace);
+    logger.log(
+      'Error persisting playlist move',
+      error: error,
+      stackTrace: stackTrace,
+    );
     if (!await restoreOwned()) return null;
     return false;
   }
   // Publish only after acknowledged writes and complete owner checks. A
   // notifier listener may itself make a newer edit; recheck before each publish.
+  // Publish the verified stored maps, preserving canonical owner identities.
+  // The private expected snapshots above remain separate from mutable owners.
   final expectedLive = Map<String, List<dynamic>>.from(beforeLive);
   for (final key in changed) {
-    if (!liveMatches(expectedLive) || !storedMatches(expected, expectedPresence)) return null;
+    if (!liveMatches(expectedLive) ||
+        !storedMatches(expected, expectedPresence))
+      return null;
     expectedLive[key] = staged[key]!;
     switch (key) {
-      case 'playlistFolders': userPlaylistFolders.value = List<Map>.from(_copyPlaylistMoveValue(staged[key]) as List);
-      case 'customPlaylists': userCustomPlaylists.value = List<Map>.from(_copyPlaylistMoveValue(staged[key]) as List);
-      case 'playlists': userPlaylists.value = List<String>.from(staged[key]!);
+      case 'playlistFolders':
+        userPlaylistFolders.value = List<Map>.from(
+          box.get(key) as List,
+        );
+      case 'customPlaylists':
+        userCustomPlaylists.value = List<Map>.from(
+          box.get(key) as List,
+        );
+      case 'playlists':
+        userPlaylists.value = List<String>.from(box.get(key) as List);
     }
   }
-  if (!liveMatches(expectedLive) || !storedMatches(expected, expectedPresence)) return null;
+  if (!liveMatches(expectedLive) || !storedMatches(expected, expectedPresence))
+    return null;
   return true;
 }
 
@@ -834,7 +866,8 @@ Future<String> movePlaylistToFolder(
   BuildContext context, {
   Future<void> Function(String key, List<dynamic>? value)? write,
 }) async {
-  const uncertain = 'The move could not be verified. Reload the Library before trying again.';
+  const uncertain =
+      'The move could not be verified. Reload the Library before trying again.';
   if (!context.mounted) return uncertain;
   final failure = context.l10n!.error;
   final success = '${context.l10n!.addedSuccess}!';
@@ -842,19 +875,25 @@ Future<String> movePlaylistToFolder(
   _playlistMoveActive = true;
   try {
     final ownedPlaylist = _currentPlaylistMoveSource(playlist);
-    final updatedFolders = List<Map>.from(_copyPlaylistMoveValue(userPlaylistFolders.value) as List);
+    final updatedFolders = List<Map>.from(
+      _copyPlaylistMoveValue(userPlaylistFolders.value) as List,
+    );
     // A stale picker must refuse before removing any current membership.
     if (folderId != null &&
-        updatedFolders.where((folder) => folder['id'] == folderId).length != 1) {
+        updatedFolders.where((folder) => folder['id'] == folderId).length !=
+            1) {
       return failure;
     }
-    final updatedCustomPlaylists = List<Map>.from(_copyPlaylistMoveValue(userCustomPlaylists.value) as List);
+    final updatedCustomPlaylists = List<Map>.from(
+      _copyPlaylistMoveValue(userCustomPlaylists.value) as List,
+    );
     final updatedYoutubePlaylists = List<String>.from(userPlaylists.value);
 
     for (final folder in updatedFolders) {
-      final folderPlaylists = List<Map>.from(
-        folder['playlists'] ?? [],
-      )..removeWhere((p) => p['ytid'] != null && p['ytid'] == ownedPlaylist['ytid']);
+      final folderPlaylists = List<Map>.from(folder['playlists'] ?? [])
+        ..removeWhere(
+          (p) => p['ytid'] != null && p['ytid'] == ownedPlaylist['ytid'],
+        );
       folder['playlists'] = folderPlaylists;
     }
 
@@ -874,7 +913,9 @@ Future<String> movePlaylistToFolder(
             (p) => p['ytid'] == ownedPlaylist['ytid'],
           );
         } else if (ownedPlaylist['source'] == 'user-youtube') {
-          updatedYoutubePlaylists.removeWhere((p) => p == ownedPlaylist['ytid']);
+          updatedYoutubePlaylists.removeWhere(
+            (p) => p == ownedPlaylist['ytid'],
+          );
         }
       } else {
         logger.log(
@@ -884,7 +925,9 @@ Future<String> movePlaylistToFolder(
       }
     } else {
       if (ownedPlaylist['source'] == 'user-created') {
-        if (!updatedCustomPlaylists.any((p) => p['ytid'] == ownedPlaylist['ytid'])) {
+        if (!updatedCustomPlaylists.any(
+          (p) => p['ytid'] == ownedPlaylist['ytid'],
+        )) {
           updatedCustomPlaylists.add(ownedPlaylist);
         }
       } else if (ownedPlaylist['source'] == 'user-youtube') {
@@ -894,12 +937,24 @@ Future<String> movePlaylistToFolder(
       }
     }
 
-    final result = await _persistPlaylistMove({
-      'playlistFolders': updatedFolders,
-      'customPlaylists': updatedCustomPlaylists,
-      'playlists': updatedYoutubePlaylists,
-    }, folderId != null ? 'playlistFolders' : ownedPlaylist['source'] == 'user-created' ? 'customPlaylists' : 'playlists', write);
-    return switch (result) { true => success, false => failure, null => uncertain };
+    final result = await _persistPlaylistMove(
+      {
+        'playlistFolders': updatedFolders,
+        'customPlaylists': updatedCustomPlaylists,
+        'playlists': updatedYoutubePlaylists,
+      },
+      folderId != null
+          ? 'playlistFolders'
+          : ownedPlaylist['source'] == 'user-created'
+          ? 'customPlaylists'
+          : 'playlists',
+      write,
+    );
+    return switch (result) {
+      true => success,
+      false => failure,
+      null => uncertain,
+    };
   } catch (e, stackTrace) {
     logger.log(
       'Error moving playlist to folder',

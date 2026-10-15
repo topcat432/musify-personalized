@@ -18,11 +18,19 @@ owner is uncertain. Uncertain saved state is retained with explicit reload advic
 it is not a success or an automatic retry. UI callers await the result. No durable
 journal, schema or migration is added, and crash/power-loss atomicity is not claimed.
 
-Thirty-four synthetic Hive cases inject before/after real saves, compensation
+Forty synthetic Hive cases inject before/after real saves, compensation
 failure, stored/live owner edits, overlap, repeat and key absence; each reopens the
 fixture and checks membership/values. A pinned f048cb41 control must reproduce
 lost membership after a folder-to-root destination failure. Corrected source
 qualification is pending remote CI; no local workload or device action occurred.
+The exact f048cb41 control reproduced persisted membership0 instead of1 after
+reopen. Draft3b5c16a3 passed analysis and99 focused playlist cases, but source
+review found that copied publication/restoration maps would break existing
+selected-occurrence writer ownership. Publication now adopts verified stored map
+instances; owned restoration uses the unchanged live owner maps. Six composed
+move/fault -> rename -> remove -> one-shot Undo -> reopen cases protect those
+existing workflows. A pinned3b5c16a3 control must fail rename ownership; the
+40 new cases imply968 aggregate and105 playlist focus, still pending qualification.
 
 ## Approved hosted Windows containment qualification,2026-10-15
 
