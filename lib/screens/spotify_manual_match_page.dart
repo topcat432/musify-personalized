@@ -50,6 +50,8 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
   late final TextEditingController _queryController;
   StreamSubscription<ReviewSprintAudioState>? _playerStateSubscription;
   Timer? _previewTimer;
+  Future<void> _audioTail = Future<void>.value();
+  int _previewGeneration = 0;
   List<Map<String, dynamic>> _results = [];
   bool _searching = false;
   bool _saving = false;
@@ -69,7 +71,7 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
     final title = widget.item['sourceTitle']?.toString().trim() ?? '';
     _queryController = TextEditingController(text: '$artist $title'.trim());
     _playerStateSubscription = _previewPlayer.stateStream.listen((state) {
-      if (!mounted) return;
+      if (!mounted || _previewingId == null) return;
       final completed = state.completed;
       setState(() {
         _previewPlaying = state.playing && !completed;
@@ -84,6 +86,7 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
 
   @override
   void dispose() {
+    _previewGeneration++;
     _previewTimer?.cancel();
     _playerStateSubscription?.cancel();
     if (_ownsPlayer) unawaited(_previewPlayer.dispose());
@@ -93,14 +96,13 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
 
   Future<void> _search() async {
     final query = _queryController.text.trim();
-    if (query.isEmpty || _searching) return;
-
-    await _stopPreview();
-    if (!mounted) return;
+    if (query.isEmpty || _searching || _saving) return;
     setState(() {
       _searching = true;
       _error = null;
     });
+    await _stopPreview();
+    if (!mounted) return;
 
     try {
       final candidateSearch = widget.candidateSearch;
@@ -214,93 +216,120 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
     };
   }
 
+  bool _ownsPreview(int generation) =>
+      mounted && generation == _previewGeneration;
+
+  Future<void> _runAudio(Future<void> Function() action) {
+    final next = _audioTail.then((_) => action());
+    _audioTail = next.then<void>((_) {}, onError: (Object _, StackTrace __) {});
+    return next;
+  }
+
   Future<void> _togglePreview(Map<String, dynamic> result) async {
-    if (_saving) return;
+    if (_saving || _searching) return;
     final candidate = result['candidate'];
     if (candidate is! Map) return;
     final songId = candidate['ytid']?.toString() ?? '';
     if (songId.isEmpty || _previewLoadingId == songId) return;
 
     if (_previewingId == songId) {
-      if (_previewPlaying) {
-        _previewTimer?.cancel();
-        await _previewPlayer.pause();
-      } else {
-        _startPreviewPlayback();
+      final generation = ++_previewGeneration;
+      try {
+        if (_previewPlaying) {
+          _previewTimer?.cancel();
+          await _runAudio(() async {
+            if (_ownsPreview(generation)) await _previewPlayer.pause();
+          });
+        } else {
+          await _runAudio(() async {
+            if (_ownsPreview(generation)) _startPreviewPlayback(generation);
+          });
+        }
+      } catch (error) {
+        if (_ownsPreview(generation)) await _failPreview(error);
       }
       return;
     }
 
-    await _stopPreview();
-    if (!mounted) return;
+    final generation = ++_previewGeneration;
+    _previewTimer?.cancel();
     setState(() {
       _previewLoadingId = songId;
+      _previewingId = null;
+      _previewPlaying = false;
       _error = null;
     });
-
     try {
-      final streamUrl = await _streamResolver(songId);
+      await _runAudio(() async {
+        if (_ownsPreview(generation)) await _previewPlayer.stop();
+      });
+      if (!_ownsPreview(generation)) return;
+      final streamUrl = await _streamResolver(songId).timeout(_timeout);
+      if (!_ownsPreview(generation)) return;
       if (streamUrl == null || streamUrl.isEmpty) {
         throw StateError('No playable audio stream was found for this result.');
       }
-
-      await _previewPlayer.setUrl(streamUrl);
-      final durationSeconds = _asInt(candidate['duration']);
-      final previewStart = durationSeconds != null && durationSeconds > 75
-          ? const Duration(seconds: 20)
-          : Duration.zero;
-      if (previewStart > Duration.zero) {
-        await _previewPlayer.seek(previewStart);
-      }
-      if (!mounted) return;
-      setState(() {
-        _previewingId = songId;
-        _previewLoadingId = null;
+      // Keep native load/seek/stop operations ordered. A late load must finish
+      // before the new owner's load, and may not play or change its labels.
+      await _runAudio(() async {
+        if (!_ownsPreview(generation)) return;
+        await _previewPlayer.setUrl(streamUrl);
+        if (!_ownsPreview(generation)) return;
+        final durationSeconds = _asInt(candidate['duration']);
+        if (durationSeconds != null && durationSeconds > 75) {
+          await _previewPlayer.seek(const Duration(seconds: 20));
+        }
+        if (!_ownsPreview(generation)) return;
+        setState(() {
+          _previewingId = songId;
+          _previewLoadingId = null;
+        });
+        _startPreviewPlayback(generation);
       });
-      _startPreviewPlayback();
     } catch (error) {
-      await _stopPreview();
-      if (!mounted) return;
-      setState(() => _error = 'Preview failed: $error');
+      if (_ownsPreview(generation)) await _failPreview(error);
     }
   }
 
-  void _startPreviewPlayback() {
-    final songId = _previewingId;
-    unawaited(
-      _previewPlayer.play().catchError((Object error, StackTrace _) async {
-        if (!mounted || _previewingId != songId) return;
-        await _stopPreview();
-        if (!mounted) return;
-        setState(() {
-          _error = 'Preview unavailable. Please try another result.';
-        });
-      }),
-    );
-    // just_audio.play completes on pause/stop/end, not when playback begins.
-    _armPreviewTimer();
+  void _startPreviewPlayback(int generation) {
+    if (!_ownsPreview(generation)) return;
+    try {
+      unawaited(_previewPlayer.play().catchError((Object error, StackTrace _) async {
+        if (_ownsPreview(generation)) await _failPreview(error);
+      }));
+      // play completes on pause/stop/end, not when playback begins.
+      _previewTimer?.cancel();
+      _previewTimer = Timer(_previewLength, () {
+        if (_ownsPreview(generation)) unawaited(_stopPreview());
+      });
+    } catch (error) {
+      if (_ownsPreview(generation)) unawaited(_failPreview(error));
+    }
   }
 
-  void _armPreviewTimer() {
-    _previewTimer?.cancel();
-    _previewTimer = Timer(_previewLength, () {
-      unawaited(_stopPreview());
-    });
+  Future<void> _failPreview(Object error) {
+    if (mounted) setState(() => _error = 'Preview failed: $error');
+    return _stopPreview();
   }
 
-  Future<void> _stopPreview() async {
+  Future<void> _stopPreview() {
+    final generation = ++_previewGeneration;
     _previewTimer?.cancel();
     _previewTimer = null;
-    try {
-      await _previewPlayer.stop();
-    } catch (_) {
-      // A failed or already-disposed player does not need further recovery.
+    if (mounted) {
+      setState(() {
+        _previewingId = null;
+        _previewLoadingId = null;
+        _previewPlaying = false;
+      });
     }
-    if (!mounted) return;
-    setState(() {
-      _previewingId = null;
-      _previewLoadingId = null;
-      _previewPlaying = false;
+    return _runAudio(() async {
+      if (!_ownsPreview(generation)) return;
+      try {
+        await _previewPlayer.stop();
+      } catch (_) {
+        // A failed or disposed player needs no further recovery.
+      }
     });
   }
 

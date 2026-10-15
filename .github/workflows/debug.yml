@@ -350,6 +350,36 @@ jobs:
           path: rescue-owner-control.log
           if-no-files-found: error
           retention-days: 7
+      - name: Reproduce late manual preview ownership defect on exact prior source
+        shell: bash
+        run: |
+          set -euo pipefail
+          original="$GITHUB_WORKSPACE"
+          control="$RUNNER_TEMP/musify-manual-preview-control-4104ccee"
+          git fetch --no-tags --depth=1 origin 4104ccee8cf150e66026934629ee6ee22fe586a0
+          git worktree add --detach "$control" 4104ccee8cf150e66026934629ee6ee22fe586a0
+          cp test/screens/spotify_manual_preview_ownership_test.dart "$control/test/screens/"
+          cd "$control"
+          flutter pub get --offline
+          set +e
+          python3 "$original/tool/bounded_command_log.py" --log "$original/manual-preview-owner-control.log" --timeout-seconds 180 -- flutter test --no-pub --reporter expanded -j 1 test/screens/spotify_manual_preview_ownership_test.dart --plain-name 'late manual preview resolver cannot replace or stop B: failure=false'
+          result=$?
+          set -e
+          test "$result" -eq 1
+          grep -Fq 'STALE_MANUAL_RESOLVER_LOADED_AFTER_B' "$original/manual-preview-owner-control.log"
+          grep -Fq 'url-a' "$original/manual-preview-owner-control.log"
+          grep -Fq 'url-b' "$original/manual-preview-owner-control.log"
+          echo "Exact4104ccee control reproduced late A loading after the newer B preview."
+          test "$(git -C "$original" rev-parse HEAD)" = "$SOURCE_SHA"
+
+      - name: Upload exact prior-source manual preview owner control log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: manual-preview-owner-control-${{ github.run_number }}
+          path: manual-preview-owner-control.log
+          if-no-files-found: error
+          retention-days: 7
       - name: Prepare read-only empty-source formatting suggestions
         shell: bash
         run: |

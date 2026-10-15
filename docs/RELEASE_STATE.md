@@ -1,6 +1,25 @@
 # Musify Personalized current state
 
 
+## Manual preview request ownership,2026-10-15
+
+I06 manual preview source inspection found that a late resolver, native load or
+seek for A could overwrite/play or stop a newer B. Play failure callbacks checked
+only recording ID, so an earlier play could stop a newer resume of the same ID.
+The page now assigns a generation before awaiting, checks ownership after every
+asynchronous boundary, and orders native operations on its existing player.
+Search, save and disposal invalidate pending preview work. Pause/resume use fresh
+generations; cutoff and asynchronous errors may stop only their current owner.
+The existing review-player adapter is reused with its unchanged online source
+configuration. No visual, schema, storage, dependency or provider-mode change.
+
+Nine actual widget cases cover late resolver success/failure, native load
+success/failure, seek, replacement search, disposal, same-recording play failure
+and pause/resume/source reuse/30-second cutoff. All use synthetic injected
+resolvers/search/player; no provider traffic or local test worker is involved.
+Exact4104ccee prior-source control and successor qualification are pending Linux CI.
+
+
 ## Rescue concurrent-owner preservation,2026-10-15
 
 Independent I08 review found a separate pre-existing conflict: rescue protected
@@ -16,10 +35,14 @@ Seven new Hive cases use the actual manual/No-match writers, an unchanged exclud
 row, typed/nested metadata conflicts, multiple successful checkpoints, a conflict
 after an intermediate checkpoint and pause/reopen/resume. Exact e2ebb0b8 control
 and successor qualification are pending remote Linux CI; no local worker launched.
-The manual-preview ownership gap is selected next but its guard is paused while
-this review repair takes priority. Its existing player adapter/search/resolver
-seam is present; default provider behavior is unchanged, and no preview fix is
-claimed yet. The eight Windows containment cases remain unqualified.
+The first successor5cf0b623 run38695966085 passed875 tests but failed the
+multiple-checkpoint regression. Hive cached the mutable working list, so the next
+batch changed live cache values before its guard. Checkpoint writes now use
+detached typed copies, and the independent ownership baseline stays separate.
+The assertion is unchanged. The exact prior-source control and six other new
+cases passed; this failed run is not qualification. Manual-preview ownership work
+is included as the next bounded product correction above. The eight Windows
+containment cases remain unqualified.
 
 ## Permanent exclusion review boundary,2026-10-15
 
