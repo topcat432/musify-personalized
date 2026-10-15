@@ -53,7 +53,7 @@ void main() {
     sourceIndex: 1,
   );
   test(
-    'one-shot restore preserves chosen values, repeats, legacy metadata and raw unrelated playlists',
+    'one-shot restore preserves chosen values, repeats, legacy metadata and loaded unrelated playlists',
     () async {
       final undo = token();
       removed['ytid'] = 'mutated';
@@ -65,6 +65,7 @@ void main() {
         'list': [],
         'name': 'Owner extra',
       };
+      userCustomPlaylists.value = [playlist, manual];
       await Hive.box('user').put('customPlaylists', [playlist, manual]);
       final result = await undo.apply(
         expectedCurrentSongs: remaining,
@@ -352,4 +353,134 @@ void main() {
       expect(undo.used, isTrue);
     },
   );
+  for (final state in ['root', 'folder-child', 'folder-name']) {
+    test('pre-apply live divergence is refused before writing: $state', () async {
+      final savedOther = <String, dynamic>{
+        'ytid': 'customId-other',
+        'source': 'user-created',
+        'title': 'Saved other',
+        'list': <Map>[],
+      };
+      final pendingOther = {...savedOther, 'title': 'Pending other'};
+      final folder = state != 'root';
+      final key = folder ? 'playlistFolders' : 'customPlaylists';
+      final List<Map> stored;
+      final List<Map> live;
+      if (folder) {
+        final savedFolder = <String, dynamic>{
+          'id': 'folder',
+          'name': 'Saved folder',
+          'playlists': [playlist, savedOther],
+        };
+        stored = [savedFolder];
+        live = [
+          {
+            ...savedFolder,
+            'name': state == 'folder-name' ? 'Pending folder' : 'Saved folder',
+            'playlists': [
+              playlist,
+              state == 'folder-child' ? pendingOther : savedOther,
+            ],
+          },
+        ];
+        userCustomPlaylists.value = [];
+        await Hive.box('user').put('customPlaylists', <Map>[]);
+        userPlaylistFolders.value = live;
+      } else {
+        stored = [playlist, savedOther];
+        live = [playlist, pendingOther];
+        userCustomPlaylists.value = live;
+      }
+      await Hive.box('user').put(key, stored);
+      final rawTarget = folder
+          ? (Hive.box('user').get(key).first['playlists'] as List).first
+          : Hive.box('user').get(key).first;
+      final liveTarget = folder
+          ? (live.first['playlists'] as List).first
+          : live.first;
+      // Target-only identity checks must pass in this regression.
+      expect(identical(rawTarget, liveTarget), isTrue);
+      final undo = token();
+      var writes = 0;
+      final result = await undo.apply(
+        expectedCurrentSongs: remaining,
+        currentSourceOrder: [0, 1, 2],
+        restoredOrder: [0, 1, 2, 3],
+        write: (key, value) async {
+          writes++;
+          await Hive.box('user').put(key, value);
+        },
+      );
+      expect(result, isNull);
+      expect(writes, 0);
+      expect(Hive.box('user').get(key), stored);
+      expect(folder ? userPlaylistFolders.value : userCustomPlaylists.value, live);
+      if (state == 'folder-name') {
+        expect(userPlaylistFolders.value.first['name'], 'Pending folder');
+      } else {
+        final items = folder
+            ? userPlaylistFolders.value.first['playlists'] as List
+            : userCustomPlaylists.value;
+        expect(items.last['title'], 'Pending other');
+      }
+    });
+  }
+  for (final folder in [false, true]) {
+    test(
+      'stored-only legacy entries remain untouched when live omits them: folder=$folder',
+      () async {
+        final legacy = {
+          'opaque': {
+            'version': 99,
+            'bytes': Uint8List.fromList([4, 5]),
+            'at': DateTime.utc(2026, 1, 1),
+          },
+          'list': <Map>[],
+        };
+        final key = folder ? 'playlistFolders' : 'customPlaylists';
+        final List<Map> stored;
+        final List<Map> live;
+        if (folder) {
+          stored = [
+            {'id': 'folder', 'name': 'Fixture', 'playlists': [playlist, legacy]},
+          ];
+          live = [
+            {'id': 'folder', 'name': 'Fixture', 'playlists': [playlist]},
+          ];
+          userCustomPlaylists.value = [];
+          await Hive.box('user').put('customPlaylists', <Map>[]);
+          userPlaylistFolders.value = live;
+        } else {
+          stored = [playlist, legacy];
+          live = [playlist];
+          userCustomPlaylists.value = live;
+        }
+        await Hive.box('user').put(key, stored);
+        await Hive.box('user').flush();
+        final beforeBytes = await File('${root.path}/user.hive').readAsBytes();
+        final undo = token();
+        var writes = 0;
+        expect(
+          await undo.apply(
+            expectedCurrentSongs: remaining,
+            currentSourceOrder: [0, 1, 2],
+            restoredOrder: [0, 1, 2, 3],
+            write: (key, value) async {
+              writes++;
+              await Hive.box('user').put(key, value);
+            },
+          ),
+          isNull,
+        );
+        expect(writes, 0);
+        expect(folder ? userPlaylistFolders.value : userCustomPlaylists.value, live);
+        await Hive.box('user').flush();
+        expect(await File('${root.path}/user.hive').readAsBytes(), beforeBytes);
+        await Hive.close();
+        Hive.init(root.path);
+        await initPriorityReviewHive();
+        expect(Hive.box('user').get(key), stored);
+      },
+    );
+  }
 }
