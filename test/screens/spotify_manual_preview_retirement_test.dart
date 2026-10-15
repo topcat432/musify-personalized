@@ -106,6 +106,7 @@ void main() {
       expect(searches, 2);
       expect(find.text('Possible matches'), findsOneWidget);
       await preview(tester, 1);
+      await tester.pump(const Duration(milliseconds: 150)); await tester.pump();
       expect(created, 1);
       expect(find.textContaining('cleanup is not confirmed'), findsOneWidget);
       first.disposeGate!.complete(); await tester.pump();
