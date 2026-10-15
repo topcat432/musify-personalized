@@ -291,6 +291,36 @@ jobs:
           name: occurrence-capacity-control-${{ github.run_number }}
           path: occurrence-capacity-control.log
           if-no-files-found: error
+      - name: Reproduce stale review exclusion on exact prior source
+        shell: bash
+        run: |
+          set -euo pipefail
+          original="$GITHUB_WORKSPACE"
+          control="$RUNNER_TEMP/musify-stale-exclusion-control-2ef03a12"
+          git fetch --no-tags --depth=1 origin 2ef03a12cbd48cc4aef922efc66f4ff30762d490
+          git worktree add --detach "$control" 2ef03a12cbd48cc4aef922efc66f4ff30762d490
+          cp test/services/spotify_stale_exclusion_resolution_test.dart "$control/test/services/"
+          cd "$control"
+          flutter pub get --offline
+          set +e
+          python3 "$original/tool/bounded_command_log.py" --log "$original/stale-review-exclusion-control.log" --timeout-seconds 180 -- flutter test --no-pub --reporter expanded -j 1 test/services/spotify_stale_exclusion_resolution_test.dart --plain-name 'stale review cannot reactivate excluded row: accept=false'
+          result=$?
+          set -e
+          test "$result" -eq 1
+          grep -Fq 'Expected: throws' "$original/stale-review-exclusion-control.log"
+          grep -Fq 'SpotifyResolutionResult' "$original/stale-review-exclusion-control.log"
+          grep -Fq 'stale review cannot reactivate excluded row: accept=false' "$original/stale-review-exclusion-control.log"
+          echo "Exact2ef03a12 control reproduced stale review reactivation of a permanent exclusion."
+          test "$(git -C "$original" rev-parse HEAD)" = "$SOURCE_SHA"
+
+      - name: Upload exact prior-source stale exclusion control log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stale-review-exclusion-control-${{ github.run_number }}
+          path: stale-review-exclusion-control.log
+          if-no-files-found: error
+          retention-days: 7
       - name: Prepare read-only empty-source formatting suggestions
         shell: bash
         run: |

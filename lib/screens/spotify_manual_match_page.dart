@@ -11,7 +11,6 @@ import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:hive/hive.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:musify/services/common_services.dart';
 import 'package:musify/services/online_audio_source.dart';
@@ -290,67 +289,19 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
     if (_saving) return;
     final candidate = result['candidate'];
     if (candidate is! Map) return;
-
-    await _stopPreview();
-    if (!mounted) return;
     setState(() {
       _saving = true;
       _error = null;
     });
-
     try {
-      final box = Hive.box('user');
-      final results = _readMaps(box.get('spotifyMatchResults'));
-      final metadata = _readMap(box.get('spotifyImportMetadata'));
-      final sourceRow = widget.item['sourceRow']?.toString();
-      final index = results.indexWhere(
-        (item) => item['sourceRow']?.toString() == sourceRow,
-      );
-      if (index == -1) {
-        throw StateError('The imported track is no longer in the match list.');
-      }
-      SpotifyReviewWorkflowService.validateCurrentItem(
+      await _stopPreview();
+      if (!mounted) return;
+      await const SpotifyReviewWorkflowService().resolveManualItem(
         item: widget.item,
-        currentResult: results[index],
-        metadata: metadata,
+        selectedAlternative: result,
+        query: _queryController.text.trim(),
+        isDirectUrl: result['isDirectUrl'] == true,
       );
-
-      final updated = Map<String, dynamic>.from(results[index])
-        ..['status'] = 'manually_matched'
-        ..['score'] = result['score']
-        ..['bestCandidate'] = Map<String, dynamic>.from(candidate)
-        ..['matchEvidence'] = result['evidence']
-        ..['reviewDecision'] = result['isDirectUrl'] == true
-            ? 'manual_url'
-            : 'manual_search'
-        ..['manualSearchQuery'] = _queryController.text.trim()
-        ..['manualSourceUrl'] = result['isDirectUrl'] == true
-            ? _queryController.text.trim()
-            : null
-        ..['reviewedAt'] = DateTime.now().toUtc().toIso8601String();
-      results[index] = updated;
-
-      metadata
-        ..['matchedCount'] = results.where(_isMatched).length
-        ..['reviewCount'] = results
-            .where((item) => item['status'] == 'needs_review')
-            .length
-        ..['unmatchedCount'] = results.where(_isUnmatched).length
-        ..['errorCount'] = results
-            .where((item) => item['status'] == 'error')
-            .length
-        ..['pendingResolutionCount'] = results
-            .where(SpotifyReviewWorkflowService.isPendingResolution)
-            .length
-        ..['lastMatchingCheckpointAt'] = DateTime.now()
-            .toUtc()
-            .toIso8601String();
-
-      await box.putAll({
-        'spotifyMatchResults': results,
-        'spotifyImportMetadata': metadata,
-      });
-
       if (!mounted) return;
       Navigator.of(context).pop(true);
     } catch (error) {
@@ -458,34 +409,13 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
     );
   }
 
-  static bool _isMatched(Map<String, dynamic> item) {
-    return item['status'] == 'matched' || item['status'] == 'manually_matched';
-  }
-
-  static bool _isUnmatched(Map<String, dynamic> item) {
-    return item['status'] == 'unmatched' ||
-        item['status'] == 'manual_unmatched';
-  }
-
   static int? _asInt(dynamic value) {
     if (value is int) return value;
     if (value is num) return value.round();
     return int.tryParse(value?.toString() ?? '');
   }
 
-  static Map<String, dynamic> _readMap(dynamic value) {
-    return value is Map
-        ? Map<String, dynamic>.from(value)
-        : <String, dynamic>{};
-  }
 
-  static List<Map<String, dynamic>> _readMaps(dynamic value) {
-    if (value is! List) return <Map<String, dynamic>>[];
-    return value
-        .whereType<Map>()
-        .map(Map<String, dynamic>.from)
-        .toList(growable: true);
-  }
 }
 
 class _ManualSearchLoading extends StatelessWidget {

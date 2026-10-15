@@ -1,5 +1,41 @@
 # Musify Personalized current state
 
+## Permanent exclusion review boundary,2026-10-15
+
+I08 source inspection found that a retained review/manual card could validate the
+same source identity after permanent exclusion, then overwrite its status with
+manually matched/unmatched while retaining contradictory exclusion history.
+The successor uses the existing history as authoritative in queue/cluster reads,
+explicit decisions, manual save, duplicate propagation, bulk approval and rescue.
+Malformed history refuses before writes; absent history remains readable. No
+permanent row is silently repaired, deleted or reactivated.
+
+Manual save now delegates to the same guarded existing-format writer, retaining
+its manual search/URL audit and selected alternative without adding review-sprint
+ISRC propagation. Its UI locks before awaiting preview stop. Checkpoints reject
+stale proposals that alter/drop a currently excluded row, including a row added
+by a newer owner; explicit repeated exclusion remains allowed. Counts distinguish
+authoritatively excluded partial rows without rewriting their retained source
+maps. No schema, adapter, migration, dependency, golden or source-provider change.
+
+Eighteen new Hive cases cover stale Accept/No-match, status/history-only and
+unreadable history, queue/cluster and metadata counts, bulk/ISRC/rescue behavior,
+late exclusion and newly added protected rows, ambiguous source rows, explicit
+exclude repeat, manual provenance/no duplicate propagation, rejection byte checks,
+reopen and unrelated library retention. All fixtures are synthetic; rescue cases
+use existing local review-evidence branches and make no provider requests.
+Exact2ef03a12 prior-source control and corrected qualification are pending in the
+required Linux workflow. This is not a completed feature acceptance claim.
+
+Owned-command source2ef03a12cbd48cc4aef922efc66f4ff30762d490 passed
+[Linux CI38688684631](https://github.com/topcat432/musify-personalized/actions/runs/38688684631):
+850 app tests,16+24 strict visuals,analysis,12 portable Python contracts with8
+native Windows cases skipped,49/30/3310 native helper checks and required builds.
+Windows containment remains unqualified pending the hosted-runner policy decision;
+no local worker was launched. Rename independently closed at b81ac049 per the
+owner lane checkpoint. Native baseline recovery stays first when admission permits,
+then F01/F02; phone, signing/publication, provider and merge boundaries stay held.
+
 ## Windows command ownership correction,2026-10-15
 
 Five exact October13 Musify TSV/JSON test runners survived their direct launchers;
