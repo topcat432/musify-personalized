@@ -10,7 +10,7 @@ import 'package:musify/main.dart' show audioHandler;
 import 'package:musify/screens/playlist_page.dart';
 import 'package:musify/services/audio_service.dart';
 import 'package:musify/services/playlists_manager.dart';
-import 'package:musify/services/settings_manager.dart' show playlistSortSetting;
+import 'package:musify/services/settings_manager.dart' show playlistSortSetting, shuffleNotifier;
 import 'package:musify/widgets/song_bar.dart';
 import 'package:musify/widgets/sort_chips.dart';
 
@@ -31,6 +31,7 @@ void main() {
     root = await Directory.systemTemp.createTemp('owned-sort-move-');
     Hive.init(root.path); await initPriorityReviewHive(); resetPriorityReviewGlobals();
     playlistSortSetting = 'default_';
+    shuffleNotifier.value = false;
     handler = MusifyAudioHandler(); audioHandler = handler;
     await Future<void>.delayed(Duration.zero);
   });
@@ -73,7 +74,7 @@ void main() {
           });
         });
         late BuildContext libraryContext;
-        await tester.pumpWidget(priorityReviewApp(brightness: Brightness.dark,
+        await tester.pumpWidget(priorityReviewAppSized(brightness: Brightness.dark, viewSize: const Size(800, 1800),
           child: Builder(builder: (context) {
             libraryContext = context;
             return TextButton(onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
@@ -89,7 +90,7 @@ void main() {
           PlaylistSortType.artist => ['Zulu', 'Zulu', 'Tail', 'Alpha', 'Bridge'],
           _ => ['Zulu', 'Tail', 'Alpha', 'Bridge', 'Zulu'],
         });
-        final back = tester.widget<IconButton>(find.byTooltip('Back'));
+        final back = tester.widget<IconButton>(find.byWidgetPredicate((widget) => widget is IconButton && widget.tooltip == 'Back'));
         Zone.root.run(back.onPressed!); await tester.pumpAndSettle();
         expect(find.text('Open owned playlist'), findsOneWidget);
         await tester.runAsync(() async {
