@@ -18,6 +18,11 @@ survival, preserving the independent sentinel and survivor assertions; cleanup
 waits for actual exit and reports native errors. A pinned b81ac049 old-logger
 control must still demonstrate a surviving descendant after that bound. The
 production containment helper is unchanged; revised native qualification is pending.
+Run38719677762 reproduced the intended old-logger survivor after the3second bound,
+with the sentinel alive, then PowerShell's footer propagated the expected native
+exit1 and prevented the positive suite. The control now explicitly succeeds only
+after verifying that expected failure; eight-case execution remains required.
+The hosted checkout disables automatic safe-directory trust edits.
 
 
 ## Manual choice query provenance preservation,2026-10-15

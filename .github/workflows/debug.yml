@@ -877,6 +877,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ env.SOURCE_SHA }}
+          set-safe-directory: false
       - name: Reproduce Windows descendant survival on exact prior logger
         shell: pwsh
         run: |
@@ -905,6 +906,7 @@ jobs:
             throw 'Pinned prior logger must fail its descendant-survival assertion'
           }
           Write-Output 'Exact b81ac049 Windows control reproduced descendant survival.'
+          exit 0 # The verified negative control's expected native exit is handled.
       - name: Verify candidate and run bounded native Windows contracts
         shell: pwsh
         run: |
