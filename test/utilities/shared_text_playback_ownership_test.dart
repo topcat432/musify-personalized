@@ -830,10 +830,142 @@ void main() {
     });
   }
 
+  for (final control in ['stop', 'pause', 'queue']) {
+    test('metadata failure handoff yields to $control before reporting', () async {
+      final player = _OwnedPlayer();
+      final handler = _FailureHandoffHandler(player);
+      final errors = <Object>[];
+      const healthy = 'CCCCCCCCCCC';
+      try {
+        await consumeYoutubeSharedTextIntent('https://youtu.be/$a',
+          audioHandler: handler, resolveSong: (_) async => song(a),
+          onError: (error, stack) => fail('$error'));
+        handler.beforeRethrow = () async {
+          if (control == 'stop') await handler.stop();
+          if (control == 'pause') await handler.pause();
+          if (control == 'queue') await handler.addPlaylistToQueue([song(healthy)], replace: true);
+        };
+        await consumeYoutubeSharedTextIntent('https://youtu.be/$b',
+          audioHandler: handler,
+          resolveSong: (_) async => throw StateError('Owned metadata failure'),
+          onError: (error, stack) => errors.add(error));
+        expect(errors, isEmpty);
+        expect(player.playedIds, control == 'queue' ? [a, healthy] : [a]);
+        if (control == 'queue') expectSelection(handler, healthy);
+        if (control == 'pause') expectSelection(handler, a);
+      } finally {
+        await handler.stop();
+        await player.dispose();
+      }
+    });
+  }
+
+  test('owned failure keeps its original action through delayed display', () async {
+    final player = _OwnedPlayer();
+    final handler = _SourceGateHandler(player);
+    bool Function()? ownsFailure;
+    var reported = 0;
+    try {
+      await consumeYoutubeSharedTextIntent('https://youtu.be/$a',
+        audioHandler: handler, resolveSong: (_) async => song(a),
+        onError: (error, stack) => fail('$error'));
+      await consumeYoutubeSharedTextIntent('https://youtu.be/$b',
+        audioHandler: handler,
+        resolveSong: (_) async => throw StateError('Owned metadata failure'),
+        onError: (error, stack) => fail('Owned failure lost its action predicate'),
+        onOwnedError: (error, stack, ownsAction) {
+          ownsFailure = ownsAction;
+          reported++;
+        });
+      expect(reported, 1);
+      expect(ownsFailure!(), isTrue);
+      await handler.pause();
+      expect(ownsFailure!(), isFalse);
+      expect(handler.capturePlaybackActionOwner()(), isTrue,
+        reason: 'Capturing at reporting time would incorrectly adopt the newer control');
+      expectSelection(handler, a);
+    } finally {
+      await handler.stop();
+      await player.dispose();
+    }
+  });
+
+  for (final control in ['stop', 'queue']) {
+    for (final lateError in [false, true]) {
+      test('expired shared A recovers after $control and ignores late error=$lateError', () async {
+        final player = _OwnedPlayer();
+        final handler = _SourceGateHandler(player);
+        final expired = Completer<Map>();
+        var calls = 0;
+        final metadata = SharedSongMetadataResolver((id) async {
+          calls++;
+          return calls == 1 ? expired.future : song(id);
+        }, lookupLifetime: const Duration(milliseconds: 20));
+        final errors = <Object>[];
+        const healthy = 'CCCCCCCCCCC';
+        Future<void>? first;
+        Future<void>? concurrent;
+        try {
+          await consumeYoutubeSharedTextIntent('https://youtu.be/$b',
+            audioHandler: handler, resolveSong: (_) async => song(b),
+            onError: (error, stack) => fail('$error'));
+          first = consumeYoutubeSharedTextIntent('https://youtu.be/$a',
+            audioHandler: handler, metadataResolver: metadata,
+            onError: (error, stack) => errors.add(error));
+          concurrent = consumeYoutubeSharedTextIntent('https://youtu.be/$a',
+            audioHandler: handler, metadataResolver: metadata,
+            onError: (error, stack) => errors.add(error));
+          if (control == 'stop') await handler.stop();
+          if (control == 'queue') await handler.addPlaylistToQueue([song(healthy)], replace: true);
+          await Future.wait([first, concurrent]);
+          expect(calls, 1);
+          expect(errors, isEmpty);
+          await consumeYoutubeSharedTextIntent('https://youtu.be/$a',
+            audioHandler: handler, metadataResolver: metadata,
+            onError: (error, stack) => errors.add(error));
+          expect(calls, 2);
+          expectSelection(handler, a);
+          final played = List<String>.from(player.playedIds);
+          if (lateError) {
+            expired.completeError(StateError('Late expired A'));
+          } else {
+            expired.complete({...song(a), 'title': 'Expired metadata must never win'});
+          }
+          await Future<void>.delayed(Duration.zero);
+          expectSelection(handler, a);
+          expect(player.playedIds, played);
+          expect(errors, isEmpty);
+        } finally {
+          if (!expired.isCompleted) expired.complete(song(a));
+          if (first != null) await first;
+          if (concurrent != null) await concurrent;
+          await handler.stop();
+          await player.dispose();
+        }
+      });
+    }
+  }
+
   tearDownAll(() async {
     await Future<void>.delayed(const Duration(milliseconds: 2100));
     await Hive.close();
   });
+}
+
+class _FailureHandoffHandler extends _SourceGateHandler {
+  _FailureHandoffHandler(super.player);
+  Future<void> Function()? beforeRethrow;
+
+  @override
+  Future<void> resolveAndPlayOwnedSong(Future<Map> Function() resolveSong,
+      {required bool Function() stillCurrent}) async {
+    try {
+      await super.resolveAndPlayOwnedSong(resolveSong, stillCurrent: stillCurrent);
+    } catch (_) {
+      await beforeRethrow?.call();
+      rethrow;
+    }
+  }
 }
 
 class _SourceGateHandler extends MusifyAudioHandler {

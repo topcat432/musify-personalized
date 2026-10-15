@@ -68,6 +68,7 @@ Future<void> handleYoutubeSharedTextIntent(
   bool Function()? stillCurrent,
   Future<Map> Function(String songId)? resolveSong,
   SharedSongMetadataResolver? metadataResolver,
+  void Function(Object error, StackTrace stack, bool Function() ownsAction)? onOwnedError,
 }) async {
   final isCurrent = stillCurrent ?? () => true;
   if (!isCurrent() || value == null || !_youtubeLinkRegex.hasMatch(value)) {
@@ -79,9 +80,15 @@ Future<void> handleYoutubeSharedTextIntent(
     return;
   }
 
+  bool Function()? ownsAction;
   try {
     await audioHandler.resolveAndPlayOwnedSong(
-      () => resolveSong?.call(songId) ??
+      () {
+        // Capture the reserved action before the first metadata await. A
+        // control can supersede it after the handler releases its load token
+        // but before this error reaches the UI callback.
+        ownsAction = audioHandler.capturePlaybackActionOwner();
+        return resolveSong?.call(songId) ??
           (metadataResolver ?? _sharedSongMetadata).resolve(
             songId,
             knownSongs: [
@@ -93,11 +100,19 @@ Future<void> handleYoutubeSharedTextIntent(
               for (final playlist in userCustomPlaylists.value)
                 if (playlist['list'] is List) ...(playlist['list'] as List),
             ],
-          ),
+          );
+      },
       stillCurrent: isCurrent,
     );
   } catch (e, stackTrace) {
-    if (isCurrent()) onError(e, stackTrace);
+    final ownsFailure = ownsAction;
+    if (isCurrent() && ownsFailure != null && ownsFailure()) {
+      if (onOwnedError != null) {
+        onOwnedError(e, stackTrace, ownsFailure);
+      } else {
+        onError(e, stackTrace);
+      }
+    }
   }
 }
 
@@ -108,6 +123,7 @@ Future<void> consumeYoutubeSharedTextIntent(
   bool Function()? stillCurrent,
   Future<Map> Function(String songId)? resolveSong,
   SharedSongMetadataResolver? metadataResolver,
+  void Function(Object error, StackTrace stack, bool Function() ownsAction)? onOwnedError,
 }) async {
   if (value == null || value.isEmpty) {
     return;
@@ -125,5 +141,6 @@ Future<void> consumeYoutubeSharedTextIntent(
     stillCurrent: stillCurrent,
     resolveSong: resolveSong,
     metadataResolver: metadataResolver,
+    onOwnedError: onOwnedError,
   );
 }

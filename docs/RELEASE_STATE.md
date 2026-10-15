@@ -1,5 +1,34 @@
 # Musify Personalized current state
 
+## Bounded metadata lifetime and error handoff, 2026-10-15
+
+f9f34ab6752b7d79853375bac2cb67f6809867e3 passed
+[exact CI38799881113](https://github.com/topcat432/musify-personalized/actions/runs/38799881113):
+clean analysis, 1,080 app tests, all 40 Linux visual cases, Android builds and
+the Windows lifecycle job. It is withheld after the consolidated review found
+an unbounded pending metadata lookup and an error propagation ownership gap.
+Five retained deterministic regressions reproduce those gaps on f9.
+
+The correction gives each shared lookup a 30-second logical lifetime. Completion
+or expiry evicts only that lookup; late success/error is consumed and cannot
+evict or commit a successor. The shared HTTP client is not closed or replaced,
+and expiry does not retry a request. The original playback-action predicate is
+captured before metadata awaits and carried through error reporting and display,
+rather than capturing a newer owner after a failure. All 106 focused cases pass,
+including stalled/concurrent A, Stop/new selection, expiry, a fresh successful A,
+late success/error, and controls during failure propagation. Clean analysis and
+all 1,090 aggregate app tests pass; the 11-case search suite separately passes
+two added music/video metadata-handoff cases with HTTP blocked. This proves the
+handoff, not codec/audio or online availability. Successor exact CI and closure
+of this combined correction batch remain gates.
+
+SearchPage passes search result metadata directly to SongBar and normal queue
+playback. Unplayed results are private to SearchPage; `globalSongs` is loaded
+catalog metadata, not that search-result cache. After actual playback, current
+and recent metadata can be reused by a share. This is a route distinction, not
+proof of the owner's actual entry/cache/source path or unknown-recording access.
+The phone remains on code17 and its owner playback has not been interrupted.
+
 ## Phone evidence and bounded metadata correction,2026-10-15
 
 Frozen6138d9860c7a93b807cb470d4053820213dd2217 passed
@@ -25,7 +54,7 @@ session remains undisturbed.
 The bounded candidate correction stops this denial without internal retry or
 manifest-client fallback,preserves sanitized status/Retry-After diagnostics and
 shows one ownership-checked failure notice without replacing current playback.
-Validated exact-ID metadata from existing local/search/library state avoids an
+Validated exact-ID metadata from existing local/catalog/library state avoids an
 unnecessary watch-page fetch; concurrent metadata lookups share one pending
 operation. No schema,migration,persistent metadata cache or source substitution
 is introduced. Synthetic fixtures reproduced three denied watch requests before

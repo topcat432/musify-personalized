@@ -1,13 +1,17 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
+import 'package:musify/main.dart' as app;
 import 'package:musify/screens/search_page.dart';
 import 'package:musify/services/music_search_service.dart';
+import 'package:musify/services/audio_service.dart';
 import 'package:musify/widgets/custom_search_bar.dart';
 import 'package:musify/widgets/song_bar.dart';
 import 'package:youtube_music_explode_dart/youtube_music_explode_dart.dart';
+import 'package:rxdart/rxdart.dart';
 import '../../tool/visual_review_harness.dart';
 
 void main() {
@@ -248,6 +252,42 @@ void main() {
     },
   );
 
+  for (final music in [true, false]) {
+    testWidgets('search ${music ? 'music' : 'video'} tap hands existing metadata directly to queue without HTTP', (tester) async {
+      final sink = _SearchMetadataSink();
+      app.audioHandler = sink;
+      final id = music ? 'AAAAAAAAAAA' : 'BBBBBBBBBBB';
+      final title = 'Owned ${music ? 'music' : 'video'} recording';
+      final row = music ? musicSearchSong(MusicSong(
+        id: id, title: title, artists: const ['Owned fixture artist'],
+        duration: const Duration(seconds: 8), thumbnailUrl: '',
+      )) : {...video(id, title, duration: 8), 'highResImage': '', 'image': ''};
+      var httpClients = 0;
+      try {
+        await HttpOverrides.runZoned(() async {
+          await search(tester, (_) async => music ? [row] : [], (_) async => music ? [] : [row]);
+          final rendered = tester.widget<SongBar>(find.byType(SongBar));
+          await tester.tap(find.text(title));
+          await tester.pump();
+          expect(sink.accepted, hasLength(1));
+          expect(sink.accepted.single, same(rendered.song));
+          expect(sink.accepted.single['ytid'], id);
+          expect(sink.accepted.single['title'], title);
+          expect(sink.replaceRequests, [true]);
+          expect(httpClients, 0);
+          expect(tester.takeException(), isNull);
+        }, createHttpClient: (context) {
+          httpClients++;
+          throw StateError('Live HTTP prohibited in search metadata handoff fixture');
+        });
+      } finally {
+        await tester.pumpWidget(const SizedBox());
+        await sink.mediaItem.close();
+        await sink.playbackState.close();
+      }
+    });
+  }
+
   testWidgets('clearing Search discards a late generic result', (tester) async {
     final pending = Completer<List<dynamic>>();
     await search(tester, (_) async => [], (_) => pending.future);
@@ -265,4 +305,22 @@ void main() {
     expect(bar.loadingProgressNotifier!.value, isFalse);
     expect(tester.takeException(), isNull);
   });
+}
+
+// Capture only the metadata handoff. Playback/codec qualification belongs to
+// separate controller and native tests; this fixture cannot contact a provider.
+class _SearchMetadataSink extends Fake implements MusifyAudioHandler {
+  final accepted = <Map>[];
+  final replaceRequests = <bool>[];
+  @override
+  final mediaItem = BehaviorSubject<MediaItem?>.seeded(null);
+  @override
+  final playbackState = BehaviorSubject<PlaybackState>.seeded(PlaybackState());
+
+  @override
+  Future<void> addPlaylistToQueue(List<Map> songs,
+      {bool replace = false, int? startIndex, bool shuffle = false}) async {
+    accepted.addAll(songs);
+    replaceRequests.add(replace);
+  }
 }

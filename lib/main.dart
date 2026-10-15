@@ -92,21 +92,21 @@ class _MusifyState extends State<Musify> with WidgetsBindingObserver {
   int _textShareGeneration = 0;
   final _sharedSongFailures = ValueNotifier<SharedSongFailure?>(null);
 
+  void _logSharedSongFailure(Object error, StackTrace stackTrace) {
+    logger.log('Shared song failed',
+      error: sharedSongFailureDiagnostic(error), stackTrace: stackTrace);
+  }
+
   void _reportSharedSongFailure(
     Object error,
     StackTrace stackTrace,
     bool Function() stillCurrent,
   ) {
     if (!mounted || !stillCurrent()) return;
-    logger.log(
-      'Shared song failed',
-      error: sharedSongFailureDiagnostic(error),
-      stackTrace: stackTrace,
-    );
-    final ownsAction = audioHandler.capturePlaybackActionOwner();
+    _logSharedSongFailure(error, stackTrace);
     _sharedSongFailures.value = SharedSongFailure(
       sharedSongFailureMessage(error),
-      () => mounted && stillCurrent() && ownsAction(),
+      () => mounted && stillCurrent(),
     );
   }
 
@@ -183,9 +183,10 @@ class _MusifyState extends State<Musify> with WidgetsBindingObserver {
           audioHandler: audioHandler,
           stillCurrent: () =>
               mounted && _textShareGeneration == shareGeneration,
-          onError: (error, stackTrace) => _reportSharedSongFailure(
+          onError: _logSharedSongFailure,
+          onOwnedError: (error, stackTrace, ownsAction) => _reportSharedSongFailure(
             error, stackTrace,
-            () => mounted && _textShareGeneration == shareGeneration,
+            () => mounted && _textShareGeneration == shareGeneration && ownsAction(),
           ),
         );
       },
@@ -204,9 +205,10 @@ class _MusifyState extends State<Musify> with WidgetsBindingObserver {
         audioHandler: audioHandler,
         stillCurrent: () =>
             mounted && _textShareGeneration == initialShareGeneration,
-        onError: (error, stackTrace) => _reportSharedSongFailure(
+        onError: _logSharedSongFailure,
+        onOwnedError: (error, stackTrace, ownsAction) => _reportSharedSongFailure(
           error, stackTrace,
-          () => mounted && _textShareGeneration == initialShareGeneration,
+          () => mounted && _textShareGeneration == initialShareGeneration && ownsAction(),
         ),
       ),
       onError: (error, stackTrace) => logger.log(

@@ -1,5 +1,22 @@
 # Product acceptance ledger
 
+## Metadata lifetime and failure ownership, 2026-10-15
+
+f9f34ab exact CI38799881113 passed analysis, 1,080 app tests, 40 Linux visuals,
+Android builds and Windows lifecycle. Consolidated review withheld promotion
+for pending-lookup lifetime and failure-handoff ownership gaps. Five negative
+controls reproduce them. The successor bounds the logical lookup to 30 seconds,
+evicts by identity, consumes late results, and carries the original action
+predicate through error display. All 106 focused cases, clean analysis and
+1,090 aggregate app tests pass. The search suite separately passes 11 cases,
+including two new actual music/video metadata handoffs with HTTP blocked and a
+capture-only queue sink; this is not native audio proof. Successor exact CI,
+combined closure and native qualification remain separate.
+No shared HTTP client is closed, automatic retry introduced or phone operation
+performed. Search result taps use their supplied metadata; unplayed search
+results are not a globally reusable cache. Actual provider availability remains
+distinct from deterministic offline route and ownership qualification.
+
 ## Phone baseline and metadata denial,2026-10-15
 
 Code300000017/source6138d986 was installed in place with actual APK/signer/UID

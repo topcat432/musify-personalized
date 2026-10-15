@@ -1,11 +1,70 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fake_async/fake_async.dart';
 import 'package:musify/services/shared_song_metadata.dart';
 
 void main() {
   const id = 'fixture1234';
   Map song(String value) => {'ytid': value, 'title': 'Synthetic recording'};
+
+  for (final lateError in [false, true]) {
+    test(
+      'stalled shared lookup expires and late completion cannot evict successor error=$lateError',
+      () {
+        fakeAsync((clock) {
+          final old = Completer<Map>();
+          final fresh = Completer<Map>();
+          var calls = 0;
+          final resolver = SharedSongMetadataResolver(
+            (_) => ++calls == 1 ? old.future : fresh.future,
+          );
+          final errors = <Object>[];
+          final results = <Map>[];
+          void observe(Future<Map> operation) {
+            operation.then<void>(
+              results.add,
+              onError: (Object error, StackTrace stack) {
+                errors.add(error);
+              },
+            );
+          }
+
+          observe(resolver.resolve(id));
+          observe(resolver.resolve(id));
+          clock.flushMicrotasks();
+          expect(calls, 1);
+          clock.elapse(const Duration(seconds: 31));
+          clock.flushMicrotasks();
+          expect(errors, hasLength(2));
+          expect(errors.every((error) => error is TimeoutException), isTrue);
+          observe(resolver.resolve(id));
+          clock.flushMicrotasks();
+          expect(calls, 2);
+          if (lateError) {
+            old.completeError(StateError('Late expired lookup'));
+          } else {
+            old.complete(song(id));
+          }
+          clock.flushMicrotasks();
+          observe(resolver.resolve(id));
+          clock.flushMicrotasks();
+          expect(
+            calls,
+            2,
+            reason:
+                'Expired completion must not evict the fresh pending lookup',
+          );
+          expect(results, isEmpty);
+          fresh.complete(song(id));
+          clock.flushMicrotasks();
+          expect(results, hasLength(2));
+          expect(results.every((row) => row['ytid'] == id), isTrue);
+          expect(errors, hasLength(2));
+        });
+      },
+    );
+  }
 
   test(
     'valid exact-ID metadata is copied without calling the loader',
