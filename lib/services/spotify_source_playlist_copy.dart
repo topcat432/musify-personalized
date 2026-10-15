@@ -28,7 +28,7 @@ class SpotifyPlaylistCopyResult {
 }
 
 extension SpotifySourcePlaylistCopies on SpotifyImportDestinationService {
-  Future<SpotifyPlaylistCopyPreview> previewSourcePlaylistCopy(int position,
+  Future<SpotifyPlaylistCopyPreview> _previewSourcePlaylistCopy(int position,
       {String? title, bool additionalCopy = false}) async {
     if (SpotifyImportDestinationService._routingActive) throw StateError('Another transfer is running. Wait for it to finish.');
     final snapshot = await loadSourcePlaylistSnapshot(position);
@@ -53,7 +53,7 @@ extension SpotifySourcePlaylistCopies on SpotifyImportDestinationService {
     var completed = false;
     final pending = metadata[importRoutingPendingKey];
     if (metadata.containsKey(importRoutingPendingKey)) {
-      if (additionalCopy) throw StateError('Review the pending copy first. Another copy cannot replace its unresolved journal.');
+      if (additionalCopy) throw StateError('An earlier copy is still unverified. Review that attempt before creating another copy.');
       prior = _decodeCopyEnvelope(pending, completed: false);
     } else if (!additionalCopy) {
       for (final entry in history.reversed) {
@@ -75,7 +75,7 @@ extension SpotifySourcePlaylistCopies on SpotifyImportDestinationService {
     if (prior != null) {
       final state = _classifyCopy(proof, completed, destinations, snapshot, fingerprint);
       if (state != SpotifyPlaylistCopyRecovery.completedNoOp && state != SpotifyPlaylistCopyRecovery.recoverAuditOnly) _copyRefuse();
-    } else if (destinations.any((row) => row['ytid'] == proof.destinationId)) {
+    } else if (destinations.length >= 10000 || destinations.any((row) => row['ytid'] == proof.destinationId)) {
       _copyRefuse();
     }
     final name = (title ?? snapshot.sourceName).trim();
@@ -87,7 +87,7 @@ extension SpotifySourcePlaylistCopies on SpotifyImportDestinationService {
       Map.unmodifiable({for (final key in library.keys) key: box.containsKey(key)}), completed, prior != null && !completed);
   }
 
-  Future<SpotifyPlaylistCopyResult> createSourcePlaylistCopy(SpotifyPlaylistCopyPreview preview) async {
+  Future<SpotifyPlaylistCopyResult> _createSourcePlaylistCopy(SpotifyPlaylistCopyPreview preview) async {
     if (SpotifyImportDestinationService._routingActive) throw StateError('Another transfer is running. Wait for it to finish.');
     SpotifyImportDestinationService._routingActive = true;
     try {
@@ -116,7 +116,8 @@ extension SpotifySourcePlaylistCopies on SpotifyImportDestinationService {
       if (metadata.containsKey(importRoutingPendingKey) || !_sameCopyValue(metadata, preview._metadata) ||
           !_copyStoredMatches(box, preview._library, preview._presence) ||
           !_sameCopyValue(_liveCopyCollections(), preview._library)) _copyRefuse();
-      if (_copyDestinations(currentLibrary).any((row) => row['ytid'] == preview.proof.destinationId)) _copyRefuse();
+      if (_copyDestinations(currentLibrary).length >= 10000 ||
+          _copyDestinations(currentLibrary).any((row) => row['ytid'] == preview.proof.destinationId)) _copyRefuse();
       final checkpoint = {...metadata, importRoutingPendingKey: _copyEnvelope(preview.proof, completed: false)};
       await _writeCopyOwned('spotifyImportMetadata', checkpoint, () {
         _validateCopySource(preview);
@@ -192,7 +193,8 @@ extension SpotifySourcePlaylistCopies on SpotifyImportDestinationService {
   Future<void> _writeCopyOwned(String key, Object stagedValue, void Function() verify,
       {bool Function()? canCompensate}) async {
     final box = Hive.box('user'); final had = box.containsKey(key);
-    final before = copyImportRoutingValue(box.get(key));
+    final original = box.get(key);
+    final before = copyImportRoutingValue(original);
     final staged = _freezeCopyValue(stagedValue);
     try {
       if (key == 'spotifyImportMetadata') {
@@ -207,8 +209,11 @@ extension SpotifySourcePlaylistCopies on SpotifyImportDestinationService {
     } catch (error, stack) {
       try {
         if (box.isOpen && box.containsKey(key) && _sameCopyValue(box.get(key), staged) &&
-            (canCompensate?.call() ?? true)) {
-          if (had) { await box.put(key, before); } else { await box.delete(key); }
+            _sameCopyValue(original, before) && (canCompensate?.call() ?? true)) {
+          // Restoring detached clones would invalidate still-live playlist
+          // owners used by selected-slot rename/Undo. Original references are
+          // safe only while both their values and the live owner remain exact.
+          if (had) { await box.put(key, original); } else { await box.delete(key); }
         }
       } catch (_) { /* Uncertain evidence/current owners remain for review. */ }
       Error.throwWithStackTrace(error, stack);
@@ -216,7 +221,7 @@ extension SpotifySourcePlaylistCopies on SpotifyImportDestinationService {
   }
 }
 
-Never _copyRefuse() => throw StateError('The source copy could not be verified. Existing data and pending proof were retained. Reload and review the Library; missing copies will not be recreated automatically.');
+Never _copyRefuse() => throw StateError('The source copy could not be verified. Existing playlists and the earlier attempt were kept for review. Reload the Library; missing copies will not be recreated automatically.');
 Map<String, dynamic> _copyMetadata(Box box) {
   final value = box.get('spotifyImportMetadata');
   if (value is! Map || value.keys.any((key) => key is! String)) _copyRefuse();

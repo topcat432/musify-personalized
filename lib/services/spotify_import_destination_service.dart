@@ -128,6 +128,13 @@ class SpotifyImportDestinationService {
   final SpotifyDestinationWriter? destinationWriter;
   static bool _routingActive = false;
 
+  Future<SpotifyPlaylistCopyPreview> previewSourcePlaylistCopy(int position,
+      {String? title, bool additionalCopy = false}) =>
+      SpotifySourcePlaylistCopies(this)._previewSourcePlaylistCopy(position, title: title, additionalCopy: additionalCopy);
+
+  Future<SpotifyPlaylistCopyResult> createSourcePlaylistCopy(SpotifyPlaylistCopyPreview preview) =>
+      SpotifySourcePlaylistCopies(this)._createSourcePlaylistCopy(preview);
+
   Future<SpotifyImportDestinationSnapshot> loadSnapshot() async {
     final box = Hive.box('user');
     final results = _effectiveResults(box);

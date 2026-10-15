@@ -69,8 +69,10 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Verify source-copy ownership codec and existing-format recovery
-        run: python3 tool/bounded_command_log.py --log source-copy-proof-focused.log --timeout-seconds 120 -- flutter test --no-pub --reporter expanded -j 1 test/services/spotify_playlist_copy_proof_test.dart test/services/spotify_playlist_copy_storage_test.dart test/services/spotify_source_playlist_copy_test.dart
+      - name: Verify source-copy protocol writer and confirmation regressions
+        env:
+          MUSIFY_SOURCE_COPY_CAPTURE: '1'
+        run: python3 tool/bounded_command_log.py --log source-copy-proof-focused.log --timeout-seconds 180 -- flutter test --no-pub --reporter expanded -j 1 test/services/spotify_playlist_copy_proof_test.dart test/services/spotify_playlist_copy_storage_test.dart test/services/spotify_source_playlist_copy_test.dart test/screens/spotify_source_playlist_copy_page_test.dart
 
       - name: Upload focused source-copy ownership proof
         if: always()
@@ -78,6 +80,42 @@ jobs:
         with:
           name: source-copy-proof-focused-${{ github.run_number }}
           path: source-copy-proof-focused.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload synthetic source-copy screen review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: source-copy-screens-${{ github.run_number }}
+          path: build/source-copy-review/*.png
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Reproduce source-copy rollback owner loss on exact draft source
+        shell: bash
+        run: |
+          set -euo pipefail
+          original="$GITHUB_WORKSPACE"
+          control="$RUNNER_TEMP/musify-source-copy-owner-control-d3d2fc8a"
+          git fetch --no-tags --depth=1 origin d3d2fc8a492aea7b27b44dd2bc262f98cfc22522
+          git worktree add --detach "$control" d3d2fc8a492aea7b27b44dd2bc262f98cfc22522
+          cp test/services/spotify_source_playlist_copy_test.dart "$control/test/services/"
+          cd "$control"
+          flutter pub get --offline
+          control_status=0
+          python3 "$original/tool/bounded_command_log.py" --log "$original/source-copy-owner-control.log" --timeout-seconds 90 -- flutter test --no-pub --reporter expanded -j 1 test/services/spotify_source_playlist_copy_test.dart --plain-name 'owned destination compensation preserves existing owner rename identity' || control_status=$?
+          test "$control_status" -eq 1
+          grep -Fq 'SOURCE_COPY_ROLLBACK_LOST_OWNER_IDENTITY' "$original/source-copy-owner-control.log"
+          grep -Eq '\+0 -1: Some tests failed\.' "$original/source-copy-owner-control.log"
+          test "$(git -C "$original" rev-parse HEAD)" = "$SOURCE_SHA"
+
+      - name: Upload source-copy exact draft owner-loss control
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: source-copy-owner-control-${{ github.run_number }}
+          path: source-copy-owner-control.log
           if-no-files-found: ignore
           retention-days: 7
 
@@ -640,6 +678,8 @@ jobs:
             lib/services/spotify_account_playlist_adapter.dart
             lib/services/spotify_playlist_copy_proof.dart
             lib/services/spotify_source_playlist_copy.dart
+            lib/screens/spotify_source_playlist_copy_page.dart
+            test/screens/spotify_source_playlist_copy_page_test.dart
             test/services/spotify_source_playlist_copy_test.dart
             test/support/spotify_source_copy_fixture.dart
             test/services/spotify_playlist_copy_proof_test.dart

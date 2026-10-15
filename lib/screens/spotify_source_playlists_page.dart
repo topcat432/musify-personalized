@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
 import 'package:musify/screens/spotify_import_destination_page.dart';
+import 'package:musify/screens/spotify_source_playlist_copy_page.dart';
 import 'package:musify/services/spotify_import_destination_service.dart';
 import 'package:musify/services/spotify_source_playlist.dart';
 import 'package:musify/widgets/personalized_ui.dart';
@@ -144,7 +145,7 @@ class _SpotifySourcePlaylistsPageState
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'Recording matches are shared across playlists. Source order and unsupported items are retained. Nonempty sources can route resolved recordings. Empty sources can be created after confirmation; exact repeated slots and synchronization remain separate.',
+                    'Recording matches are shared across playlists. Source order and unsupported items are retained. Route unique recordings, or review a separate source-order copy including repeats when every source entry is ready. Empty sources have their own confirmation. Synchronization remains separate.',
                   ),
                   const SizedBox(height: 16),
                   DropdownButtonFormField<int>(
@@ -187,6 +188,13 @@ class _SpotifySourcePlaylistsPageState
                         ),
                       ),
                       child: const Text('Route resolved songs'),
+                    ),
+                  if (widget.preview == null && source.members.isNotEmpty)
+                    OutlinedButton(
+                      onPressed: creating ? null : () => Navigator.of(context).push(
+                        personalizedPageRoute<void>(builder: (_) => SpotifySourcePlaylistCopyPage(
+                          sourcePosition: source.position, service: widget.routingService))),
+                      child: const Text('Review source-order copy'),
                     ),
                 ],
               ),

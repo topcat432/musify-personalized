@@ -76,7 +76,7 @@ void main() {
     final rootValues = playlists(); final target = rootValues.removeLast();
     target['title'] = 'Owner renamed'; target['list'] = [{'ytid': 'manual-owner'}, {'ytid': 'chosen-B'}];
     final folders = List<Map>.from(Hive.box('user').get('playlistFolders'));
-    (folders.first['playlists'] as List).add(target);
+    folders.first['playlists'] = <dynamic>[...folders.first['playlists'] as List, target];
     await Hive.box('user').putAll({'customPlaylists': rootValues, 'playlistFolders': folders}); SpotifySourceCopyFixture.hydrate();
     final before = inventory(); final result = await service.createSourcePlaylistCopy(preview);
     expect(result.created, isFalse); expect(result.destinationTitle, 'Owner renamed'); expect(inventory(), before);
@@ -231,6 +231,64 @@ void main() {
     await expectLater(writer.createSourcePlaylistCopy(await writer.previewSourcePlaylistCopy(1)), throwsStateError);
     expect(Hive.box('user').containsKey('customPlaylists'), isFalse);
     expect(metadata()[importRoutingPendingKey], isA<Map>()); await reopen(); expect(Hive.box('user').containsKey('customPlaylists'), isFalse);
+  });
+  test('owned destination compensation preserves existing owner rename identity', () async {
+    final writer = SpotifyImportDestinationService(destinationWriter: (box, key, values) async {
+      await box.put(key, values); throw StateError('Injected owned destination failure');
+    });
+    final owner = userCustomPlaylists.value.first;
+    await expectLater(writer.createSourcePlaylistCopy(await writer.previewSourcePlaylistCopy(1)), throwsStateError);
+    final renamed = await PlaylistSongRename(owner, sourceIndex: 0, expectedSong: (owner['list'] as List).first as Map)
+      .apply(title: 'Owner after failed copy', artist: 'Owner artist');
+    expect(renamed, isNotNull, reason: 'SOURCE_COPY_ROLLBACK_LOST_OWNER_IDENTITY');
+    expect((renamed!['list'] as List).first['title'], 'Owner after failed copy');
+    await reopen(); expect((playlists().first['list'] as List).first['title'], 'Owner after failed copy');
+  });
+  for (final phase in ['checkpoint', 'destination', 'audit']) {
+    test('closed Hive handles after $phase checkpoint retain restart evidence without duplicate creation', () async {
+      var calls = 0;
+      final writer = SpotifyImportDestinationService(metadataWriter: (box, values) async {
+        calls++; await box.put('spotifyImportMetadata', values);
+        if ((phase == 'checkpoint' && calls == 1) || (phase == 'audit' && calls == 2)) {
+          await Hive.close(); throw StateError('Injected lost storage handle after $phase');
+        }
+      }, destinationWriter: (box, key, values) async {
+        await box.put(key, values);
+        if (phase == 'destination') { await Hive.close(); throw StateError('Injected lost storage handle after destination'); }
+      });
+      final preview = await writer.previewSourcePlaylistCopy(1);
+      await expectLater(writer.createSourcePlaylistCopy(preview), throwsA(anything));
+      await reopen();
+      if (phase == 'checkpoint') {
+        expect(playlists(), hasLength(1)); expect(metadata()[importRoutingPendingKey], isA<Map>());
+        await expectLater(service.previewSourcePlaylistCopy(1), throwsStateError);
+      } else {
+        expect(playlists(), hasLength(2));
+        var destinationWrites = 0;
+        final recovery = SpotifyImportDestinationService(destinationWriter: (_, _, _) async { destinationWrites++; });
+        final recovered = await recovery.createSourcePlaylistCopy(await recovery.previewSourcePlaylistCopy(1));
+        expect(recovered.created, isFalse); expect(recovered.trackingRecorded, isTrue); expect(destinationWrites, 0);
+      }
+    });
+  }
+  test('changed source needs a fresh preview/new identity and leaves the earlier copy intact', () async {
+    final first = await service.previewSourcePlaylistCopy(1); await service.createSourcePlaylistCopy(first);
+    final originalCopy = copyImportRoutingValue(playlists().last);
+    final value = copyImportRoutingValue(metadata()) as Map;
+    final source = value['sourcePlaylists']['playlists'][0] as Map;
+    final members = source['members'] as List;
+    source['members'] = [members[0], members[2], members[1]];
+    for (final (index, member) in (source['members'] as List).indexed) member['position'] = index + 1;
+    await Hive.box('user').put('spotifyImportMetadata', value);
+    final fresh = await service.previewSourcePlaylistCopy(1);
+    expect(fresh.proof.destinationId, isNot(first.proof.destinationId));
+    expect(fresh.songs.map((song) => song['ytid']), ['chosen-alternative-A', 'chosen-alternative-A', 'chosen-B']);
+    await service.createSourcePlaylistCopy(fresh); expect(playlists()[1], originalCopy); expect(playlists(), hasLength(3));
+  });
+  test('ownership-scan capacity refuses before a new root write without dropping old entries', () async {
+    await Hive.box('user').put('customPlaylists', [for (var i = 0; i < 9998; i++) {'ytid': 'customId-existing-$i'}]);
+    SpotifySourceCopyFixture.hydrate(); final before = inventory();
+    await expectLater(service.previewSourcePlaylistCopy(1), throwsStateError); expect(inventory(), before);
   });
   test('completed actual writer output survives saved-file independent restore and restart with no second creation', () async {
     await service.createSourcePlaylistCopy(await service.previewSourcePlaylistCopy(1)); final before = inventory();

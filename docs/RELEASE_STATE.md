@@ -12,11 +12,16 @@ proof. See [minimum protocol and recovery boundaries](SPOTIFY_SOURCE_PLAYLIST_CO
 No legacy adoption, song tags, automatic migration or synchronization is selected.
 Source82f1837c/CI38741239983 passed42 focused codec/classifier and actual-proof
 Hive/backup/restore tests, but failed sort_constructors_first; aggregate/visuals/
-builds were unrun. The constructor-order lint is corrected. The next service
-writer/fault/restart tests are added with explicit pending ownership, guarded
-awaited writes and no unique-routing baseline advance. No UI entry is enabled
-until its own confirmation/lifecycle tests are added. Exact qualification is
-tracked in PR23 and the canonical ledger; the failed prerequisite is not a pass.
+builds were unrun. The constructor-order lint is corrected. Draftd3d2fc8a/CI38743634195
+passed72 focused cases and failed one fixture's overly narrow typed folder list;
+that fixture is corrected without weakening preservation assertions. The source
+writer also now restores still-owned original map references during compensation;
+a composed rename regression and exact draft control protect this boundary.
+Explicit source-order preview/Cancel/Confirm and additional-copy UI are added,
+plus before/after/ignored-write, closed-handle reopen and saved-file independent
+restore tests. Exact qualification remains tracked in PR23/canonical evidence;
+failed drafts are not passes. The optional versioned proof is documented explicitly;
+no old map migration, per-song ownership tags or synchronization is enabled.
 Local native admission remains unsafe; baseline5560 recovery thenF01/F02 is first
 when unchanged commit/physical/storage requirements pass. No phone/release action.
 
