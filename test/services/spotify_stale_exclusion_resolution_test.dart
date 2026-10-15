@@ -188,4 +188,25 @@ void main() {
     expect(await File('${root.path}/user.hive').readAsBytes(), before);
   });
 
+  test('rescue preserves a newer excluded-row timezone value with equal instant', () async {
+    final box = Hive.box('user');
+    final protected = {...ownedRow(7), 'status': 'excluded', 'ownerTime': DateTime.utc(2026, 1, 1)};
+    final pending = ownedRow(8, safe: false);
+    await box.put('spotifyMatchResults', [protected, pending]);
+    await box.put('spotifyExcludedImportRows', ['7']);
+    Future<void>? ownerWrite;
+    final result = await service.runRescuePass(onProgress: (progress) {
+      if (progress.processed == 1 && ownerWrite == null) {
+        ownerWrite = box.put('spotifyMatchResults', [
+          {...protected, 'ownerTime': DateTime.utc(2026, 1, 1).toLocal()}, pending,
+        ]);
+      }
+    });
+    await ownerWrite;
+    expect(result.finished, isFalse);
+    expect(((box.get('spotifyMatchResults') as List).first['ownerTime'] as DateTime).isUtc, isFalse);
+    await reopen();
+    expect(((Hive.box('user').get('spotifyMatchResults') as List).first['ownerTime'] as DateTime).isUtc, isFalse);
+  });
+
 }

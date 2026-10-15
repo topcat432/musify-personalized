@@ -20,9 +20,10 @@ by a newer owner; explicit repeated exclusion remains allowed. Counts distinguis
 authoritatively excluded partial rows without rewriting their retained source
 maps. No schema, adapter, migration, dependency, golden or source-provider change.
 
-Eighteen new Hive cases cover stale Accept/No-match, status/history-only and
+Nineteen new Hive cases cover stale Accept/No-match, status/history-only and
 unreadable history, queue/cluster and metadata counts, bulk/ISRC/rescue behavior,
-late exclusion and newly added protected rows, ambiguous source rows, explicit
+late exclusion and newly added protected rows, equal-instant timezone changes,
+ambiguous source rows, explicit
 exclude repeat, manual provenance/no duplicate propagation, rejection byte checks,
 reopen and unrelated library retention. All fixtures are synthetic; rescue cases
 use existing local review-evidence branches and make no provider requests.

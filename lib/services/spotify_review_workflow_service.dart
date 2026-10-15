@@ -8,8 +8,8 @@
  */
 
 import 'dart:async';
+import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart' show mapEquals;
 import 'package:hive/hive.dart';
 import 'package:musify/services/common_services.dart';
 import 'package:musify/services/spotify_import_routing_state.dart';
@@ -774,7 +774,7 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
       if (explicitExclusionRow != null &&
           row == _reviewRowKey(explicitExclusionRow) &&
           isExcluded(proposed.single)) continue;
-      if (!mapEquals(proposed.single, current.single)) return false;
+      if (!_sameExcludedValue(proposed.single, current.single)) return false;
     }
     if (excludedRows != null) excluded.addAll(_permanentExclusionRows(excludedRows));
     bool excludedResult(Map<String, dynamic> item) => _resultPermanentlyExcluded(item, excluded);
@@ -796,6 +796,27 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
       if (excludedRows != null) 'spotifyExcludedImportRows': excludedRows,
     });
     return true;
+  }
+
+  static bool _sameExcludedValue(dynamic left, dynamic right) {
+    if (left is DateTime || right is DateTime) {
+      return left is DateTime && right is DateTime &&
+          left == right && left.isUtc == right.isUtc;
+    }
+    if ((left is Uint8List) != (right is Uint8List)) return false;
+    if (left is List && right is List) {
+      if (left.length != right.length) return false;
+      for (var i = 0; i < left.length; i++) {
+        if (!_sameExcludedValue(left[i], right[i])) return false;
+      }
+      return true;
+    }
+    if (left is Map && right is Map) {
+      return left.length == right.length && left.keys.every(
+        (key) => right.containsKey(key) && _sameExcludedValue(left[key], right[key]),
+      );
+    }
+    return left == right;
   }
 
   static String _reviewRowKey(dynamic row) =>
