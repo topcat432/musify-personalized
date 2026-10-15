@@ -1,6 +1,18 @@
 # Musify Personalized current state
 
 
+## Approved hosted Windows containment qualification,2026-10-15
+
+The owner approved a bounded disposable windows-2022 exception at10:12 UTC for
+the eight remaining native command-lifetime cases. debug.yml now admits that
+runner's measured disk/physical/commit resources before checkout, then runs only
+the eight native cases under the owned bounded logger. All eight must execute
+and pass without skips. The admission/result receipts and bounded log are retained
+seven days. See STORAGE_WORKFLOW.md for the narrow resource policy; home-PC
+controls, tool setup and security are unchanged. Qualification is pending the
+exact-source Windows/Linux CI run; prior Linux skips are not a Windows pass.
+
+
 ## Manual choice query provenance preservation,2026-10-15
 
 I05/I06 source inspection found that Use match persisted the editable search box,

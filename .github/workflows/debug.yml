@@ -823,3 +823,91 @@ jobs:
       # CI builds are verification inputs only. They are deliberately not
       # uploaded because debug signing is ephemeral and unsigned releases are
       # not safe user updates. User-facing APKs come only from signed-release.
+
+  windows-owned-command:
+    name: Windows owned-command lifecycle
+    runs-on: windows-2022
+    timeout-minutes: 8
+    steps:
+      - name: Admit disposable runner disk and memory budget
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:RUNNER_OS -ne 'Windows') { throw 'Native Windows runner required' }
+          # Owner-approved hosted-only exception,2026-10-15 10:12 UTC.
+          # Together: source/action staging, Python fixtures/cache misses, logs,
+          # upload/output costs. No SDK/dependency downloads or snapshots.
+          $expectedWritesPerRoot = [uint64]2147483648
+          $expectedCommit = [uint64]1073741824
+          $diskReserve = [uint64]10737418240
+          $physicalReserve = [uint64]2147483648
+          $roots = @('C:\', [IO.Path]::GetPathRoot($env:GITHUB_WORKSPACE),
+            [IO.Path]::GetPathRoot($env:RUNNER_TEMP), [IO.Path]::GetPathRoot($env:TEMP)) | Select-Object -Unique
+          $volumes = @(Get-CimInstance Win32_Volume)
+          $targets = @(foreach ($root in $roots) {
+            if (-not $root) { throw 'Unknown runner storage root' }
+            $volume = @($volumes | Where-Object DriveLetter -eq $root.TrimEnd('\'))
+            if ($volume.Count -ne 1) { throw "Unknown runner volume for $root" }
+            [pscustomobject]@{ Identity=$volume[0].DeviceID; Root=$root; Free=[uint64]$volume[0].FreeSpace }
+          })
+          $diskEvidence = @(foreach ($group in ($targets | Group-Object Identity)) {
+            # Sum allowances for aliases sharing a volume; free space is not added.
+            $expectedWrites = $expectedWritesPerRoot * $group.Count
+            $free = [uint64](($group.Group | Measure-Object Free -Minimum).Minimum)
+            if ($free -lt ($diskReserve + $expectedWrites)) { throw "Runner disk budget not admitted: free=$free writes=$expectedWrites reserve=$diskReserve" }
+            [pscustomobject]@{ Roots=@($group.Group.Root); FreeBytes=$free;
+              ExpectedWriteBytes=$expectedWrites; RequiredReserveBytes=$diskReserve }
+          })
+          $memory = Get-CimInstance Win32_PerfFormattedData_PerfOS_Memory
+          if ($null -eq $memory -or $null -eq $memory.CommittedBytes -or $null -eq $memory.AvailableBytes -or -not $memory.CommitLimit) { throw 'Runner memory counters are unavailable' }
+          $projectedCommitPercent = 100 * ([double]$memory.CommittedBytes + $expectedCommit) / $memory.CommitLimit
+          if ($projectedCommitPercent -ge 80 -or $memory.AvailableBytes -lt ($physicalReserve + $expectedCommit)) {
+            throw "Runner memory budget not admitted: available=$($memory.AvailableBytes) projectedCommitPercent=$projectedCommitPercent"
+          }
+          $receipt = [ordered]@{ SourceSha=$env:SOURCE_SHA; RunnerOS=$env:RUNNER_OS;
+            WorkflowSha=$env:GITHUB_WORKFLOW_SHA; HostedException='owner-approved 2026-10-15 10:12 UTC';
+            Disk=$diskEvidence; AvailableBytes=$memory.AvailableBytes; CommittedBytes=$memory.CommittedBytes;
+            CommitLimit=$memory.CommitLimit; ExpectedAdditionalCommitBytes=$expectedCommit;
+            PhysicalReserveBytes=$physicalReserve; ProjectedCommitPercent=$projectedCommitPercent;
+            SdkDependencyDownloadBytes=0; SnapshotBytes=0; Admitted=$true }
+          $json = $receipt | ConvertTo-Json -Depth 6
+          if ([Text.Encoding]::UTF8.GetByteCount($json) -gt 16384) { throw 'Admission receipt exceeded its bound' }
+          [IO.File]::WriteAllText("$env:RUNNER_TEMP/windows-owned-admission.json", $json)
+          Write-Output $json
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+      - name: Verify candidate and run bounded native Windows contracts
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ((git rev-parse HEAD) -ne $env:SOURCE_SHA) { throw 'Wrong candidate checkout' }
+          $python = (Get-Command python -CommandType Application -ErrorAction Stop).Source
+          $log = "$env:RUNNER_TEMP/windows-owned-command.log"
+          & $python tool/bounded_command_log.py --log $log --max-bytes 10485760 --timeout-seconds 120 -- $python -m unittest discover -s tool -p 'windows_owned_command_test.py' -v
+          if ($LASTEXITCODE -ne 0) { throw "Windows owned-command contracts failed: $LASTEXITCODE" }
+          $text = [IO.File]::ReadAllText($log)
+          if ($text -match 'skipped' -or $text -notmatch '(?m)^Ran 8 tests in ' -or $text -notmatch '(?m)^OK\r?$') {
+            throw 'All eight native contracts must execute and pass without skips'
+          }
+          $files = @('tool/windows_owned_job.py','tool/windows_owned_command_test.py',
+            'tool/owned_command.py','tool/bounded_command_log.py')
+          $hashes = @(foreach ($file in $files) {
+            [pscustomobject]@{ Path=$file; Sha256=(Get-FileHash -Algorithm SHA256 -LiteralPath $file).Hash.ToLowerInvariant() }
+          })
+          $receipt = [ordered]@{ SourceSha=$env:SOURCE_SHA; NativeWindowsCases=8; Skipped=0;
+            Result='PASS'; Python=$python; SourceFiles=$hashes; LogBytes=(Get-Item -LiteralPath $log).Length }
+          $json = $receipt | ConvertTo-Json -Depth 5
+          if ([Text.Encoding]::UTF8.GetByteCount($json) -gt 16384) { throw 'Result receipt exceeded its bound' }
+          [IO.File]::WriteAllText("$env:RUNNER_TEMP/windows-owned-result.json", $json)
+      - name: Upload bounded Windows lifecycle evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-owned-command-${{ github.run_number }}
+          path: |
+            ${{ runner.temp }}/windows-owned-command.log
+            ${{ runner.temp }}/windows-owned-admission.json
+            ${{ runner.temp }}/windows-owned-result.json
+          if-no-files-found: ignore
+          retention-days: 7

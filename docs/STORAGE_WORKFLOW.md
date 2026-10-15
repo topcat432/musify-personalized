@@ -96,10 +96,29 @@ historical direct-launch scripts as current guarded commands.
 
 This containment helper does not replace the emulator lease and verified graceful
 finally shutdown, and must not be used to bypass native rehearsal controls.
-Linux process-group behavior remains covered separately. Native Windows proof is
-pending: local workers remain unadmitted, and the proposed disposable hosted-CI
-storage exception requires explicit approval before adding/executing that job.
-Mocks or Linux skips do not qualify the native Job implementation.
+Linux process-group behavior remains covered separately. Mocks or Linux skips do
+not qualify the native Job implementation. The owner approved the following
+narrow hosted-runner exception on2026-10-15 at10:12 UTC; routine reruns within this
+scope need no repeated question. Native qualification remains evidence-dependent.
+
+Only debug.yml's disposable windows-2022 Windows owned-command lifecycle job may
+substitute its inline, runner-specific admission for the home C:/V: session
+helper. Before checkout it resolves actual C:, workspace, runner TEMP and process
+TEMP volumes; declares2GiB writes per distinct root together for action/source
+staging, fixtures, Python cache misses, logs and uploads/outputs; aggregates aliases
+sharing a volume; and retains10GiB free per involved volume after those writes.
+It declares1GiB additional commit, requires projected commit strictly below80%,
+and keeps2GiB available physical memory after that forecast. An absent/unknown
+volume or unavailable memory limit refuses the job. Receipts record measurements,
+allowances, source/workflow SHA and the eight-case result with source-file hashes.
+
+The job uses only existing Python, has an8-minute job limit and120-second owned
+command deadline, enforces a10MiB single-generation log and16KiB receipts, requires
+all eight Windows cases to execute/pass without skips, and retains evidence7days.
+No SDK/dependency installation, snapshots, paid service, credentials, persistent
+access, emulator, phone, signing, publication or security change is authorized by
+this exception. Home-PC session hashing, C:/V: reserves, admission thresholds,
+existing helper, emulator lease and graceful-finally controls remain mandatory.
 
 ## Logs and canonical evidence
 
