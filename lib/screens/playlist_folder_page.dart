@@ -42,10 +42,12 @@ class PlaylistFolderPage extends StatefulWidget {
     super.key,
     required this.folderId,
     required this.folderName,
+    this.youtubePlaylistLoader,
   });
 
   final String folderId;
   final String folderName;
+  final Future<List<dynamic>> Function()? youtubePlaylistLoader;
 
   @override
   State<PlaylistFolderPage> createState() => _PlaylistFolderPageState();
@@ -287,7 +289,7 @@ class _PlaylistFolderPageState extends State<PlaylistFolderPage> {
 
   Future<void> _showAddPlaylistDialog() async {
     final customCandidates = getPlaylistsNotInFolders();
-    final youtubeCandidates = await getUserPlaylistsNotInFolders();
+    final youtubeCandidates = await (widget.youtubePlaylistLoader?.call() ?? getUserPlaylistsNotInFolders());
     final candidates = [...customCandidates, ...youtubeCandidates];
 
     if (!mounted) return;
