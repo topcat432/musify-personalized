@@ -1,0 +1,21 @@
+{
+  "playlists": [
+    {
+      "name": "Synthetic ordered mix",
+      "lastModifiedDate": "2026-10-01",
+      "collaborators": [],
+      "items": [
+        {"track": {"trackName": "Synthetic first", "artistName": "Synthetic artist", "albumName": "Synthetic album", "trackUri": "spotify:track:AAAAAAAAAAAAAAAAAAAAAA"}, "episode": null, "audiobook": null, "localTrack": null, "addedDate": "2026-09-01"},
+        {"track": null, "episode": {}, "audiobook": null, "localTrack": null, "addedDate": "2026-09-02"},
+        {"track": {"trackName": "Synthetic second", "artistName": "Synthetic artist", "albumName": "Synthetic album", "trackUri": "spotify:track:BBBBBBBBBBBBBBBBBBBBBB"}, "episode": null, "audiobook": null, "localTrack": null, "addedDate": "2026-09-03"},
+        {"track": {"trackName": "Synthetic first", "artistName": "Synthetic artist", "albumName": "Synthetic album", "trackUri": "spotify:track:AAAAAAAAAAAAAAAAAAAAAA"}, "episode": null, "audiobook": null, "localTrack": null, "addedDate": "2026-09-04"}
+      ],
+      "description": "Synthetic fixture only",
+      "numberOfFollowers": 0
+    },
+    {"name": "Synthetic empty", "lastModifiedDate": "2026-10-01", "items": []},
+    {"name": "Synthetic ordered mix", "lastModifiedDate": "2026-10-01", "items": [
+      {"track": {"trackName": "Synthetic second", "artistName": "Synthetic artist", "albumName": "Synthetic album", "trackUri": "spotify:track:BBBBBBBBBBBBBBBBBBBBBB"}, "addedDate": "2026-09-05"}
+    ]}
+  ]
+}

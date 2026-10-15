@@ -1,15 +1,18 @@
 import 'dart:typed_data';
+import 'package:musify/services/spotify_account_playlist_adapter.dart';
 import 'package:musify/services/spotify_csv_importer.dart';
 import 'package:musify/services/spotify_source_playlist.dart';
 export 'package:musify/services/spotify_source_playlist.dart';
 
 /// Transient membership model only: no save or routing adapter may flatten it.
-/// Compatibility: caseychu/spotify-backup named playlists with Web API tracks.
+/// Compatibility: caseychu/spotify-backup and evidenced account Playlist*.json.
 class SpotifyPlaylistDraft {
-  SpotifyPlaylistDraft._(this.tracks, this.playlists, this.ignoredAlbums);
+  SpotifyPlaylistDraft._(this.tracks, this.playlists, this.ignoredAlbums,
+      {this.format = 'Named Spotify playlist backup'});
   final List<SpotifyImportTrack> tracks;
   final List<SpotifySourcePlaylist> playlists;
   final int ignoredAlbums;
+  final String format;
   SpotifyImportPreview toPreview({required String fileName}) {
     if (tracks.isEmpty && !playlists.any((source) => source.members.isEmpty))
       throw const SpotifyImportException(
@@ -32,7 +35,7 @@ class SpotifyPlaylistDraft {
     }
     return SpotifyImportPreview(
       fileName: fileName,
-      format: 'Named Spotify playlist backup',
+      format: format,
       totalDataRows: row,
       tracks: tracks,
       rejectedRows: List.unmodifiable(rejected),
@@ -51,7 +54,10 @@ class SpotifyPlaylistDraft {
     Never fail() => throw const SpotifyImportException(
       'Unsupported playlist JSON. Choose a compatible named-playlist backup; nothing was saved.',
     );
-    final document = SpotifyCsvImporter.decodeBoundedJson(bytes);
+    var document = SpotifyCsvImporter.decodeBoundedJson(bytes);
+    final account = document is Map<String, dynamic>
+        ? SpotifyAccountPlaylistAdapter.normalize(document) : null;
+    if (account != null) document = account;
     if (document is! Map<String, dynamic> ||
         document['playlists'] is! List ||
         document.keys.any((k) => k != 'playlists' && k != 'albums') ||
@@ -240,6 +246,7 @@ class SpotifyPlaylistDraft {
       List.unmodifiable(tracks),
       List.unmodifiable(playlists),
       (document['albums'] as List?)?.length ?? 0,
+      format: account == null ? 'Named Spotify playlist backup' : 'Spotify account playlists',
     );
   }
 }

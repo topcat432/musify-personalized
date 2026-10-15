@@ -625,6 +625,8 @@ jobs:
             lib/screens/spotify_source_playlists_page.dart
             lib/services/spotify_import_destination_service.dart
             lib/services/spotify_playlist_draft.dart
+            lib/services/spotify_account_playlist_adapter.dart
+            test/services/spotify_account_playlist_test.dart
             lib/services/spotify_whole_source_readiness.dart
             test/services/spotify_empty_source_playlist_test.dart
             test/screens/spotify_empty_source_playlist_page_test.dart
@@ -705,6 +707,48 @@ jobs:
         with:
           name: playlist-source-focused-${{ github.run_number }}
           path: playlist-source-focused.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Reproduce account playlist incompatibility on exact prior source
+        shell: bash
+        run: |
+          set -euo pipefail
+          original="$GITHUB_WORKSPACE"
+          control="$RUNNER_TEMP/musify-account-playlist-control-105ad478"
+          git fetch --no-tags --depth=1 origin 105ad4781a4fada7c9d0664276b1178529caf015
+          git worktree add --detach "$control" 105ad4781a4fada7c9d0664276b1178529caf015
+          mkdir -p "$control/test/fixtures"
+          cp test/services/spotify_account_playlist_test.dart "$control/test/services/"
+          cp test/fixtures/spotify_account_playlists.json "$control/test/fixtures/"
+          cd "$control"
+          flutter pub get --offline
+          if python3 "$original/tool/bounded_command_log.py" --log "$original/account-playlist-control.log" --timeout-seconds 90 -- flutter test --no-pub --reporter expanded -j 1 test/services/spotify_account_playlist_test.dart --plain-name 'account fixture enters the production file route and preserves ordered gaps and repeats'; then
+            echo "Prior source unexpectedly accepted account playlist items"
+            exit 1
+          fi
+          grep -Fq 'Unsupported playlist JSON' "$original/account-playlist-control.log"
+          echo "Exact105ad478 control rejected the evidenced account playlist fixture."
+          test "$(git -C "$original" rev-parse HEAD)" = "$SOURCE_SHA"
+
+      - name: Upload exact prior-source account playlist control log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: account-playlist-control-${{ github.run_number }}
+          path: account-playlist-control.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Verify evidenced account playlist compatibility
+        run: python3 tool/bounded_command_log.py --log account-playlist-focused.log --timeout-seconds 120 -- flutter test --no-pub --reporter expanded -j 1 test/services/spotify_account_playlist_test.dart test/services/spotify_playlist_draft_test.dart
+
+      - name: Upload focused account playlist compatibility log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: account-playlist-focused-${{ github.run_number }}
+          path: account-playlist-focused.log
           if-no-files-found: ignore
           retention-days: 7
 

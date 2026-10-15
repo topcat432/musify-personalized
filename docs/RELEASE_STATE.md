@@ -1,6 +1,19 @@
 # Musify Personalized current state
 
 
+## Account Playlist JSON compatibility source milestone,2026-10-15
+
+Independent review closed105ad478 modelled move exception/reopen recovery;
+physical ENOSPC, torn writes and power-loss remain unqualified. The next bounded
+F04 gap implements the evidenced account Playlist*.json shape into the existing
+ordered-membership model. See [schema evidence and limits](SPOTIFY_ACCOUNT_PLAYLIST_JSON.md).
+Only synthetic fixtures enter Git. Parser, production file dispatch, count/identity
+refusal and existing-format Save/rollback/reopen/independent backup restore tests
+are added. Exact-source CI is pending; no local heavy worker is authorized by
+unsafe host commit pressure. No occurrence writer, synchronization, schema,
+account connection or provider request is added. Baseline5560 recovery thenF01/F02
+remain the first native priority when normal admission passes; no phone/release.
+
 ## Accepted playlist-move persistence boundary,2026-10-15
 
 Independent review closed f3947dd8 ownership/order, manual provenance and hosted
