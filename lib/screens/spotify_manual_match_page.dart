@@ -48,7 +48,7 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
   static const Duration _previewLength = Duration(seconds: 30);
 
   static final ManualPreviewPlayerPool _defaultPreviewPool =
-      ManualPreviewPlayerPool(() => JustAudioReviewSprintPlayer());
+      ManualPreviewPlayerPool(JustAudioReviewSprintPlayer.new);
   late final ManualPreviewPlayerPool _previewPool;
   ManualPreviewPlayerLease? _previewLease;
   late final Future<String?> Function(String songId) _streamResolver;
