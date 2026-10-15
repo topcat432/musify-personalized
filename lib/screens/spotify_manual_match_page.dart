@@ -12,6 +12,7 @@ import 'dart:async';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:musify/services/common_services.dart';
+import 'package:musify/services/manual_preview_player_pool.dart';
 import 'package:musify/services/review_sprint_audio_player.dart';
 import 'package:musify/services/spotify_manual_source_service.dart';
 import 'package:musify/services/spotify_match_scoring.dart';
@@ -24,12 +25,14 @@ class SpotifyManualMatchPage extends StatefulWidget {
     required this.item,
     super.key,
     this.audioPlayer,
+    this.previewPool,
     this.streamResolver,
     this.candidateSearch,
   });
 
   final Map<String, dynamic> item;
   final ReviewSprintAudioPlayer? audioPlayer;
+  final ManualPreviewPlayerPool? previewPool;
   final Future<String?> Function(String songId)? streamResolver;
   final Future<List<Map<String, dynamic>>> Function(String query)? candidateSearch;
 
