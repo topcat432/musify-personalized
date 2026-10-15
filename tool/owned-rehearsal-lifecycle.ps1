@@ -27,15 +27,19 @@ function Invoke-MusifyOwnedRehearsal {
         [string]$HarnessScript,
         [string]$ApprovedHarnessSha256,
         [switch]$CheckOnly,
-        [ValidateSet('original','saved')][string]$Target='original',
+        [ValidateSet('original','saved','isolated')][string]$Target='original',
         [switch]$BootstrapSaved,
         [switch]$ColdBootSaved
     )
     $ErrorActionPreference='Stop'
-    if (($BootstrapSaved -or $ColdBootSaved) -and $Target -ne 'saved') {throw 'Saved-only launch option refused for original AVD'}
-    $avdName=if($Target -eq 'saved'){'musify_saved_acceptance_api35'}else{'musify_rehearsal_api35'}
-    $serial=if($Target -eq 'saved'){'emulator-5558'}else{'emulator-5556'}
-    $avdHome=if($Target -eq 'saved'){'V:\Storage-Recovery-20261013\ProjectWork\musify-saved-acceptance\avds'}else{'C:\Users\james\Documents\Codex\2026-10-10\task\musify-source-comparison\emulator-rehearsal\avds'}
+    if (($BootstrapSaved -and $Target -ne 'saved') -or ($ColdBootSaved -and $Target -eq 'original')) {throw 'Saved-only launch option refused for original AVD'}
+    if ($Target -eq 'isolated' -and -not $ColdBootSaved) {throw 'Isolated target requires explicit cold boot'}
+    $profiles=@{
+        original=@{Name='musify_rehearsal_api35';Serial='emulator-5556';Home='C:\Users\james\Documents\Codex\2026-10-10\task\musify-source-comparison\emulator-rehearsal\avds';Gpu='swiftshader_indirect'}
+        saved=@{Name='musify_saved_acceptance_api35';Serial='emulator-5558';Home='V:\Storage-Recovery-20261013\ProjectWork\musify-saved-acceptance\avds';Gpu='swiftshader_indirect'}
+        isolated=@{Name='musify_isolated_acceptance_api35';Serial='emulator-5560';Home='V:\Storage-Recovery-20261013\ProjectWork\musify-isolated-acceptance\avds';Gpu='swiftshader'}
+    }
+    $profile=$profiles[$Target];$avdName=$profile.Name;$serial=$profile.Serial;$avdHome=$profile.Home
     $admission=Get-MusifyRehearsalAdmission
     $projected=100*($admission.CommittedBytes+27917287424)/$admission.CommitLimit
     if ($admission.CFreeBytes -lt 12884901888 -or
@@ -59,12 +63,12 @@ function Invoke-MusifyOwnedRehearsal {
     try {
         try {$held=$lease.WaitOne(0)} catch [Threading.AbandonedMutexException] {$held=$true}
         if (-not $held) {throw 'Owned rehearsal lease busy'}
-        if ((Get-MusifyOwnedEmulator -AvdName $avdName).Count) {throw 'Pre-existing owned emulator; no adoption or shutdown'}
+        if (@(Get-MusifyOwnedEmulator -AvdName $avdName).Count) {throw 'Pre-existing owned emulator; no adoption or shutdown'}
         $started=[datetime]::UtcNow
         $env:ANDROID_AVD_HOME=$avdHome
         try {
-            $launchArgs=@('-avd',$avdName,'-port',($serial -replace 'emulator-',''),'-no-window','-no-audio','-gpu','swiftshader_indirect')
-            if($Target -eq 'saved'){$launchArgs+=@('-data',(Join-Path $avdHome 'musify_saved_acceptance_api35.avd\userdata-qemu.img'))}
+            $launchArgs=@('-avd',$avdName,'-port',($serial -replace 'emulator-',''),'-no-window','-no-audio','-gpu',$profile.Gpu)
+            if($Target -ne 'original'){$launchArgs+=@('-data',(Join-Path $avdHome ($avdName+'.avd\userdata-qemu.img')))}
             if($ColdBootSaved){$launchArgs+='-no-snapshot-load'}
             Start-Process -FilePath 'C:\devtools\android-sdk\emulator\emulator.exe' -ArgumentList $launchArgs -WindowStyle Hidden | Out-Null
             $end=[datetime]::UtcNow.AddSeconds(150)
@@ -81,7 +85,7 @@ function Invoke-MusifyOwnedRehearsal {
                 } catch {$booted=$false}
             } while (-not $booted -and [datetime]::UtcNow -lt $end)
             if (-not $booted) {throw 'Owned emulator boot deadline'}
-            $owned=Get-MusifyOwnedEmulator -AvdName $avdName
+            $owned=@(Get-MusifyOwnedEmulator -AvdName $avdName)
             if (-not $owned.Count -or @($owned|Where-Object {$_.CreationDate.ToUniversalTime() -lt $started}).Count) {throw 'Unexpected emulator process ownership'}
             $identity=Invoke-MusifyOwnedAdb -Serial $serial -Arguments @('emu','avd','name')|Out-String
             if ($identity -notmatch ('(?m)^'+[regex]::Escape($avdName)+'\s*$')) {throw 'Owned AVD identity mismatch'}
@@ -89,15 +93,15 @@ function Invoke-MusifyOwnedRehearsal {
             & $harness
             if ($LASTEXITCODE -ne 0) {throw "Owned callback failed: $LASTEXITCODE"}
         } finally {
-            $owned=Get-MusifyOwnedEmulator -AvdName $avdName
+            $owned=@(Get-MusifyOwnedEmulator -AvdName $avdName)
             if ($owned.Count) {
                 if (@($owned|Where-Object {$_.CreationDate.ToUniversalTime() -lt $started}).Count) {throw 'Foreign process; shutdown refused'}
                 $identity=Invoke-MusifyOwnedAdb -Serial $serial -Arguments @('emu','avd','name')|Out-String
                 if ($identity -notmatch ('(?m)^'+[regex]::Escape($avdName)+'\s*$')) {throw 'Unverified AVD; shutdown refused'}
                 Invoke-MusifyOwnedAdb -Serial $serial -Arguments @('emu','kill')|Out-Null
                 $end=[datetime]::UtcNow.AddSeconds(15)
-                while ((Get-MusifyOwnedEmulator -AvdName $avdName).Count -and [datetime]::UtcNow -lt $end) {Start-Sleep -Seconds 1}
-                if ((Get-MusifyOwnedEmulator -AvdName $avdName).Count) {throw 'Graceful shutdown incomplete; no force kill'}
+                while (@(Get-MusifyOwnedEmulator -AvdName $avdName).Count -and [datetime]::UtcNow -lt $end) {Start-Sleep -Seconds 1}
+                if (@(Get-MusifyOwnedEmulator -AvdName $avdName).Count) {throw 'Graceful shutdown incomplete; no force kill'}
             }
         }
     } finally {

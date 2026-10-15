@@ -96,6 +96,22 @@ Describe 'Owned emulator lifecycle' {
         Invoke-MusifyOwnedRehearsal -Target saved -ColdBootSaved -HarnessScript $callback -ApprovedHarnessSha256 $hash
         Assert-MockCalled Start-Process -Scope It -Times 1 -Exactly -ParameterFilter {$ArgumentList -contains '-no-snapshot-load' -and $ArgumentList -notcontains '-no-snapshot-save' -and $ArgumentList -contains '-data'}
     }
+    It 'pins isolated clone to serial5560, its own disk and modern software renderer' {
+        $global:mockIdentity='musify_isolated_acceptance_api35'
+        Invoke-MusifyOwnedRehearsal -Target isolated -ColdBootSaved -HarnessScript $callback -ApprovedHarnessSha256 $hash
+        $global:mockCallbackRan | Should Be $true
+        $global:mockAlive | Should Be $false
+        Assert-MockCalled Start-Process -Scope It -Times 1 -Exactly -ParameterFilter {$ArgumentList -contains '5560' -and $ArgumentList -contains 'swiftshader' -and $ArgumentList -notcontains 'swiftshader_indirect' -and $ArgumentList -contains '-no-snapshot-load' -and $ArgumentList -contains 'V:\Storage-Recovery-20261013\ProjectWork\musify-isolated-acceptance\avds\musify_isolated_acceptance_api35.avd\userdata-qemu.img'}
+        Assert-MockCalled Invoke-MusifyOwnedAdb -Scope It -Times 1 -Exactly -ParameterFilter {$Serial -eq 'emulator-5560' -and $Arguments[1] -eq 'kill'}
+    }
+    It 'refuses isolated snapshot startup without an explicit cold boot' {
+        {Invoke-MusifyOwnedRehearsal -Target isolated -HarnessScript $callback -ApprovedHarnessSha256 $hash} | Should Throw 'requires explicit cold boot'
+        Assert-MockCalled Start-Process -Scope It -Times 0 -Exactly
+    }
+    It 'refuses bootstrap for the already-cloned isolated target' {
+        {Invoke-MusifyOwnedRehearsal -Target isolated -BootstrapSaved -ColdBootSaved -HarnessScript $callback -ApprovedHarnessSha256 $hash} | Should Throw 'Saved-only'
+        Assert-MockCalled Start-Process -Scope It -Times 0 -Exactly
+    }
     It 'refuses bootstrap of original target before launch' {
         {Invoke-MusifyOwnedRehearsal -BootstrapSaved -HarnessScript $callback -ApprovedHarnessSha256 $hash} | Should Throw 'Saved-only'
         Assert-MockCalled Start-Process -Scope It -Times 0 -Exactly

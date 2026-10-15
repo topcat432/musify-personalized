@@ -2256,3 +2256,20 @@ aggregate checks: owned writer cleanup passed, but the exited leader's flushed
 prefix was lost while buffered read waited for8192 bytes. Successor consumes
 available chunks with read1 and adds a cross-platform short-output timeout
 regression. No deadline, output bound, cleanup or data assertion is weakened.
+
+## System rendering isolation in progress, 2026-10-15
+
+Retainedc249 System UI ANRs occur before restore. One fresh original5558 diagnostic
+kept Musify stopped and captured system_server65% CPU, total73% (59% kernel,
+6.8% IO wait), multi-second binder/overlay contention and MemAvailable about1.5GiB.
+UIAutomator could not obtain a usable idle hierarchy; no app launch or restore
+followed. This supports guest boot/rendering pressure, not proven RAM exhaustion
+or a product restore-code defect. The prior black/ANR evidence remains retained.
+
+The authorized isolated profile uses serial5560 with a flattened working clone,
+720x1280/density320 and modern swiftshader, preserving API35/guest CPUs/RAM and
+all host ceilings. Original5558 images/configuration stay unchanged and hash-
+verified. Source wrapper adds explicit isolated cold-boot mapping and fixes
+single-object process counting on PowerShell5;15 offline lifecycle contracts PASS.
+Creation/native qualification remain pending in the private canonical ledger.
+No app, phone, signing or publication change. See STORAGE_WORKFLOW for the map.

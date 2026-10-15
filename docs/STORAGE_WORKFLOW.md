@@ -100,3 +100,20 @@ baseline is explicitly a clone of verified host APK/four-Hive copies, not proof
 that the original AVD's package/data state survived restart. All three guarded
 sessions ended with verified graceful shutdown.12 offline lifecycle contracts
 cover original/saved target separation in addition to failure cleanup.
+## Isolated rendering diagnostic profile, 2026-10-15
+
+An explicitly authorized isolated comparison uses musify_isolated_acceptance_api35,
+serial emulator-5560, under V:/Storage-Recovery-20261013/ProjectWork/
+musify-isolated-acceptance/avds. Target isolated requires ColdBootSaved and retains
+the same lease,26GiB host forecast,80% threshold and graceful finally shutdown.
+Original/saved profiles and their5556/5558 paths/renderer remain unchanged.
+
+The comparison uses the same API35 image, four guest CPUs and configured2G RAM,
+with720x1280/density320 and the installed emulator's supported swiftshader mode.
+Current userdata/encryption overlays are flattened offline into separate raw
+images; no snapshots/cache/locks are copied, and original hashes must match
+before/after creation. It is working storage, not an independent backup. No new
+APK installation, phone operation, signing, schema migration or guest permission
+change is implied. The profile is unqualified until exact package/hash/UID,
+normal-data identity, system-control responsiveness and cold lifecycle are proven.
+Record results against the actual target/profile, never against original5558.
