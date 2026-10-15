@@ -138,4 +138,106 @@ void main() {
       });
     });
   }
+  for (final entry in [
+    ('changed-root', true, false), ('changed-folder', false, false),
+    ('deleted-root', true, false), ('deleted-folder', false, false),
+    ('ambiguous-root', true, false), ('ambiguous-folder', false, false),
+    ('cross-location', true, false), ('stored-only', true, false),
+    ('live-only', true, false), ('unrelated-stored-only', true, false), ('source-type', false, false),
+    ('typed-storage', true, false), ('youtube-deleted', true, true),
+    ('youtube-duplicate', true, true),
+  ]) {
+    final (change, inRoot, youtube) = entry;
+    testWidgets('retained source move refuses newer or missing owner: $change', (tester) async {
+      await withContext(tester, (context) async {
+        selected['ownerCount'] = 1;
+        await seed(inRoot: inRoot, youtube: youtube);
+        final requested = _copy(selected) as Map;
+        final newer = (_copy(selected) as Map)
+          ..['title'] = 'Newer owner playlist'
+          ..['bytes'] = Uint8List.fromList([9, 8])
+          ..['at'] = DateTime.utc(2026, 1, 1).toLocal()
+          ..['list'] = [...selected['list'] as List, {'ytid': 'owned-newer', 'title': 'New owner member'}];
+        void replaceSource(Map? value) {
+          if (inRoot) {
+            userCustomPlaylists.value = [
+              userCustomPlaylists.value.first,
+              if (value != null) value,
+            ];
+          } else {
+            userPlaylistFolders.value = [
+              {...userPlaylistFolders.value.first, 'playlists': [
+                if (value != null) value, (userPlaylistFolders.value.first['playlists'] as List).last,
+              ]},
+              ...userPlaylistFolders.value.skip(1),
+            ];
+          }
+        }
+        Future<void> persist() => Hive.box('user').putAll({
+          'playlistFolders': userPlaylistFolders.value,
+          'customPlaylists': userCustomPlaylists.value,
+          'playlists': userPlaylists.value,
+        });
+        if (change.startsWith('changed-') || change == 'live-only') replaceSource(newer);
+        if (change.startsWith('deleted-')) replaceSource(null);
+        if (change == 'ambiguous-root') userCustomPlaylists.value = [...userCustomPlaylists.value, _copy(selected) as Map];
+        if (change == 'ambiguous-folder' || change == 'cross-location') {
+          userPlaylistFolders.value = [
+            {...userPlaylistFolders.value.first, 'playlists': [
+              ...userPlaylistFolders.value.first['playlists'] as List, _copy(selected),
+            ]},
+            ...userPlaylistFolders.value.skip(1),
+          ];
+        }
+        if (change == 'source-type') replaceSource({...selected, 'source': 'user-youtube'});
+        if (change == 'youtube-deleted') userPlaylists.value = ['youtube-other'];
+        if (change == 'youtube-duplicate') userPlaylists.value = ['youtube-other', 'owned-selected', 'owned-selected'];
+        if (change != 'live-only') await persist();
+        if (change == 'stored-only' || change == 'typed-storage') {
+          await Hive.box('user').put('customPlaylists', [
+            userCustomPlaylists.value.first,
+            change == 'typed-storage' ? {...selected, 'ownerCount': 1.0} : newer,
+          ]);
+        }
+        if (change == 'unrelated-stored-only') {
+          await Hive.box('user').put('customPlaylists', [
+            ...userCustomPlaylists.value, {'ytid': 'opaque-new-owner', 'opaque': {'keep': true}},
+          ]);
+        }
+        await Hive.box('user').flush();
+        final before = snapshot();
+        final bytes = await File('${root.path}/user.hive').readAsBytes();
+        expect(movePlaylistToFolder(requested, 'target', context), context.l10n!.error,
+          reason: 'STALE_SOURCE_MOVE_MUST_REFUSE');
+        expect(snapshot(), before);
+        await Hive.box('user').flush();
+        expect(await File('${root.path}/user.hive').readAsBytes(), bytes);
+        await Hive.close(); Hive.init(root.path); await initPriorityReviewHive();
+        expect(Hive.box('user').toMap(), before['stored']);
+        if (change == 'typed-storage') {
+          expect((Hive.box('user').get('customPlaylists') as List).last['ownerCount'], isA<double>());
+        }
+      });
+    });
+  }
+
+  testWidgets('an equal retained card can move repeatedly without duplicating current source', (tester) async {
+    await withContext(tester, (context) async {
+      await seed(inRoot: true);
+      final requested = _copy(selected) as Map;
+      for (var attempt = 0; attempt < 2; attempt++) {
+        final writes = Hive.box('user').watch().where((event) =>
+          ['playlistFolders', 'customPlaylists', 'playlists'].contains(event.key)).take(3).toList();
+        expect(movePlaylistToFolder(requested, 'target', context), '${context.l10n!.addedSuccess}!');
+        await writes.timeout(const Duration(seconds: 3));
+        await Hive.box('user').flush();
+      }
+      final target = userPlaylistFolders.value[1]['playlists'] as List;
+      expect(target.map((p) => p['ytid']), ['target-other', 'owned-selected']);
+      expect(target.last, selected);
+      await Hive.close(); Hive.init(root.path); await initPriorityReviewHive();
+      expect(((Hive.box('user').get('playlistFolders') as List)[1]['playlists'] as List).last, selected);
+    });
+  });
+
 }

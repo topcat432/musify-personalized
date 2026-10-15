@@ -282,10 +282,12 @@ void main() {
                   ? ['Zulu', 'Bridge', 'Alpha', 'Tail']
                   : ['Zulu', 'Bridge', 'Tail', 'Zulu'];
               expect(
+                tester.widgetList<SongBar>(find.byType(SongBar)).map((row) => row.song['title']),
+                type == PlaylistSortType.dateAdded ? expected.reversed : expected,
+              );
+              expect(
                 (playlist['list'] as List).map((song) => song['title']),
-                type == PlaylistSortType.dateAdded
-                    ? expected.reversed
-                    : expected,
+                expected,
               );
             }
             await tester.pumpWidget(const SizedBox.shrink());

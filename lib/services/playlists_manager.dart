@@ -20,6 +20,7 @@
  */
 
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/widgets.dart';
 import 'package:hive/hive.dart';
@@ -658,27 +659,105 @@ String renamePlaylistFolder(
   return context?.l10n?.folderUpdated ?? 'Folder updated successfully';
 }
 
+Map _currentPlaylistMoveSource(Map requested) {
+  final box = Hive.box('user');
+  final live = <String, List>{
+    'playlistFolders': userPlaylistFolders.value,
+    'customPlaylists': userCustomPlaylists.value,
+    'playlists': userPlaylists.value,
+  };
+  for (final entry in live.entries) {
+    if (!_samePlaylistMoveValue(entry.value, box.get(entry.key, defaultValue: const []))) {
+      throw StateError('Playlist storage changed. Reload the Library.');
+    }
+  }
+  final id = requested['ytid'];
+  if (id is! String || id.trim().isEmpty) {
+    throw StateError('The selected playlist has no current source identity.');
+  }
+  final maps = <Map>[];
+  for (final item in userCustomPlaylists.value) {
+    if (item['ytid'] == id) maps.add(item);
+  }
+  for (final folder in userPlaylistFolders.value) {
+    final children = folder['playlists'] ?? const [];
+    if (children is! List || children.any((child) => child is! Map)) {
+      throw StateError('Folder contents are unreadable. Reload the Library.');
+    }
+    for (final child in children.cast<Map>()) {
+      if (child['ytid'] == id) maps.add(child);
+    }
+  }
+  final rootYoutube = userPlaylists.value.where((value) => value == id).length;
+  if (maps.length + rootYoutube != 1) {
+    throw StateError('The selected playlist source is missing or ambiguous.');
+  }
+  if (maps.isNotEmpty) {
+    final current = maps.single;
+    if (!_samePlaylistMoveValue(current, requested) ||
+        !const ['user-created', 'user-youtube'].contains(current['source'])) {
+      throw StateError('The selected playlist changed. Reload the Library.');
+    }
+    return _copyPlaylistMoveValue(current) as Map;
+  }
+  // Root YouTube ownership is stored as an ID, not as a metadata map. Its
+  // current membership is authoritative; the lookup supplies only that ID's card.
+  if (requested['source'] != 'user-youtube') {
+    throw StateError('The selected playlist source type changed.');
+  }
+  return _copyPlaylistMoveValue(requested) as Map;
+}
+
+dynamic _copyPlaylistMoveValue(dynamic value) {
+  if (value is Uint8List) return Uint8List.fromList(value);
+  if (value is List) return [for (final item in value) _copyPlaylistMoveValue(item)];
+  if (value is Map) return {for (final entry in value.entries) entry.key: _copyPlaylistMoveValue(entry.value)};
+  return value;
+}
+
+bool _samePlaylistMoveValue(dynamic left, dynamic right) {
+  if (left is DateTime || right is DateTime) {
+    return left is DateTime && right is DateTime && left == right && left.isUtc == right.isUtc;
+  }
+  if (left is num || right is num) {
+    return left is num && right is num && left.runtimeType == right.runtimeType && left == right;
+  }
+  if ((left is Uint8List) != (right is Uint8List)) return false;
+  if (left is List && right is List) {
+    if (left.length != right.length) return false;
+    for (var i = 0; i < left.length; i++) {
+      if (!_samePlaylistMoveValue(left[i], right[i])) return false;
+    }
+    return true;
+  }
+  if (left is Map && right is Map) {
+    return left.length == right.length && left.keys.every(
+      (key) => right.containsKey(key) && _samePlaylistMoveValue(left[key], right[key]),
+    );
+  }
+  return left == right;
+}
+
 String movePlaylistToFolder(
   Map playlist,
   String? folderId,
   BuildContext context,
 ) {
   try {
-    final updatedFolders = userPlaylistFolders.value
-        .map(Map<dynamic, dynamic>.from)
-        .toList();
+    final ownedPlaylist = _currentPlaylistMoveSource(playlist);
+    final updatedFolders = List<Map>.from(_copyPlaylistMoveValue(userPlaylistFolders.value) as List);
     // A stale picker must refuse before removing any current membership.
     if (folderId != null &&
         updatedFolders.where((folder) => folder['id'] == folderId).length != 1) {
       return context.l10n!.error;
     }
-    final updatedCustomPlaylists = List<Map>.from(userCustomPlaylists.value);
+    final updatedCustomPlaylists = List<Map>.from(_copyPlaylistMoveValue(userCustomPlaylists.value) as List);
     final updatedYoutubePlaylists = List<String>.from(userPlaylists.value);
 
     for (final folder in updatedFolders) {
       final folderPlaylists = List<Map>.from(
         folder['playlists'] ?? [],
-      )..removeWhere((p) => p['ytid'] != null && p['ytid'] == playlist['ytid']);
+      )..removeWhere((p) => p['ytid'] != null && p['ytid'] == ownedPlaylist['ytid']);
       folder['playlists'] = folderPlaylists;
     }
 
@@ -690,15 +769,15 @@ String movePlaylistToFolder(
 
       if (targetFolder.isNotEmpty) {
         final folderPlaylists = List<Map>.from(targetFolder['playlists'] ?? [])
-          ..add(playlist);
+          ..add(ownedPlaylist);
         targetFolder['playlists'] = folderPlaylists;
 
-        if (playlist['source'] == 'user-created') {
+        if (ownedPlaylist['source'] == 'user-created') {
           updatedCustomPlaylists.removeWhere(
-            (p) => p['ytid'] == playlist['ytid'],
+            (p) => p['ytid'] == ownedPlaylist['ytid'],
           );
-        } else if (playlist['source'] == 'user-youtube') {
-          updatedYoutubePlaylists.removeWhere((p) => p == playlist['ytid']);
+        } else if (ownedPlaylist['source'] == 'user-youtube') {
+          updatedYoutubePlaylists.removeWhere((p) => p == ownedPlaylist['ytid']);
         }
       } else {
         logger.log(
@@ -707,13 +786,13 @@ String movePlaylistToFolder(
         return context.l10n!.error;
       }
     } else {
-      if (playlist['source'] == 'user-created') {
-        if (!updatedCustomPlaylists.any((p) => p['ytid'] == playlist['ytid'])) {
-          updatedCustomPlaylists.add(playlist);
+      if (ownedPlaylist['source'] == 'user-created') {
+        if (!updatedCustomPlaylists.any((p) => p['ytid'] == ownedPlaylist['ytid'])) {
+          updatedCustomPlaylists.add(ownedPlaylist);
         }
-      } else if (playlist['source'] == 'user-youtube') {
-        if (!updatedYoutubePlaylists.contains(playlist['ytid'])) {
-          updatedYoutubePlaylists.add(playlist['ytid']);
+      } else if (ownedPlaylist['source'] == 'user-youtube') {
+        if (!updatedYoutubePlaylists.contains(ownedPlaylist['ytid'])) {
+          updatedYoutubePlaylists.add(ownedPlaylist['ytid']);
         }
       }
     }

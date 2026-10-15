@@ -439,6 +439,93 @@ jobs:
           path: folder-move-control.log
           if-no-files-found: error
           retention-days: 7
+      - name: Reproduce stale folder source ownership on exact prior source
+        shell: bash
+        run: |
+          set -euo pipefail
+          original="$GITHUB_WORKSPACE"
+          control="$RUNNER_TEMP/musify-folder-source-control-2dbe545c"
+          git fetch --no-tags --depth=1 origin 2dbe545cda7b4f666d7c9ea56298e1986adde0b1
+          git worktree add --detach "$control" 2dbe545cda7b4f666d7c9ea56298e1986adde0b1
+          cp test/services/playlist_folder_move_preservation_test.dart "$control/test/services/playlist_folder_move_preservation_test.dart"
+          cd "$control"
+          flutter pub get --offline
+          set +e
+          python3 "$original/tool/bounded_command_log.py" --log "$original/folder-source-control.log" --timeout-seconds 180 -- flutter test --no-pub --reporter expanded -j 1 test/services/playlist_folder_move_preservation_test.dart --plain-name 'retained source move refuses newer or missing owner: changed-root'
+          result=$?
+          set -e
+          test "$result" -eq 1
+          grep -Fq 'STALE_SOURCE_MOVE_MUST_REFUSE' "$original/folder-source-control.log"
+          grep -Fq 'Expected:' "$original/folder-source-control.log"
+          echo "Exact2dbe545c control reproduced stale folder source ownership."
+          test "$(git -C "$original" rev-parse HEAD)" = "$SOURCE_SHA"
+
+      - name: Upload exact prior-source folder-source-control
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: folder-source-control-${{ github.run_number }}
+          path: folder-source-control.log
+          if-no-files-found: error
+          retention-days: 7
+      - name: Reproduce retained picker source overwrite on exact prior source
+        shell: bash
+        run: |
+          set -euo pipefail
+          original="$GITHUB_WORKSPACE"
+          control="$RUNNER_TEMP/musify-folder-picker-source-control-b006957f"
+          git fetch --no-tags --depth=1 origin b006957f3417aa852a05532d11bf5694ba9ef52a
+          git worktree add --detach "$control" b006957f3417aa852a05532d11bf5694ba9ef52a
+          cp test/screens/playlist_folder_source_picker_test.dart "$control/test/screens/playlist_folder_source_picker_test.dart"
+          cd "$control"
+          flutter pub get --offline
+          set +e
+          python3 "$original/tool/bounded_command_log.py" --log "$original/folder-picker-source-control.log" --timeout-seconds 180 -- flutter test --no-pub --reporter expanded -j 1 test/screens/playlist_folder_source_picker_test.dart --plain-name 'retained folder picker preserves current source: changed'
+          result=$?
+          set -e
+          test "$result" -eq 1
+          grep -Fq 'PICKER_OVERWROTE_CURRENT_SOURCE' "$original/folder-picker-source-control.log"
+          grep -Fq 'Expected:' "$original/folder-picker-source-control.log"
+          echo "Exactb006957f control reproduced retained picker source overwrite."
+          test "$(git -C "$original" rev-parse HEAD)" = "$SOURCE_SHA"
+
+      - name: Upload exact prior-source folder-picker-source-control
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: folder-picker-source-control-${{ github.run_number }}
+          path: folder-picker-source-control.log
+          if-no-files-found: error
+          retention-days: 7
+      - name: Reproduce display sort persisted by folder move on exact prior source
+        shell: bash
+        run: |
+          set -euo pipefail
+          original="$GITHUB_WORKSPACE"
+          control="$RUNNER_TEMP/musify-folder-source-order-control-2dbe545c"
+          git fetch --no-tags --depth=1 origin 2dbe545cda7b4f666d7c9ea56298e1986adde0b1
+          git worktree add --detach "$control" 2dbe545cda7b4f666d7c9ea56298e1986adde0b1
+          cp test/screens/playlist_move_source_order_test.dart "$control/test/screens/playlist_move_source_order_test.dart"
+          cd "$control"
+          flutter pub get --offline
+          set +e
+          python3 "$original/tool/bounded_command_log.py" --log "$original/folder-source-order-control.log" --timeout-seconds 180 -- flutter test --no-pub --reporter expanded -j 1 test/screens/playlist_move_source_order_test.dart --plain-name 'widget sort then move retains canonical source order: title folder=false'
+          result=$?
+          set -e
+          test "$result" -eq 1
+          grep -Fq 'MOVE_PERSISTED_DISPLAY_SORT_AS_SOURCE' "$original/folder-source-order-control.log"
+          grep -Fq 'Expected:' "$original/folder-source-order-control.log"
+          echo "Exact2dbe545c control reproduced display sort persisted by folder move."
+          test "$(git -C "$original" rev-parse HEAD)" = "$SOURCE_SHA"
+
+      - name: Upload exact prior-source folder-source-order-control
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: folder-source-order-control-${{ github.run_number }}
+          path: folder-source-order-control.log
+          if-no-files-found: error
+          retention-days: 7
       - name: Prepare read-only empty-source formatting suggestions
         shell: bash
         run: |
@@ -505,6 +592,18 @@ jobs:
         with:
           name: manual-preview-focused-${{ github.run_number }}
           path: manual-preview-focused.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Verify bounded canonical playlist ownership and display regressions
+        run: python3 tool/bounded_command_log.py --log playlist-source-focused.log --timeout-seconds 180 -- flutter test --no-pub --reporter expanded -j 1 test/services/playlist_folder_move_preservation_test.dart test/screens/playlist_folder_source_picker_test.dart test/screens/playlist_move_source_order_test.dart test/screens/playlist_page_test.dart test/screens/playlist_song_rename_test.dart
+
+      - name: Upload focused canonical playlist regression log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playlist-source-focused-${{ github.run_number }}
+          path: playlist-source-focused.log
           if-no-files-found: ignore
           retention-days: 7
 

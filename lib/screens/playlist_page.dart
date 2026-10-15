@@ -73,6 +73,7 @@ class PlaylistPage extends StatefulWidget {
 
 class _PlaylistPageState extends State<PlaylistPage> {
   dynamic _playlist;
+  Map? _sourcePlaylist;
   late List<dynamic> _originalPlaylistList; // Keep original order separately
   List<int> _playlistSourceOrder = []; // Runtime slots, never stored in songs.
 
@@ -171,6 +172,7 @@ class _PlaylistPageState extends State<PlaylistPage> {
         );
       }
 
+      if (_playlist is Map) _sourcePlaylist = _playlist;
       if (_playlist != null && _playlist['list'] != null) {
         _capturePlaylistOrder();
         _sortPlaylist(_sortType);
@@ -200,7 +202,7 @@ class _PlaylistPageState extends State<PlaylistPage> {
         leading: IconButton(
           icon: const Icon(FluentIcons.arrow_left_24_regular),
           onPressed: () =>
-              Navigator.pop(context, widget.playlistData == _playlist),
+              Navigator.pop(context, widget.playlistData == _sourcePlaylist),
           tooltip: context.l10n!.back,
         ),
       ),
@@ -453,7 +455,7 @@ class _PlaylistPageState extends State<PlaylistPage> {
                     updatePlaylistLikeStatus(
                       _playlist['ytid'],
                       playlistLikeStatus.value,
-                      playlistData: _playlist,
+                      playlistData: _sourcePlaylist ?? _playlist,
                     ),
                   );
                 },
@@ -468,7 +470,7 @@ class _PlaylistPageState extends State<PlaylistPage> {
                     updatePlaylistLikeStatus(
                       _playlist['ytid'],
                       playlistLikeStatus.value,
-                      playlistData: _playlist,
+                      playlistData: _sourcePlaylist ?? _playlist,
                     ),
                   );
                 },
@@ -516,7 +518,7 @@ class _PlaylistPageState extends State<PlaylistPage> {
       onPressed: () async {
         final result = await showDialog<Map?>(
           context: context,
-          builder: (context) => EditPlaylistDialog(playlistData: _playlist),
+          builder: (context) => EditPlaylistDialog(playlistData: _sourcePlaylist ?? _playlist),
         );
 
         if (result != null) {
@@ -529,12 +531,13 @@ class _PlaylistPageState extends State<PlaylistPage> {
             return;
           }
 
+          final sourcePlaylist = _sourcePlaylist ?? _playlist;
           final updatedPlaylist = {
-            ..._playlist,
+            ...sourcePlaylist,
             ...result,
             'ytid': resolvedPlaylistYtid,
             'source': _playlist['source'] ?? result['source'],
-            'list': result['list'] ?? _playlist['list'],
+            'list': result['list'] ?? sourcePlaylist['list'],
           };
 
           // Search root list first, then inside folders.
@@ -582,7 +585,15 @@ class _PlaylistPageState extends State<PlaylistPage> {
           // Update offline playlist if it exists
           unawaited(syncOfflinePlaylistMetadata(updatedPlaylist));
 
-          setState(() => _playlist = updatedPlaylist);
+          setState(() {
+            _playlist = updatedPlaylist;
+            if (_playlist['list'] is List) {
+              _capturePlaylistOrder();
+              _sortPlaylist(_sortType);
+            } else {
+              _sourcePlaylist = updatedPlaylist;
+            }
+          });
           showToast(context, context.l10n!.playlistUpdated);
         }
       },
@@ -725,7 +736,7 @@ class _PlaylistPageState extends State<PlaylistPage> {
         index > sourceIndex ? index - 1 : index,
     ];
     final undo = PlaylistSlotUndo(
-      _playlist,
+      _sourcePlaylist!,
       remainingSourceSongs: _originalPlaylistList,
       removedSong: songToRemove,
       sourceIndex: sourceIndex,
@@ -744,17 +755,12 @@ class _PlaylistPageState extends State<PlaylistPage> {
             showToast(context, context.l10n!.error);
             return;
           }
-          // Recompute from original slots using the current sort, never an old
-          // displayed/filtered index captured when the row was deleted.
-          final order = _sortedSourceOrder(
-            _sortType,
-            restoredSource,
-            List.generate(restoredSource.length, (i) => i),
-          );
+          // The writer owns canonical slots; display sorting is reapplied only
+          // to the detached page container after a successful source restore.
           final restored = await undo.apply(
-            expectedCurrentSongs: List<dynamic>.from(_playlist['list'] as List),
-            currentSourceOrder: List<int>.from(_playlistSourceOrder),
-            restoredOrder: order,
+            expectedCurrentSongs: List<dynamic>.from(_sourcePlaylist!['list'] as List),
+            currentSourceOrder: List.generate(_originalPlaylistList.length, (i) => i),
+            restoredOrder: List.generate(restoredSource.length, (i) => i),
           );
           if (!mounted) return;
           if (restored == null) {
@@ -763,8 +769,7 @@ class _PlaylistPageState extends State<PlaylistPage> {
           }
           setState(() {
             _playlist = restored;
-            _originalPlaylistList = restoredSource;
-            _playlistSourceOrder = order;
+            _capturePlaylistOrder();
             _sortPlaylist(_sortType);
           });
         },
@@ -790,7 +795,11 @@ class _PlaylistPageState extends State<PlaylistPage> {
   }
 
   void _capturePlaylistOrder() {
-    _originalPlaylistList = List<dynamic>.from(_playlist['list'] as List);
+    _sourcePlaylist = _playlist as Map;
+    // Sort a page-owned container; the library/Hive map retains source order.
+    _playlist = Map<dynamic, dynamic>.from(_sourcePlaylist!)
+      ..['list'] = List<dynamic>.from(_sourcePlaylist!['list'] as List);
+    _originalPlaylistList = List<dynamic>.from(_sourcePlaylist!['list'] as List);
     _playlistSourceOrder = List.generate(
       _originalPlaylistList.length,
       (i) => i,
@@ -870,10 +879,11 @@ class _PlaylistPageState extends State<PlaylistPage> {
           ? () {
               _syncOriginalSongValues();
               if (removeSongFromPlaylist(
-                _playlist,
+                _sourcePlaylist!,
                 song,
-                removeOneAtIndex: index,
+                removeOneAtIndex: _playlistSourceOrder[index],
               )) {
+                _playlist['list'] = List<dynamic>.from(_playlist['list'] as List)..removeAt(index);
                 _updateSongsListOnRemove(index, song);
               }
             }
@@ -886,9 +896,8 @@ class _PlaylistPageState extends State<PlaylistPage> {
       },
       borderRadius: borderRadius,
       playlistId: playlistId,
-      playlist: isUserCreatedPlaylist ? _playlist as Map : null,
-      playlistSongIndex: fullIndex,
-      playlistSourceOrder: _playlistSourceOrder,
+      playlist: isUserCreatedPlaylist ? _sourcePlaylist : null,
+      playlistSongIndex: _playlistSourceOrder[fullIndex],
       onRenamed: (renamed) {
         if (!mounted) return;
         _playlist = renamed;

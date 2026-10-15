@@ -108,7 +108,8 @@ void main() {
             Zone.root.run(() => chips.onSelected(sort));
             await tester.pump();
             await drain();
-            expect((current()['list'] as List).map((s) => s['title']), sort == PlaylistSortType.dateAdded ? expected.reversed : expected);
+            expect(tester.widgetList<SongBar>(find.byType(SongBar)).map((row) => row.song['title']), sort == PlaylistSortType.dateAdded ? expected.reversed : expected);
+            expect((current()['list'] as List).map((s) => s['title']), expected);
           }
           expect(current()['legacy'], {'keep': true});
           await tester.pumpWidget(const SizedBox.shrink());

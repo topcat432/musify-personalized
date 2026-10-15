@@ -1,6 +1,40 @@
 # Musify Personalized current state
 
 
+## Authoritative playlist move source and display order,2026-10-15
+
+Independent review closed invalid-destination rejection, then identified two
+pre-existing source gaps: retained picker maps could overwrite a newer source or
+recreate a deleted one, and PlaylistPage sorted the actual owned map so a later
+move persisted display order as source order. Moves now require consistent live
+and Hive owned collections and exactly one current source. Stored map payloads
+must match the caller before mutation; staging uses the authoritative typed copy.
+Absent/ambiguous/changed sources and stored-only/live-only divergence refuse.
+Root YouTube ownership remains its existing ID list: current unique membership
+is verified, while the metadata card supplies that ID's lookup information.
+No new epoch, ownership field, schema, journal or migration is added.
+
+PlaylistPage now keeps a page-local display container. Rename/delete/Undo use
+canonical slots; metadata edits and likes retain canonical source payloads.
+Existing widget assertions now verify both the sorted display and the unchanged
+canonical collection, rather than treating a mutated shared map as the display.
+Fifteen service cases cover stale/deleted/ambiguous/typed/divergent ownership and
+safe repeat, three actual pending-picker cases and six Title/Artist/Date-added
+widget-to-move/reopen cases cover root/folder sources and repeated recording slots.
+Exact prior-source controls and corrected qualification are pending Linux CI.
+Accepted-move disk/device fault atomicity remains outside this pre-write guard.
+The separate21-line manual-query provenance patch remains uncommitted and paused.
+Windows exception still awaits the owner; its job is uncreated/unrun. Native
+baseline recovery remains first after unchanged admission, then F01/F02.
+
+Source2dbe545cda7b4f666d7c9ea56298e1986adde0b1 passed
+[Linux CI38706011644](https://github.com/topcat432/musify-personalized/actions/runs/38706011644):
+17 focused preview cases,901 aggregate tests,40 strict Linux visuals,analysis,
+49/30/3310 helper checks and all required Android builds. Its retirement and
+invalid-destination controls reproduced the intended defects. All8 native Windows
+containment cases remain unqualified; no native hang/shutdown/phone pass is claimed.
+
+
 ## Rejected folder-move membership preservation,2026-10-15
 
 L02 source inspection found that moving to a stale/deleted destination first
