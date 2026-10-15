@@ -11,10 +11,13 @@ Only synthetic fixtures enter Git. Parser, production file dispatch, count/ident
 refusal and existing-format Save/rollback/reopen/independent backup restore tests
 are added. Initial90ad7be8/CI38732850299 passes analysis, focused account/legacy
 parser tests and8 hosted Windows tooling cases; its pinned105ad478 control rejects
-the fixture. Final successor adds ZIP/source-scope and legacy-extra-metadata
-coverage. Final exact aggregate/visual/build qualification is pending; no local
-heavy worker is authorized by
-unsafe host commit pressure. No occurrence writer, synchronization, schema,
+the fixture. Sourceb6ce94a9/CI38734248164 passes39 focused cases (24 account/15 legacy),
+analysis and8 hosted Windows tooling cases, including ZIP/source-scope and
+legacy-extra-metadata coverage. The final workflow guard additionally requires
+exit1 and the terminal one-test-failed marker; timeout/log overflow cannot qualify
+the old-source refusal. Final exact aggregate/visual/build qualification is tracked by PR23
+and the canonical evidence ledger. No local heavy worker is authorized by unsafe
+host commit pressure. No occurrence writer, synchronization, schema,
 account connection or provider request is added. Baseline5560 recovery thenF01/F02
 remain the first native priority when normal admission passes; no phone/release.
 

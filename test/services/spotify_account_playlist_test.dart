@@ -82,15 +82,29 @@ void main() {
     },
   );
 
-  test('stored ZIP uses the same account adapter and retains selected-entry provenance', () async {
-    // Independently produced with Python zipfile ZIP_STORED; synthetic only.
-    final archive = base64Decode('UEsDBBQAAAAAAAAAQV2Io5cdKQIAACkCAAAOAAAAUGxheWxpc3QxLmpzb257InBsYXlsaXN0cyI6W3sibmFtZSI6IlN5bnRoZXRpYyBvcmRlcmVkIG1peCIsImxhc3RNb2RpZmllZERhdGUiOiIyMDI2LTEwLTAxIiwiaXRlbXMiOlt7InRyYWNrIjp7InRyYWNrTmFtZSI6IlN5bnRoZXRpYyBmaXJzdCIsImFydGlzdE5hbWUiOiJTeW50aGV0aWMgYXJ0aXN0IiwiYWxidW1OYW1lIjoiU3ludGhldGljIGFsYnVtIiwidHJhY2tVcmkiOiJzcG90aWZ5OnRyYWNrOkFBQUFBQUFBQUFBQUFBQUFBQUFBQUEifSwiZXBpc29kZSI6bnVsbCwiYXVkaW9ib29rIjpudWxsLCJsb2NhbFRyYWNrIjpudWxsLCJhZGRlZERhdGUiOiIyMDI2LTA5LTAxIn0sbnVsbCx7InRyYWNrIjp7InRyYWNrTmFtZSI6IlN5bnRoZXRpYyBmaXJzdCIsImFydGlzdE5hbWUiOiJTeW50aGV0aWMgYXJ0aXN0IiwiYWxidW1OYW1lIjoiU3ludGhldGljIGFsYnVtIiwidHJhY2tVcmkiOiJzcG90aWZ5OnRyYWNrOkFBQUFBQUFBQUFBQUFBQUFBQUFBQUEifSwiZXBpc29kZSI6bnVsbCwiYXVkaW9ib29rIjpudWxsLCJsb2NhbFRyYWNrIjpudWxsLCJhZGRlZERhdGUiOiIyMDI2LTA5LTAxIn1dfV19UEsBAhQAFAAAAAAAAABBXYijlx0pAgAAKQIAAA4AAAAAAAAAAAAAAICBAAAAAFBsYXlsaXN0MS5qc29uUEsFBgAAAAABAAEAPAAAAFUCAAAAAA==');
-    final preview = await SpotifyZipImporter.parseBytes(archive, fileName: 'synthetic-account.zip');
-    expect(preview.sourceEntryName, 'Playlist1.json');
-    expect(preview.format, 'Spotify account playlists in ZIP');
-    expect(preview.sourcePlaylists.single.members.map((member) => member.sourceRow), [1, null, 1]);
-    expect(preview.tracks, hasLength(1)); expect(preview.rejectedRows, hasLength(1));
-  });
+  test(
+    'stored ZIP uses the same account adapter and retains selected-entry provenance',
+    () async {
+      // Independently produced with Python zipfile ZIP_STORED; synthetic only.
+      final archive = base64Decode(
+        'UEsDBBQAAAAAAAAAQV2Io5cdKQIAACkCAAAOAAAAUGxheWxpc3QxLmpzb257InBsYXlsaXN0cyI6W3sibmFtZSI6IlN5bnRoZXRpYyBvcmRlcmVkIG1peCIsImxhc3RNb2RpZmllZERhdGUiOiIyMDI2LTEwLTAxIiwiaXRlbXMiOlt7InRyYWNrIjp7InRyYWNrTmFtZSI6IlN5bnRoZXRpYyBmaXJzdCIsImFydGlzdE5hbWUiOiJTeW50aGV0aWMgYXJ0aXN0IiwiYWxidW1OYW1lIjoiU3ludGhldGljIGFsYnVtIiwidHJhY2tVcmkiOiJzcG90aWZ5OnRyYWNrOkFBQUFBQUFBQUFBQUFBQUFBQUFBQUEifSwiZXBpc29kZSI6bnVsbCwiYXVkaW9ib29rIjpudWxsLCJsb2NhbFRyYWNrIjpudWxsLCJhZGRlZERhdGUiOiIyMDI2LTA5LTAxIn0sbnVsbCx7InRyYWNrIjp7InRyYWNrTmFtZSI6IlN5bnRoZXRpYyBmaXJzdCIsImFydGlzdE5hbWUiOiJTeW50aGV0aWMgYXJ0aXN0IiwiYWxidW1OYW1lIjoiU3ludGhldGljIGFsYnVtIiwidHJhY2tVcmkiOiJzcG90aWZ5OnRyYWNrOkFBQUFBQUFBQUFBQUFBQUFBQUFBQUEifSwiZXBpc29kZSI6bnVsbCwiYXVkaW9ib29rIjpudWxsLCJsb2NhbFRyYWNrIjpudWxsLCJhZGRlZERhdGUiOiIyMDI2LTA5LTAxIn1dfV19UEsBAhQAFAAAAAAAAABBXYijlx0pAgAAKQIAAA4AAAAAAAAAAAAAAICBAAAAAFBsYXlsaXN0MS5qc29uUEsFBgAAAAABAAEAPAAAAFUCAAAAAA==',
+      );
+      final preview = await SpotifyZipImporter.parseBytes(
+        archive,
+        fileName: 'synthetic-account.zip',
+      );
+      expect(preview.sourceEntryName, 'Playlist1.json');
+      expect(preview.format, 'Spotify account playlists in ZIP');
+      expect(
+        preview.sourcePlaylists.single.members.map(
+          (member) => member.sourceRow,
+        ),
+        [1, null, 1],
+      );
+      expect(preview.tracks, hasLength(1));
+      expect(preview.rejectedRows, hasLength(1));
+    },
+  );
 
   for (final variant in [
     'episode',
@@ -168,12 +182,32 @@ void main() {
       expect(() => parse(value), rejected);
     },
   );
-  test('legacy backup tracks keep their previously accepted extra metadata', () {
-    final preview = parse({'playlists': [{'name': 'Legacy synthetic', 'lastModifiedDate': '2026-10-01', 'tracks': [
-      {'track': {'uri': 'spotify:track:${'A' * 22}', 'name': 'Legacy song', 'artists': [{'name': 'Synthetic'}]}},
-    ]}]});
-    expect(preview.format, 'Named Spotify playlist backup'); expect(preview.tracks, hasLength(1));
-  });
+  test(
+    'legacy backup tracks keep their previously accepted extra metadata',
+    () {
+      final preview = parse({
+        'playlists': [
+          {
+            'name': 'Legacy synthetic',
+            'lastModifiedDate': '2026-10-01',
+            'tracks': [
+              {
+                'track': {
+                  'uri': 'spotify:track:${'A' * 22}',
+                  'name': 'Legacy song',
+                  'artists': [
+                    {'name': 'Synthetic'},
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      });
+      expect(preview.format, 'Named Spotify playlist backup');
+      expect(preview.tracks, hasLength(1));
+    },
+  );
   test(
     'account and backup shapes cannot mix across sources or root fields',
     () {
@@ -283,11 +317,12 @@ void main() {
           importedAt: DateTime.utc(2026, 10, 15),
         );
         final service = SpotifyImportDestinationService();
-      final first = await service.loadSourcePlaylistSnapshot(1);
-      final last = await service.loadSourcePlaylistSnapshot(3);
-      expect(first.sourcePlaylistKey, isNot(last.sourcePlaylistKey));
-      expect(first.sourcePlaylistKey, isNotNull); expect(last.sourcePlaylistKey, isNotNull);
-      final before = copy(Hive.box('user').toMap());
+        final first = await service.loadSourcePlaylistSnapshot(1);
+        final last = await service.loadSourcePlaylistSnapshot(3);
+        expect(first.sourcePlaylistKey, isNot(last.sourcePlaylistKey));
+        expect(first.sourcePlaylistKey, isNotNull);
+        expect(last.sourcePlaylistKey, isNotNull);
+        final before = copy(Hive.box('user').toMap());
         await reopen(root.path);
         expect(Hive.box('user').toMap(), before);
         final box = Hive.box('user');

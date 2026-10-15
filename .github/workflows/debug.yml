@@ -723,11 +723,11 @@ jobs:
           cp test/fixtures/spotify_account_playlists.json "$control/test/fixtures/"
           cd "$control"
           flutter pub get --offline
-          if python3 "$original/tool/bounded_command_log.py" --log "$original/account-playlist-control.log" --timeout-seconds 90 -- flutter test --no-pub --reporter expanded -j 1 test/services/spotify_account_playlist_test.dart --plain-name 'account fixture enters the production file route and preserves ordered gaps and repeats'; then
-            echo "Prior source unexpectedly accepted account playlist items"
-            exit 1
-          fi
+          control_status=0
+          python3 "$original/tool/bounded_command_log.py" --log "$original/account-playlist-control.log" --timeout-seconds 90 -- flutter test --no-pub --reporter expanded -j 1 test/services/spotify_account_playlist_test.dart --plain-name 'account fixture enters the production file route and preserves ordered gaps and repeats' || control_status=$?
+          test "$control_status" -eq 1
           grep -Fq 'Unsupported playlist JSON' "$original/account-playlist-control.log"
+          grep -Eq '\+0 -1: Some tests failed\.' "$original/account-playlist-control.log"
           echo "Exact105ad478 control rejected the evidenced account playlist fixture."
           test "$(git -C "$original" rev-parse HEAD)" = "$SOURCE_SHA"
 

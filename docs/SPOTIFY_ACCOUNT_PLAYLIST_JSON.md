@@ -1,6 +1,7 @@
 # Account playlist JSON compatibility
 
-Source milestone2026-10-15; exact CI and current-source Android acceptance pending.
+Source milestone2026-10-15. Exact CI status is tracked by PR23 and the canonical
+evidence ledger; current-source Android acceptance remains pending.
 
 ## Evidence before implementation
 
@@ -22,7 +23,8 @@ objects exercise unsupported variants without guessing their internal schema.
 ## Supported boundary
 
 The production song-list dispatch recognizes the document structure, independent
-of the file's name. Account sources require name, lastModifiedDate and items;
+of the file's name. One selected JSON file/ZIP entry is parsed; separate PlaylistN
+files are not merged across imports. Account sources require name, lastModifiedDate and items;
 optional description, numberOfFollowers and collaborators are ignored. Root
 fields other than playlists, mixed account/Web-API backup sources and unknown
 playlist or track fields reject explicitly. The existing caseychu/spotify-backup
