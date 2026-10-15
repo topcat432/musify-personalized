@@ -17,7 +17,10 @@ metadata, all other occurrences, source order, folder metadata and unrelated
 playlists are retained. The runtime sort permutation is inverted before saving,
 so a rename in Date added/Name/Artist view retains original source order after
 restart; the page then reapplies the current view sort in memory. The page adopts the saved target and resynchronizes its
-runtime sort/source mapping. No persistent identity, field, adapter, migration,
+runtime sort/source mapping. Confirm is consumed before its callback/navigation,
+so a repeated press cannot save again or pop the underlying page. The eight
+view cases invoke the actual Confirm callback twice. No persistent identity,
+field, adapter, migration,
 backup-format, dependency or rendering change; liked-song semantics are unchanged.
 
 The initial test-only27e74dc3 run was cancelled after a disk/fake-clock fixture

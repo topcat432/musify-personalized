@@ -83,6 +83,7 @@ void main() {
           await tester.enterText(fields.at(1), 'New artist');
           final confirm = tester.widget<FilledButton>(find.descendant(of: find.byType(RenameSongDialog), matching: find.byType(FilledButton)));
           Zone.root.run(confirm.onPressed!);
+          Zone.root.run(confirm.onPressed!); // Repeat must not pop the page.
           await tester.pump(const Duration(milliseconds: 300));
           await drain();
           await tester.pump();
