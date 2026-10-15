@@ -13,13 +13,30 @@ MAX_BYTES = 10 * 1024 * 1024
 
 
 def stop_owned(process):
+    # Popen created a private session/group; never signal the caller's group.
     if os.name == 'posix':
-        try:
-            os.killpg(process.pid, signal.SIGTERM)
-        except ProcessLookupError:
-            pass
+        def send(sig):
+            try:
+                os.killpg(process.pid, sig)
+                return True
+            except ProcessLookupError:
+                return False
+
+        if send(signal.SIGTERM):
+            deadline = time.monotonic() + .5
+            while time.monotonic() < deadline:
+                process.poll()  # Reap the leader without assuming descendants exited.
+                if not send(0):
+                    break
+                time.sleep(.02)
+            # A pipe-holding descendant may remain after its leader has exited.
+            send(signal.SIGKILL)
     elif process.poll() is None:
         process.terminate()
+        try:
+            process.wait(timeout=.5)
+        except subprocess.TimeoutExpired:
+            process.kill()
     process.wait(timeout=5)
 
 
@@ -59,17 +76,14 @@ def run(command, log_path, maximum, timeout):
                     log.write(chunk[:maximum - written])
                     log.flush()
                     print('Owned command log reached its byte limit; stopping writer.', file=sys.stderr)
-                    stop_owned(process)
                     return 125
                 log.write(chunk)
                 written += len(chunk)
         except (queue.Empty, subprocess.TimeoutExpired):
             print('Owned command reached its deadline; stopping writer.', file=sys.stderr)
-            stop_owned(process)
             return 124
         finally:
-            if process.poll() is None:
-                stop_owned(process)
+            stop_owned(process)
             process.stdout.close()
 
 

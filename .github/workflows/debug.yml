@@ -234,6 +234,34 @@ jobs:
           name: empty-reporting-control-${{ github.run_number }}
           path: empty-reporting-control.log
           if-no-files-found: error
+      - name: Verify bounded logger cleanup and exact prior-source resistant-writer control
+        shell: bash
+        run: |
+          set -euo pipefail
+          original="$GITHUB_WORKSPACE"
+          python3 -m unittest discover -s "$original/tool" -p bounded_command_log_test.py -v
+          control="$RUNNER_TEMP/musify-logger-cleanup-control-1192aa56"
+          git fetch --no-tags --depth=1 origin 1192aa56bfb428499d236f665922e93f9015206e
+          git worktree add --detach "$control" 1192aa56bfb428499d236f665922e93f9015206e
+          cp tool/bounded_command_log_test.py "$control/tool/"
+          cd "$control/tool"
+          set +e
+          python3 "$original/tool/bounded_command_log.py" --log "$original/logger-cleanup-control.log" --timeout-seconds 120 -- python3 -m unittest bounded_command_log_test.BoundedCommandLogTest.test_term_resistant_writer_timeout_is_124_and_leaves_no_writer
+          result=$?
+          set -e
+          test "$result" -eq 1
+          grep -Fq 'TimeoutExpired' "$original/logger-cleanup-control.log"
+          grep -Fq 'test_term_resistant_writer_timeout_is_124_and_leaves_no_writer' "$original/logger-cleanup-control.log"
+          echo "Exact1192aa56 control reproduced TERM-resistant writer cleanup failure; fixture cleanup retained."
+          test "$(git -C "$original" rev-parse HEAD)" = "$SOURCE_SHA"
+
+      - name: Upload exact prior-source logger cleanup control log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logger-cleanup-control-${{ github.run_number }}
+          path: logger-cleanup-control.log
+          if-no-files-found: error
       - name: Reproduce oversized occurrence proposal on exact prior source
         shell: bash
         run: |
@@ -245,7 +273,6 @@ jobs:
           cp test/services/spotify_source_occurrence_plan_test.dart "$control/test/services/"
           cd "$control"
           flutter pub get --offline
-          python3 -m unittest discover -s "$original/tool" -p bounded_command_log_test.py
           set +e
           python3 "$original/tool/bounded_command_log.py" --log "$original/occurrence-capacity-control.log" -- flutter test --no-pub -j 1 --reporter expanded --name 'proposed output above capacity' test/services/spotify_source_occurrence_plan_test.dart
           result=$?

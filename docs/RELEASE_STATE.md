@@ -2225,3 +2225,28 @@ overflow/deadline, and requires assertion failure exit1 plus the named reason.
 Synthetic logger contracts cover stream/exit propagation, compiler output outside
 the log cap, existing evidence, overflow and timeout. No app/test/visual assertion
 is weakened. The bounded negative control remains required before qualification.
+
+## Qualified capacity correction and logger cleanup review, 2026-10-15
+
+Exact1192aa56bfb428499d236f665922e93f9015206e CI38660962087 PASS784,
+analysis/16+24 strict Linux visuals/5 logger contracts/49 reader-policy/30 channel/
+3310 inflater checks/all required builds. The exact6a8d18fc negative control
+reproduced the10001-entry proposal. Current Windows strict FAIL16+24, all40 actual
+PNGs byte-identical to the retained control; no comparator/reference edits.
+
+Independent review then found the CI-only command logger could leave a TERM-
+resistant command or pipe-holding descendant alive after its leader exited.
+Successor cleanup sends bounded TERM then KILL to its own private process group,
+reaps the command, and preserves124/125 timeout/overflow and normal exit results.
+Three Linux regressions check resistant timeout/overflow and an exited leader's
+pipe-holding descendant, including no live owned writer. An exact1192 control
+must reproduce the old cleanup failure; failed controls also clean their fixtures.
+No app/library/playback behavior changes in this correction.
+
+Signedc249 empty-library rehearsal is not qualified: two pre-restore harness
+checks were corrected, then execution supervision lost the final process result.
+The receipt has no UI snapshots/exports/restart/rollback proof and the independent
+audit correctly refuses it. Four normal-debug Hives were restored byte-exact.
+Read-only verification found no owned emulator process and the lease available
+without abandonment. A new complete owned rehearsal and audit are required;
+About/Back remains independently PASS. Current source is not installed.
