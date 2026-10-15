@@ -81,7 +81,8 @@ void main() {
           final fields = find.descendant(of: find.byType(RenameSongDialog), matching: find.byType(TextField));
           await tester.enterText(fields.at(0), 'Renamed');
           await tester.enterText(fields.at(1), 'New artist');
-          await tester.tap(find.descendant(of: find.byType(RenameSongDialog), matching: find.byType(FilledButton)));
+          final confirm = tester.widget<FilledButton>(find.descendant(of: find.byType(RenameSongDialog), matching: find.byType(FilledButton)));
+          Zone.root.run(confirm.onPressed!);
           await tester.pump(const Duration(milliseconds: 300));
           await drain();
           await tester.pump();
@@ -118,6 +119,56 @@ void main() {
           expect((children.first['list'] as List).where((s) => s['title'] == 'Renamed'), hasLength(1));
           expect(children.last, other);
           expect((children.first as Map).keys.toSet(), playlist.keys.toSet());
+          expect(tester.takeException(), isNull);
+        } finally {
+          await tester.pumpWidget(const SizedBox.shrink());
+          await tester.pump(const Duration(seconds: 11));
+          await tester.runAsync(() => Zone.root.run(() async {
+            await Future<void>.delayed(Duration.zero);
+            if (Hive.isBoxOpen('user')) await Hive.box('user').flush();
+            if (Hive.isBoxOpen('settings')) await Hive.box('settings').flush();
+          }));
+        }
+      }, timeout: const Timeout(Duration(seconds: 25)));
+    }
+  }
+  for (final folder in [false, true]) {
+    for (final cancel in [false, true]) {
+      testWidgets('rename dialog preserves cancel or changed source: folder=$folder cancel=$cancel', (tester) async {
+        try {
+          tester.view
+            ..physicalSize = const Size(800, 1600)
+            ..devicePixelRatio = 1;
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          final first = {'ytid': 'same', 'title': 'First', 'artist': 'Artist'};
+          final selected = {'ytid': 'same', 'title': 'Selected', 'artist': 'Artist'};
+          final playlist = <String, dynamic>{'ytid': 'customId-dialog', 'source': 'user-created', 'title': 'Dialog fixture', 'image': '', 'list': [first, selected]};
+          final key = folder ? 'playlistFolders' : 'customPlaylists';
+          final collection = folder ? <Map>[{'id': 'folder', 'name': 'Folder', 'playlists': [playlist]}] : <Map>[playlist];
+          if (folder) { userPlaylistFolders.value = collection; }
+          else { userCustomPlaylists.value = collection; }
+          await tester.runAsync(() => Zone.root.run(() async { await Hive.box('user').put(key, collection); await Hive.box('user').flush(); }));
+          final before = await tester.runAsync(() => File('${root.path}/user.hive').readAsBytes());
+          await tester.pumpWidget(priorityReviewApp(brightness: Brightness.dark, child: PlaylistPage(playlistData: playlist)));
+          await tester.pump();
+          final menu = tester.widget<OverflowMenuButton<String>>(find.descendant(of: find.byType(SongBar).last, matching: find.byType(OverflowMenuButton<String>)));
+          menu.onSelected('rename');
+          await tester.pump(const Duration(milliseconds: 300));
+          if (cancel) {
+            await tester.tap(find.descendant(of: find.byType(RenameSongDialog), matching: find.byType(OutlinedButton)));
+          } else {
+            playlist['list'] = [first, {...selected, 'title': 'Owner pending'}];
+            final fields = find.descendant(of: find.byType(RenameSongDialog), matching: find.byType(TextField));
+            await tester.enterText(fields.at(0), 'Wrong replacement');
+            final confirm = tester.widget<FilledButton>(find.descendant(of: find.byType(RenameSongDialog), matching: find.byType(FilledButton)));
+          Zone.root.run(confirm.onPressed!);
+          }
+          await tester.pump(const Duration(milliseconds: 300));
+          await tester.runAsync(() => Zone.root.run(() async { await Future<void>.delayed(Duration.zero); await Hive.box('user').flush(); }));
+          expect((playlist['list'] as List).map((s) => s['title']), ['First', cancel ? 'Selected' : 'Owner pending']);
+          final after = await tester.runAsync(() => File('${root.path}/user.hive').readAsBytes());
+          expect(after, before);
           expect(tester.takeException(), isNull);
         } finally {
           await tester.pumpWidget(const SizedBox.shrink());
