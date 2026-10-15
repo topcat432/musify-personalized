@@ -1,5 +1,16 @@
 # Product acceptance ledger
 
+## Baseline delivery priority,2026-10-15
+
+The candidate is explicitly frozen to the reviewed0100aa baseline tree through a
+forward commit. Deferred repeated-occurrence work remains in reachable checkpoint
+f3821a9c and is not part of this delivery baseline. Actual production playback,
+owned5560 baseline recovery/F01/F02 and data/update/native safety take priority over
+roadmap expansion. Fresh admission now passes; source counts do not establish
+playback usability, recovery, physical output or phone acceptance. Exact forward-tip
+CI and any later sign-only artifact/source/hash must be recorded separately.
+No phone install, publication or merge follows automatically.
+
 ## Current capability classification,2026-10-15
 
 Use the [canonical implementation/acceptance map](IMPORT_AND_MATCHING_ROADMAP.md#current-implementation-and-acceptance-map2026-10-15)

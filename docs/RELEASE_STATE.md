@@ -1,29 +1,34 @@
 # Musify Personalized current state
 
 
-## Source-order copy ownership design/test prerequisite,2026-10-15
+## Usable Samsung baseline freeze,2026-10-15
 
-Account JSON0100aa33 is queued for independent review and remains exact-CI
-qualified (992 aggregate/39 parser focus/40 Linux visuals/all required builds).
-The next approved F04 gap is a separately confirmed new playlist preserving all
-resolved source occurrences and selected alternatives. The existing map/list
-format supports these slots; idempotent recovery needs explicit additive optional
-proof. See [minimum protocol and recovery boundaries](SPOTIFY_SOURCE_PLAYLIST_COPY.md).
-No legacy adoption, song tags, automatic migration or synchronization is selected.
-Source82f1837c/CI38741239983 passed42 focused codec/classifier and actual-proof
-Hive/backup/restore tests, but failed sort_constructors_first; aggregate/visuals/
-builds were unrun. The constructor-order lint is corrected. Draftd3d2fc8a/CI38743634195
-passed72 focused cases and failed one fixture's overly narrow typed folder list;
-that fixture is corrected without weakening preservation assertions. The source
-writer also now restores still-owned original map references during compensation;
-a composed rename regression and exact draft control protect this boundary.
-Explicit source-order preview/Cancel/Confirm and additional-copy UI are added,
-plus before/after/ignored-write, closed-handle reopen and saved-file independent
-restore tests. Exact qualification remains tracked in PR23/canonical evidence;
-failed drafts are not passes. The optional versioned proof is documented explicitly;
-no old map migration, per-song ownership tags or synchronization is enabled.
-Local native admission remains unsafe; baseline5560 recovery thenF01/F02 is first
-when unchanged commit/physical/storage requirements pass. No phone/release action.
+Owner priority is a usable bug-fixed phone baseline. This explicit forward change
+restores the reviewed0100aa3377791811221ea0b2810958310209021b production/test/tool/
+workflow tree. No reset or force-push occurred. The source-copy development remains
+reachable at parent checkpointf3821a9c70341f0bf4835d85297af306e0850900, including its
+optional ownership protocol, UI, tests and all failure evidence. That draft passed87
+focused cases and failed one widget assertion expecting the wrong stale-source
+guard message; it is deferred and is not a delivery candidate. Its preceding
+82f1837c andd3d2fc8a failures remain recorded outside Git. No essential baseline
+bug fix from0100aa or its reviewed105ad478 predecessor is reverted.
+
+0100aa independent review closed without a material defect; exactCI38735668618
+passed992 app tests,39 parser focus,105 playlist focus,40 strict Linux visuals,
+analysis/helpers,all required builds and8 hosted Windows tooling cases/0skips.
+The new forward tip requires its own exact CI before sign-only rehearsal. Signed
+c249 remains the installed disposable bootstrap/recovery artifact, not a claim
+that this newer baseline is installed or fully runtime-qualified.
+
+Fresh14:13 UTC unchanged admission passes at51.48% projected commit with the full
+26GiB allowance; C:/V: reserves pass, owned5560 was stopped and its lease free.
+Pinned recovery is now running under the owned wrapper/lease, bounded Windows Job
+logging and graceful finally shutdown. Actual native recovery/playback results
+are tracked in PR23 and the canonical evidence ledger, not inferred from CI.
+Production playback beyond the prior1MiB denial, essential native flows and
+saved-file/data/update safety remain release gates. No denied-source retry,
+credentials/provider bypass, publication, merge or phone installation is authorized.
+Phone readiness is separately coordinated through the existing S21 gateway.
 
 ## Account Playlist JSON compatibility source milestone,2026-10-15
 
