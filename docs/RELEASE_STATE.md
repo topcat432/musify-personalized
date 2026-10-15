@@ -2215,3 +2215,13 @@ milestone/acceptance ledger. Current successor source was not installed; c249
 remains the immutable signed baseline. Earlier black/SystemUI failures remain
 retained, so this is no blanket cold-start reliability pass. Empty/rollback,
 picker/playback and eventual actual-phone gates remain. No merge/sign/publication.
+
+5e45753af1ce0baec1f2031b85ffb5aded82bec8 exactCI38660191691 terminal FAIL
+before aggregate checks: the new negative-control shell file-size limit also
+constrained Dart's objective_c hook.dill compilation. It did not reach the
+capacity assertion; no source qualification is claimed. Successor caps only its
+owned captured command log at10MiB, refuses overwrite, stops its owned writer on
+overflow/deadline, and requires assertion failure exit1 plus the named reason.
+Synthetic logger contracts cover stream/exit propagation, compiler output outside
+the log cap, existing evidence, overflow and timeout. No app/test/visual assertion
+is weakened. The bounded negative control remains required before qualification.

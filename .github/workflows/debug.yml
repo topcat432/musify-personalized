@@ -245,10 +245,12 @@ jobs:
           cp test/services/spotify_source_occurrence_plan_test.dart "$control/test/services/"
           cd "$control"
           flutter pub get --offline
-          if (ulimit -f 10240; flutter test --no-pub -j 1 --reporter expanded --name 'proposed output above capacity' test/services/spotify_source_occurrence_plan_test.dart) > "$original/occurrence-capacity-control.log" 2>&1; then
-            echo "Prior source unexpectedly refused oversized occurrence output"
-            exit 1
-          fi
+          python3 -m unittest discover -s "$original/tool" -p bounded_command_log_test.py
+          set +e
+          python3 "$original/tool/bounded_command_log.py" --log "$original/occurrence-capacity-control.log" -- flutter test --no-pub -j 1 --reporter expanded --name 'proposed output above capacity' test/services/spotify_source_occurrence_plan_test.dart
+          result=$?
+          set -e
+          test "$result" -eq 1
           test "$(wc -c < "$original/occurrence-capacity-control.log")" -lt 10485760
           grep -Fq 'Destination plus appends must fit the 10000-entry restart bound' "$original/occurrence-capacity-control.log"
           echo "Exact6a8d18fc control reproduced the 10001-entry occurrence proposal."
