@@ -1089,6 +1089,7 @@ Future<bool> makeSongOffline(
   OfflineAudioLoader? audioLoader,
   OfflineArtworkLoader? artworkLoader,
   OfflineRegistryWriter? registryWriter,
+  OfflineFilePublisher? filePublisher,
   OfflineCommitProbe? commitProbe,
   bool Function()? shouldCancel,
 }) async {
@@ -1107,6 +1108,7 @@ Future<bool> makeSongOffline(
     audioLoader: audioLoader,
     artworkLoader: artworkLoader,
     registryWriter: registryWriter,
+    filePublisher: filePublisher,
     commitProbe: commitProbe,
     cancelled: () =>
         generation != _offlineCancellationGeneration ||
@@ -1128,10 +1130,12 @@ Future<bool> _makeSongOffline(
   OfflineAudioLoader? audioLoader,
   OfflineArtworkLoader? artworkLoader,
   OfflineRegistryWriter? registryWriter,
+  OfflineFilePublisher? filePublisher,
   OfflineCommitProbe? commitProbe,
 }) async {
   File? partial;
   File? committed;
+  OfflineFilePublication? publication;
   File? ownershipMarker;
   var commitFinished = false;
   var ownsPartial = false;
@@ -1266,8 +1270,7 @@ Future<bool> _makeSongOffline(
         if (cancelled() || await audioFile.exists())
           throw StateError('Offline commit is cancelled or stale');
         Future<void> validatePayload(File file, {bool linked = false}) async {
-          if (linked &&
-              !await FileSystemEntity.identical(partial!.path, file.path))
+          if (linked && !(publication?.owns(file) ?? false))
             throw StateError('Offline published file was replaced');
           final check = await checkOfflineAudio({
             ...offlineSong,
@@ -1299,6 +1302,8 @@ Future<bool> _makeSongOffline(
             'partialPath': partial.path,
             'expectedBytes': expectedBytes,
             'sha256': expectedDigest,
+            // A moved Android source has no durable inode witness after exit.
+            // Retain that residual on restart; never claim checksum ownership.
             'sourceLinkRequired': true,
           }),
           flush: true,
@@ -1310,7 +1315,7 @@ Future<bool> _makeSongOffline(
         if (commitProbe != null)
           await commitProbe(OfflineCommitBoundary.beforeRename);
         await validatePayload(partial);
-        publishOfflineFile(partial, audioFile);
+        publication = (filePublisher ?? publishOfflineFile)(partial, audioFile);
         committed = audioFile;
         if (commitProbe != null)
           await commitProbe(OfflineCommitBoundary.afterRename);
@@ -1378,10 +1383,7 @@ Future<bool> _makeSongOffline(
                 });
             canRemoveCommitted =
                 !referenced &&
-                await FileSystemEntity.identical(
-                  partial.path,
-                  audioFile.path,
-                ) &&
+                (publication?.owns(audioFile) ?? false) &&
                 (await checkOfflineAudio(offlineSong)).playable;
             // Keep compensation under the same registry mutation owner.
             if (canRemoveCommitted) await audioFile.delete();
@@ -1441,18 +1443,22 @@ Future<bool> _makeSongOffline(
     return false;
   } finally {
     try {
-      if (ownershipMarker != null &&
-          (commitFinished || canRemoveCommitted || committed == null) &&
-          await ownershipMarker!.exists())
-        await ownershipMarker!.delete();
-    } catch (_) {
-      /* Leave known proof for explicit retry if cleanup fails. */
+      try {
+        if (ownershipMarker != null &&
+            (commitFinished || canRemoveCommitted || committed == null) &&
+            await ownershipMarker!.exists())
+          await ownershipMarker!.delete();
+      } catch (_) {
+        /* Leave known proof for explicit retry if cleanup fails. */
+      }
+      if (ownsPartial &&
+          partial != null &&
+          (committed == null || canRemoveCommitted || commitFinished) &&
+          await partial.exists())
+        await partial.delete();
+    } finally {
+      publication?.close();
     }
-    if (ownsPartial &&
-        partial != null &&
-        (committed == null || canRemoveCommitted || commitFinished) &&
-        await partial.exists())
-      await partial.delete();
   }
 }
 
@@ -1523,6 +1529,7 @@ Future<File?> _downloadAndSaveArtworkFile(
   required bool Function() cancelled,
 }) async {
   File? partial;
+  OfflineFilePublication? publication;
   var ownsPartial = false;
   try {
     final bytes = await (loader ?? _fetchOfflineArtwork)(url);
@@ -1542,9 +1549,9 @@ Future<File?> _downloadAndSaveArtworkFile(
         (await sha256.bind(partial.openRead()).first).toString() != digest ||
         cancelled())
       return null;
-    publishOfflineFile(partial, file);
+    publication = publishOfflineFile(partial, file);
     await flushOfflineFile(file);
-    if (!await FileSystemEntity.identical(partial.path, file.path) ||
+    if (!publication.owns(file) ||
         await file.length() != bytes.length ||
         (await sha256.bind(file.openRead()).first).toString() != digest)
       return null;
@@ -1557,6 +1564,7 @@ Future<File?> _downloadAndSaveArtworkFile(
     );
     return null;
   } finally {
+    publication?.close();
     if (ownsPartial && partial != null && await partial.exists())
       await partial.delete();
   }

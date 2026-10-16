@@ -1,5 +1,39 @@
 # Musify Personalized current state
 
+## Android no-replace publication correction under qualification, 2026-10-16
+
+The fresh synthetic errno probe reproduced the original helper refusal under the
+app UID: process link,explicit libc link and libc linkat each returned-1/errno13
+(EACCES),with no destination created and the8192-byte source preserved. This is
+consistent with [AOSP's untrusted-app hard-link prohibition](https://android.googlesource.com/platform/system/sepolicy/+/0d8e2fe39e92f22006460b45c7705cf06e3c30b1/private/app_neverallows.te).
+It is not resolved by changing the symbol to linkat. The original debug APK and
+four Hive baselines passed immediate and independent cold verification afterward.
+All prior synthetic namespaces and the offline checkpoint remain retained.
+
+The candidate now uses Android renameat2 with RENAME_NOREPLACE,never an ordinary
+overwrite-capable rename or check-then-rename fallback. The libc wrapper is used
+when available; older supported API24–29 uses libc syscall with explicit variadic
+FFI types and UAPI numbers for the supported Android ABIs. Unsupported ABI,kernel,
+filesystem or policy failures leave the source intact and report native errno.
+minSdk remains24; older-device execution is not yet qualified.
+
+Because this operation consumes the source name,a read-only no-follow descriptor
+pins the validated inode until registration or compensation finishes. Download
+validation,rollback and artwork now compare against that live witness; identical
+bytes at a replacement inode do not confer ownership. Every exit releases it.
+The existing marker format is unchanged. After process death,a moved-source
+residual without a surviving durable inode witness is conservatively retained;
+it is never automatically deleted or adopted using checksum equality alone.
+Existing marker/partial-state behavior remains covered by the regression suite.
+
+Local analysis passes;1164 Windows tests pass with6 Linux-specific cases skipped.
+The Linux move/syscall regressions cover collisions,competing writers,same-byte
+replacement,descriptor cleanup,successor registry ownership and registration
+failure/restart behavior. Those cases and native Android qualification are still
+pending; host hard-link success does not qualify Android. Both strict Windows
+visual suites are being rerun without reference/comparison changes. Promotion,
+signing,provider,phone and publication gates remain held.
+
 ## Direct namespace diagnosis and fresh native failure, 2026-10-16
 
 Bounded read-only diagnosis resolves the preflight ambiguity below. Under actual

@@ -8,6 +8,7 @@ import 'package:hive/hive.dart';
 import 'package:flutter/material.dart';
 import 'package:musify/services/common_services.dart';
 import 'package:musify/services/io_service.dart';
+import 'package:musify/services/offline_file_publication.dart';
 import 'package:musify/services/playlist_download_service.dart';
 
 import '../../tool/visual_review_harness.dart';
@@ -57,6 +58,109 @@ void main() {
         Stream.value(bytes),
         expectedBytes: expected ?? bytes.length,
       );
+
+  for (final scenario in [
+    'success',
+    'registry-failure',
+    'same-byte-successor',
+    'successor-row',
+    'after-publication',
+  ]) {
+    test(
+      'no-replace move preserves ownership across $scenario',
+      () async {
+        final id = 'moved-$scenario';
+        final file = File(FilePaths.getAudioPath(id));
+        OfflineFilePublication? witness;
+        final result = await makeSongOffline(
+          song(id),
+          audioLoader: (_) async => body([1, 2, 3, 4]),
+          filePublisher: (source, target) => witness = publishOfflineFile(
+            source,
+            target,
+            useNoReplaceMove: true,
+            forceSyscall: true,
+          ),
+          commitProbe: (boundary) async {
+            if (scenario == 'after-publication' &&
+                boundary == OfflineCommitBoundary.afterRename) {
+              throw StateError('Synthetic interruption before registration');
+            }
+          },
+          registryWriter: (box, values) async {
+            if (scenario == 'success') {
+              await box.put('offlineSongs', values);
+              return;
+            }
+            if (scenario == 'same-byte-successor') {
+              await file.delete();
+              await file.writeAsBytes([1, 2, 3, 4], flush: true);
+            }
+            if (scenario == 'successor-row') {
+              await box.put('offlineSongs', [
+                ...values.whereType<Map>().where((row) => row['ytid'] != id),
+                {
+                  ...values.whereType<Map>().singleWhere(
+                    (row) => row['ytid'] == id,
+                  ),
+                  'title': 'Owned successor row',
+                },
+              ]);
+            } else {
+              await box.put('offlineSongs', values);
+            }
+            throw StateError('Synthetic writer failure before flush');
+          },
+        );
+        expect(result, scenario == 'success');
+        expect(witness, isNotNull);
+        expect(
+          witness!.owns(file),
+          isFalse,
+          reason: 'Witness must close on every exit',
+        );
+        final rows = Hive.box('userNoBackup').get('offlineSongs') as List;
+        final retained = rows.whereType<Map>().where(
+          (row) => row['ytid'] == id,
+        );
+        if (scenario == 'successor-row')
+          expect(retained.single['title'], 'Owned successor row');
+        else
+          expect(retained.isNotEmpty, scenario == 'success');
+        if (scenario == 'registry-failure') {
+          expect(await file.exists(), isFalse);
+          expect(
+            await file.parent
+                .list()
+                .where((entry) => entry.path.contains(id))
+                .isEmpty,
+            isTrue,
+          );
+        } else {
+          expect(await file.readAsBytes(), [1, 2, 3, 4]);
+        }
+        if (scenario == 'same-byte-successor' ||
+            scenario == 'after-publication') {
+          await Hive.close();
+          await initPriorityReviewHive();
+          var calls = 0;
+          expect(
+            await makeSongOffline(
+              song(id),
+              audioLoader: (_) async {
+                calls++;
+                return body([9, 9, 9, 9]);
+              },
+            ),
+            isFalse,
+          );
+          expect(calls, 0);
+          expect(await file.readAsBytes(), [1, 2, 3, 4]);
+        }
+      },
+      skip: !Platform.isLinux,
+    );
+  }
 
   for (final fail in [false, true]) {
     test(
