@@ -1,5 +1,24 @@
 # Musify Personalized current state
 
+## Legacy canonical-reference compensation closure, 2026-10-16
+
+`d48f45ed257b79dae32b956a5680147e659ea853` passed
+[exact CI38840673988](https://github.com/topcat432/musify-personalized/actions/runs/38840673988).
+Independent review closed provider fallback, registry serialization and clear-all
+ownership, then identified one narrow legacy-reference omission: a newer durable
+row without `audioPath` still owns its canonical audio path. A regression fails
+on unchangedd48: that row survives Hive reopen while its payload is deleted.
+Compensation now resolves canonical legacy paths as well as explicit shared
+paths. The new row and exact payload survive reopen; explicit shared-path cases
+remain retained. Clean analysis, all111 focused cases and all1,159 aggregate
+app tests pass. Strict Windows visuals remain FAIL16+24 with all40 actuals
+byte-identical to the prior control and no reference/comparator changes.
+Successor exact CI and narrow closure review remain pending; no signing or
+native/provider/phone action is authorized by these source results. The existing
+debug publication probe imports unchanged helper files, verified by exact source
+hashes; it is component evidence only, not successor whole-app qualification.
+
+
 ## Offline async ownership closure, 2026-10-16
 
 `5cd97d0ce07fb5477f1a0c7eb6c120609f95d882` passed

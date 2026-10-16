@@ -158,6 +158,47 @@ void main() {
     );
   }
   test(
+    'legacy canonical reference survives failed commit compensation and reopen',
+    () async {
+      const id = 'rollback-legacy-reference';
+      final newer = {'ytid': id, 'title': 'new owner'};
+      expect(
+        await makeSongOffline(
+          song(id),
+          audioLoader: (_) async => body([1, 2, 3, 4]),
+          registryWriter: (box, values) async {
+            await box.put('offlineSongs', values);
+            await box.put('offlineSongs', [
+              ...values.where((row) => row is! Map || row['ytid'] != id),
+              newer,
+            ]);
+            await box.flush();
+            throw StateError(
+              'Synthetic writer failure after a newer legacy row',
+            );
+          },
+        ),
+        isFalse,
+      );
+      await Hive.close();
+      await initPriorityReviewHive();
+      final rows = Hive.box('userNoBackup').get('offlineSongs') as List;
+      expect(
+        rows.whereType<Map>().singleWhere((row) => row['ytid'] == id),
+        newer,
+      );
+      final canonical = File(FilePaths.getAudioPath(id));
+      expect(await canonical.exists(), isTrue);
+      expect(await canonical.readAsBytes(), [1, 2, 3, 4]);
+      expect(await File(FilePaths.getAudioPath('keep-owned')).readAsBytes(), [
+        7,
+        8,
+        9,
+      ]);
+    },
+  );
+
+  test(
     'review residual rollback preserves newer in-place durable row',
     () async {
       const id = 'rollback-in-place';

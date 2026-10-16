@@ -1365,12 +1365,17 @@ Future<bool> _makeSongOffline(
           try {
             final referenced =
                 current is! List ||
-                current.whereType<Map>().any(
-                  (row) =>
-                      row['audioPath'] is String &&
-                      _offlinePathKey(row['audioPath']) ==
-                          _offlinePathKey(audioFile.path),
-                );
+                current.whereType<Map>().any((row) {
+                  // Legacy rows without an explicit path still own their
+                  // canonical payload, just as playback/validation resolve it.
+                  final path = row['audioPath'] is String
+                      ? row['audioPath'] as String
+                      : row['ytid'] is String
+                      ? FilePaths.getAudioPath(row['ytid'])
+                      : null;
+                  return path != null &&
+                      _offlinePathKey(path) == _offlinePathKey(audioFile.path);
+                });
             canRemoveCommitted =
                 !referenced &&
                 await FileSystemEntity.identical(
