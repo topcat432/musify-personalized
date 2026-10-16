@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:musify/services/common_services.dart';
 import 'package:musify/services/io_service.dart';
 import 'package:musify/services/offline_file_publication.dart';
+import 'package:musify/services/offline_audio_integrity.dart';
 import 'package:musify/services/playlist_download_service.dart';
 
 import '../../tool/visual_review_harness.dart';
@@ -58,6 +59,71 @@ void main() {
         Stream.value(bytes),
         expectedBytes: expected ?? bytes.length,
       );
+
+  for (final stage in ['validation', 'compensation']) {
+    for (final successor in ['same-byte-file', 'registry-row']) {
+      test(
+        '$stage rechecks ownership after checksum awaits for $successor',
+        () async {
+          final id = 'checksum-$stage-$successor';
+          final file = File(FilePaths.getAudioPath(id));
+          final reached = Completer<void>(), release = Completer<void>();
+          var finalReads = 0;
+          var writerCalls = 0;
+          final pending = makeSongOffline(
+            song(id),
+            audioLoader: (_) async => body([1, 2, 3, 4]),
+            payloadVerifier: (row) async {
+              final result = await checkOfflineAudio(row);
+              if (row['audioPath'] == file.path &&
+                  ++finalReads == (stage == 'validation' ? 1 : 2)) {
+                reached.complete();
+                await release.future;
+              }
+              return result;
+            },
+            registryWriter: (box, values) async {
+              writerCalls++;
+              await box.put('offlineSongs', values);
+              if (stage == 'compensation')
+                throw StateError('Synthetic writer failure');
+            },
+          );
+          await reached.future.timeout(const Duration(seconds: 5));
+          if (successor == 'same-byte-file') {
+            await file.delete();
+            await file.writeAsBytes([1, 2, 3, 4], flush: true);
+          } else {
+            final box = Hive.box('userNoBackup');
+            final rows = box.get('offlineSongs') as List;
+            await box.put('offlineSongs', [
+              ...rows.whereType<Map>().where((r) => r['ytid'] != id),
+              {
+                ...song(id),
+                'audioPath': file.path,
+                'title': 'Checksum successor',
+              },
+            ]);
+          }
+          release.complete();
+          expect(await pending, isFalse);
+          if (stage == 'validation' && successor == 'same-byte-file')
+            expect(writerCalls, 0);
+          expect(await file.readAsBytes(), [1, 2, 3, 4]);
+          final rows = Hive.box('userNoBackup').get('offlineSongs') as List;
+          if (successor == 'registry-row')
+            expect(
+              rows.whereType<Map>().singleWhere(
+                (r) => r['ytid'] == id,
+              )['title'],
+              'Checksum successor',
+            );
+          else
+            expect(rows.whereType<Map>().any((r) => r['ytid'] == id), isFalse);
+        },
+      );
+    }
+  }
 
   for (final scenario in [
     'success',

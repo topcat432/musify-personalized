@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:ffi';
 import 'dart:io';
+import 'dart:typed_data';
 
 typedef OfflineFilePublisher =
     OfflineFilePublication Function(File source, File destination);
@@ -8,16 +9,22 @@ typedef OfflineFilePublisher =
 /// Live inode witness. Close after registration or compensation, including errors.
 /// A checksum alone cannot distinguish a same-byte successor at the final path.
 class OfflineFilePublication {
-  OfflineFilePublication._(this._identityPath, [this._release]);
+  OfflineFilePublication._(
+    this._identityPath, [
+    this._release,
+    this._nativeOwns,
+  ]);
   final String _identityPath;
   final void Function()? _release;
+  final bool Function(File)? _nativeOwns;
   bool _closed = false;
 
   bool owns(File file) =>
       !_closed &&
       FileSystemEntity.typeSync(file.path, followLinks: false) ==
           FileSystemEntityType.file &&
-      FileSystemEntity.identicalSync(_identityPath, file.path);
+      (_nativeOwns?.call(file) ??
+          FileSystemEntity.identicalSync(_identityPath, file.path));
 
   void close() {
     if (_closed) return;
@@ -121,6 +128,17 @@ int? offlineRenameNoReplaceSyscallNumber(Abi abi) => switch (abi) {
 int offlineReadOnlyNoFollowFlags(Abi abi) =>
     0x80000 | (abi == Abi.androidArm || abi == Abi.linuxArm ? 0x8000 : 0x20000);
 
+/// Bionic stat64 layouts verified by compiling offsetof/sizeof against NDK28.2
+/// for all supported Android ABIs. Linux CI uses its matching x64/arm64 ABI.
+({int bytes, int inode, int mode})? offlineNativeStatLayout(Abi abi) =>
+    switch (abi) {
+      Abi.androidArm => (bytes: 104, inode: 96, mode: 16),
+      Abi.androidIA32 => (bytes: 96, inode: 88, mode: 16),
+      Abi.androidArm64 || Abi.linuxArm64 => (bytes: 128, inode: 8, mode: 16),
+      Abi.androidX64 || Abi.linuxX64 => (bytes: 144, inode: 8, mode: 24),
+      _ => null,
+    };
+
 OfflineFilePublication _publishByNoReplaceMove(
   File source,
   File destination, {
@@ -129,6 +147,8 @@ OfflineFilePublication _publishByNoReplaceMove(
   if (!Platform.isAndroid && !Platform.isLinux) {
     throw UnsupportedError('No-replace move requires Android or Linux');
   }
+  final layout = offlineNativeStatLayout(Abi.current());
+  if (layout == null) throw UnsupportedError('Unsupported native stat ABI');
   final libc = DynamicLibrary.open(
     Platform.isAndroid ? 'libc.so' : 'libc.so.6',
   );
@@ -154,6 +174,47 @@ OfflineFilePublication _publishByNoReplaceMove(
   final close = libc.lookupFunction<Int32 Function(Int32), int Function(int)>(
     'close',
   );
+  final fstat = libc
+      .lookupFunction<
+        Int32 Function(Int32, Pointer<Void>),
+        int Function(int, Pointer<Void>)
+      >('fstat64');
+  final fstatat = libc
+      .lookupFunction<
+        Int32 Function(Int32, Pointer<Uint8>, Pointer<Void>, Int32),
+        int Function(int, Pointer<Uint8>, Pointer<Void>, int)
+      >('fstatat64');
+  bool matches(int fd, Pointer<Uint8> path) {
+    final descriptorStat = malloc(layout.bytes);
+    if (descriptorStat == nullptr)
+      throw StateError('Offline stat allocation failed');
+    Pointer<Void> pathStat = nullptr;
+    try {
+      pathStat = malloc(layout.bytes);
+      if (pathStat == nullptr)
+        throw StateError('Offline stat allocation failed');
+      if (fstat(fd, descriptorStat) != 0 ||
+          fstatat(-100, path, pathStat, 0x100) != 0)
+        return false;
+      final descriptor = ByteData.sublistView(
+        descriptorStat.cast<Uint8>().asTypedList(layout.bytes),
+      );
+      final named = ByteData.sublistView(
+        pathStat.cast<Uint8>().asTypedList(layout.bytes),
+      );
+      return (descriptor.getUint32(layout.mode, Endian.host) & 0xf000) ==
+              0x8000 &&
+          (named.getUint32(layout.mode, Endian.host) & 0xf000) == 0x8000 &&
+          descriptor.getUint64(0, Endian.host) ==
+              named.getUint64(0, Endian.host) &&
+          descriptor.getUint64(layout.inode, Endian.host) ==
+              named.getUint64(layout.inode, Endian.host);
+    } finally {
+      if (pathStat != nullptr) free(pathStat);
+      free(descriptorStat);
+    }
+  }
+
   Pointer<Uint8> encode(String path) {
     final bytes = [...utf8.encode(path), 0];
     final pointer = malloc(bytes.length).cast<Uint8>();
@@ -178,8 +239,7 @@ OfflineFilePublication _publishByNoReplaceMove(
         OSError('open', code),
       );
     }
-    final witness = '/proc/self/fd/$fd';
-    if (!FileSystemEntity.identicalSync(source.path, witness)) {
+    if (!matches(fd, from)) {
       throw FileSystemException('Offline source identity changed', source.path);
     }
     final int result;
@@ -219,9 +279,20 @@ OfflineFilePublication _publishByNoReplaceMove(
       );
     }
     final ownedFd = fd;
-    final publication = OfflineFilePublication._(witness, () {
-      close(ownedFd);
-    });
+    final publication = OfflineFilePublication._(
+      '',
+      () {
+        close(ownedFd);
+      },
+      (file) {
+        final path = encode(file.absolute.path);
+        try {
+          return matches(ownedFd, path);
+        } finally {
+          free(path.cast<Void>());
+        }
+      },
+    );
     transferred = true;
     return publication;
   } finally {

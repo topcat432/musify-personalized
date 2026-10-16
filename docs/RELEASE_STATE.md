@@ -1,5 +1,34 @@
 # Musify Personalized current state
 
+## Native inode witness and checksum timing correction, 2026-10-16
+
+The initial no-replace candidate fee1aa2d is rejected: its proc-fd pathname was
+compared as a symlink by Dart identicalSync,not as the open inode. Its bounded
+native attempt failed before moving the8192-byte source; immediate and cold
+APK/four-Hive preservation passed. Exact CI38858194564 independently exercised
+the actual Linux move/syscall paths and failed1173passed/9failed,including the
+zero-winner races and five download scenarios. This is retained negative proof,
+not a native or Linux pass. No failed namespace or source was removed.
+
+The corrected witness compares fstat64 on the open descriptor with no-follow
+fstatat64 on the named regular file,checking device and inode. It never uses
+readlink/resolved-path equality. sizeof/offsetof were compiled against installed
+NDK28.2 headers for ARM,ARM64,x86,x64;the matching layouts and ARM open flags are
+covered. API24 libc stubs for all four ABIs export every required witness/syscall
+symbol and lack the API30 renameat2 wrapper,confirming why the fallback is needed.
+This is static ABI evidence,not execution proof for older phones/kernels.
+
+Payload validation rechecks live ownership after awaited checksums. Compensation
+re-reads registry references and inode ownership after its checksum,then removes
+synchronously without a Dart await between the final ownership test and removal.
+Four gated regressions insert same-byte file or registry successors while reads
+are awaiting completion. Removing those post-read protections reproduces3 failures;
+the corrected source was restored byte-exact. Current analysis and1168 Windows
+tests pass,with7 Linux-specific cases skipped. New exact Linux CI and corrected
+native qualification remain pending. The retained Windows visual FAIL16+24/40
+byte-identical-control result below remains applicable;this correction changes no
+UI or references. All production/phone/signing gates remain held.
+
 ## Android no-replace publication correction under qualification, 2026-10-16
 
 The fresh synthetic errno probe reproduced the original helper refusal under the

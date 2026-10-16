@@ -1084,12 +1084,15 @@ Stream<List<int>> _completeOfflineSource(GoogleVideoByteSource source) async* {
   }
 }
 
+typedef OfflinePayloadVerifier = Future<OfflineAudioCheck> Function(Map row);
+
 Future<bool> makeSongOffline(
   dynamic song, {
   OfflineAudioLoader? audioLoader,
   OfflineArtworkLoader? artworkLoader,
   OfflineRegistryWriter? registryWriter,
   OfflineFilePublisher? filePublisher,
+  OfflinePayloadVerifier? payloadVerifier,
   OfflineCommitProbe? commitProbe,
   bool Function()? shouldCancel,
 }) async {
@@ -1109,6 +1112,7 @@ Future<bool> makeSongOffline(
     artworkLoader: artworkLoader,
     registryWriter: registryWriter,
     filePublisher: filePublisher,
+    payloadVerifier: payloadVerifier,
     commitProbe: commitProbe,
     cancelled: () =>
         generation != _offlineCancellationGeneration ||
@@ -1131,6 +1135,7 @@ Future<bool> _makeSongOffline(
   OfflineArtworkLoader? artworkLoader,
   OfflineRegistryWriter? registryWriter,
   OfflineFilePublisher? filePublisher,
+  OfflinePayloadVerifier? payloadVerifier,
   OfflineCommitProbe? commitProbe,
 }) async {
   File? partial;
@@ -1272,10 +1277,14 @@ Future<bool> _makeSongOffline(
         Future<void> validatePayload(File file, {bool linked = false}) async {
           if (linked && !(publication?.owns(file) ?? false))
             throw StateError('Offline published file was replaced');
-          final check = await checkOfflineAudio({
+          final check = await (payloadVerifier ?? checkOfflineAudio)({
             ...offlineSong,
             'audioPath': file.path,
           });
+          if (linked && !(publication?.owns(file) ?? false))
+            throw StateError(
+              'Offline published file changed during validation',
+            );
           if (!check.playable)
             throw StateError(
               'Offline payload is incomplete or changed: ${check.state.name}',
@@ -1368,9 +1377,9 @@ Future<bool> _makeSongOffline(
           if (current is List)
             userOfflineSongs.value = List<dynamic>.from(current);
           try {
-            final referenced =
-                current is! List ||
-                current.whereType<Map>().any((row) {
+            bool referenced(dynamic values) =>
+                values is! List ||
+                values.whereType<Map>().any((row) {
                   // Legacy rows without an explicit path still own their
                   // canonical payload, just as playback/validation resolve it.
                   final path = row['audioPath'] is String
@@ -1381,12 +1390,21 @@ Future<bool> _makeSongOffline(
                   return path != null &&
                       _offlinePathKey(path) == _offlinePathKey(audioFile.path);
                 });
-            canRemoveCommitted =
-                !referenced &&
+            final complete =
+                !referenced(current) &&
                 (publication?.owns(audioFile) ?? false) &&
-                (await checkOfflineAudio(offlineSong)).playable;
-            // Keep compensation under the same registry mutation owner.
-            if (canRemoveCommitted) await audioFile.delete();
+                (await (payloadVerifier ?? checkOfflineAudio)(
+                  offlineSong,
+                )).playable;
+            // Re-read registry and inode after the asynchronous checksum. No Dart
+            // await may separate this final live ownership test from removal.
+            canRemoveCommitted =
+                complete &&
+                !referenced(
+                  box.get('offlineSongs', defaultValue: <dynamic>[]),
+                ) &&
+                (publication?.owns(audioFile) ?? false);
+            if (canRemoveCommitted) audioFile.deleteSync();
           } catch (_) {
             canRemoveCommitted = false;
           }

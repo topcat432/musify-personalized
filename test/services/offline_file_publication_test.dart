@@ -18,6 +18,27 @@ void main() {
     expect(offlineRenameNoReplaceSyscallNumber(Abi.androidIA32), 353);
     expect(offlineRenameNoReplaceSyscallNumber(Abi.androidX64), 316);
     expect(offlineRenameNoReplaceSyscallNumber(Abi.windowsX64), isNull);
+    expect(offlineNativeStatLayout(Abi.androidArm), (
+      bytes: 104,
+      inode: 96,
+      mode: 16,
+    ));
+    expect(offlineNativeStatLayout(Abi.androidIA32), (
+      bytes: 96,
+      inode: 88,
+      mode: 16,
+    ));
+    expect(offlineNativeStatLayout(Abi.androidArm64), (
+      bytes: 128,
+      inode: 8,
+      mode: 16,
+    ));
+    expect(offlineNativeStatLayout(Abi.androidX64), (
+      bytes: 144,
+      inode: 8,
+      mode: 24,
+    ));
+    expect(offlineNativeStatLayout(Abi.windowsX64), isNull);
     expect(offlineReadOnlyNoFollowFlags(Abi.androidArm), 0x88000);
     expect(offlineReadOnlyNoFollowFlags(Abi.androidArm64), 0xa0000);
     expect(offlineReadOnlyNoFollowFlags(Abi.androidIA32), 0xa0000);
