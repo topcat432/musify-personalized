@@ -1,5 +1,44 @@
 # Musify Personalized current state
 
+## Direct namespace diagnosis and fresh native failure, 2026-10-16
+
+Bounded read-only diagnosis resolves the preflight ambiguity below. Under actual
+run-as UID10209, the old private namespace exists as a directory,mode700; stat
+without symlink dereferencing and `ls -ld` agree. Direct and explicitly quoted
+shell predicates agree: `test -e` returns0 and `test ! -e` returns1. The old
+collector's negative directory observation was invalid: its ADB validator rejected
+`-d` locally before running the predicate. For the external path, parent and path
+stat/listing report permission denied while `test ! -e` returns0. This is
+inaccessibility, not absence. Exact argv,shell script,UID,stdout/stderr are retained
+outside Git. The old namespace was preserved without deletion or overwrite.
+
+The authorized continuation compiled source
+`4c47f7f53af95419a79fe06b0ae83b51c036d0a3` with fresh runId
+`4c47f7f5-link-20261016-v2`; APK SHA256
+`c07db13d85592bd83d2353f87f0b91c60ba601ad679cd7d12e67f4f91e3abe11`.
+Embedded source/runId,debug package,version300004002 and retained debug signer
+were verified. Minimal external collector corrections use stat and require
+ENOENT beneath a readable owned private parent. All6 device-free collector tests
+pass, including existing files/directories/symlinks,permission errors,wrong UID
+and inaccessible parents. No product helper or deadline changed.
+
+Before any component write, the app successfully listed both parents and checked
+all entry types, logging privateFresh=true,externalFresh=true,uid10209. Its first
+private publication then failed with `FileSystemException: Atomic offline
+publication refused (destination exists or hard links unavailable)`. The retained
+listing shows only the8192-byte synthetic source.part and no published.m4a.
+The helper omits native errno, so the underlying refusal remains unclassified.
+Collision,race,reopen and external-filesystem cases were not reached; native
+qualification remains FAILED, now with a concrete operation and typed app error.
+
+The original debug APK was restored via successful no-streaming in-place install
+and sync. Immediate and independent cold-restart verification passed exact
+APK/signer/UID/version and all four Hive hashes,sizes,modes; no Hive writes or
+normal app UI occurred. Both synthetic namespaces remain retained. The offline
+checkpoint and invalid production-fixture proof hashes are unchanged. Owned
+graceful shutdown completed and the lease was released. Playback and phone release
+gates remain open; no provider,phone,production-package or publication action ran.
+
 ## Bounded component follow-up stopped at preflight, 2026-10-16
 
 The single authorized follow-up on source
