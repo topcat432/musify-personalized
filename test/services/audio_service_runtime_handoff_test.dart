@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:crypto/crypto.dart';
 
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -11,7 +12,7 @@ import 'package:musify/services/stream_request_context.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:musify/services/audio_service.dart';
 import 'package:musify/services/common_services.dart'
-    show songStreamUrlCacheKey;
+    show songStreamUrlCacheKey, userOfflineSongs;
 import 'package:musify/services/settings_manager.dart';
 import 'package:musify/services/online_audio_source.dart';
 import 'package:rxdart/rxdart.dart';
@@ -26,6 +27,80 @@ void main() {
       await Hive.openBox(name);
     }
   });
+
+  for (final online in [false, true]) {
+    for (final registered in [false, true]) {
+      for (final kind in ['missing', 'empty', 'short', 'tampered']) {
+        test(
+          '$kind ${registered ? 'registered' : 'passed'} audio cannot reach native or online source, online=$online',
+          () async {
+            offlineMode.value = !online;
+            sponsorBlockSupport.value = false;
+            playNextSongAutomatically.value = false;
+            final id = 'integrity-$online-$registered-$kind';
+            final file = File('${directory.path}/$id.m4a');
+            if (kind != 'missing')
+              await file.writeAsBytes(
+                kind == 'empty'
+                    ? []
+                    : kind == 'short'
+                    ? [1]
+                    : [9, 9, 9, 9],
+                flush: true,
+              );
+            final entry = <String, dynamic>{
+              'ytid': id,
+              'title': 'Synthetic saved audio',
+              'highResImage': '',
+              'audioPath': file.path,
+              'offlineAudioBytes': 4,
+              'offlineAudioSha256': sha256.convert([1, 2, 3, 4]).toString(),
+            };
+            final registry = registered ? [entry] : <Map<String, dynamic>>[];
+            await Hive.box('userNoBackup').put('offlineSongs', registry);
+            userOfflineSongs.value = registry;
+            var sources = 0;
+            final player = _PendingPlayer();
+            final handler = MusifyAudioHandler(
+              player: player,
+              sourceFactory: (url, {tag, onUnavailable}) {
+                sources++;
+                throw StateError('Synthetic guard: no online source permitted');
+              },
+            );
+            try {
+              final passed = {...entry};
+              if (registered) {
+                final stale = File('${directory.path}/$id-stale.m4a');
+                await stale.writeAsBytes([1, 2, 3, 4], flush: true);
+                passed['audioPath'] = stale.path;
+              }
+              expect(await handler.playSong(passed), isFalse);
+              expect(sources, 0);
+              expect(player.loadedIds, isEmpty);
+              expect(Hive.box('userNoBackup').get('offlineSongs'), registry);
+              expect(
+                await file.exists() ? await file.readAsBytes() : null,
+                kind == 'missing'
+                    ? null
+                    : kind == 'empty'
+                    ? []
+                    : kind == 'short'
+                    ? [1]
+                    : [9, 9, 9, 9],
+              );
+            } finally {
+              await handler.stop();
+              await player.dispose();
+              await Hive.box('userNoBackup').put('offlineSongs', []);
+              userOfflineSongs.value = [];
+              offlineMode.value = false;
+            }
+          },
+        );
+      }
+    }
+  }
 
   test(
     'late native cancellation error after Stop cannot restart the queue',

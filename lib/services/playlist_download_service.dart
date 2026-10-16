@@ -37,7 +37,9 @@ import 'package:musify/utilities/flutter_toast.dart';
 
 class OfflinePlaylistService {
   factory OfflinePlaylistService() => _instance;
-  OfflinePlaylistService._internal();
+  OfflinePlaylistService._internal() {
+    offlineAudioChecks.addListener(offlinePlaylists.notifyListeners);
+  }
   static final OfflinePlaylistService _instance =
       OfflinePlaylistService._internal();
 
@@ -62,7 +64,10 @@ class OfflinePlaylistService {
 
   bool isPlaylistDownloaded(String playlistId) {
     return offlinePlaylists.value.any(
-      (playlist) => playlist['ytid'] == playlistId,
+      (playlist) =>
+          playlist['ytid'] == playlistId &&
+          playlist['list'] is List &&
+          isPlaylistFullyOffline(playlist['list']),
     );
   }
 
@@ -156,9 +161,18 @@ class OfflinePlaylistService {
       activeDownloads.remove(playlistId);
 
       final songsList = playlist['list'] as List<dynamic>;
+      var membersValid = true;
+      for (final song in songsList) {
+        if (song is! Map ||
+            !await validateRegisteredOfflineSong(
+              song['ytid']?.toString() ?? '',
+            ))
+          membersValid = false;
+      }
 
       // Offline availability requires every member, not a successful majority.
       if (!progressNotifier.value.isCancelled &&
+          membersValid &&
           progressNotifier.value.failed == 0 &&
           progressNotifier.value.completed == songsList.length) {
         // Create an offline version of the playlist
@@ -186,14 +200,11 @@ class OfflinePlaylistService {
         }
 
         // Also mark albums/playlists whose songs are now fully offline
-        final offlineSongIds = userOfflineSongs.value
-            .where(
-              (s) => File(
-                s['audioPath']?.toString() ?? FilePaths.getAudioPath(s['ytid']),
-              ).existsSync(),
-            )
-            .map((s) => s['ytid'])
-            .toSet();
+        final offlineSongIds = <String>{};
+        for (final row in userOfflineSongs.value.whereType<Map>()) {
+          final id = row['ytid']?.toString() ?? '';
+          if (await validateRegisteredOfflineSong(id)) offlineSongIds.add(id);
+        }
         for (final p in playlists) {
           final pList = p['list'] as List?;
           if (pList == null ||
@@ -469,16 +480,14 @@ class OfflinePlaylistService {
         }
 
         // Skip if already offline
-        if (isSongAlreadyOffline(song['ytid']) &&
-            File(
-              getOfflineSongByYtid(song['ytid'])['audioPath']?.toString() ??
-                  FilePaths.getAudioPath(song['ytid']),
-            ).existsSync()) {
+        if (await validateRegisteredOfflineSong(song['ytid'].toString())) {
           // Find the existing offline song to get the correct audioPath
           final offlineSong = getOfflineSongByYtid(song['ytid']);
           if (offlineSong.isNotEmpty) {
             // Update the song in the playlist with the correct offline properties
-            song['audioPath'] = offlineSong['audioPath'];
+            song['audioPath'] =
+                offlineSong['audioPath'] ??
+                FilePaths.getAudioPath(song['ytid']);
             final artworkPath = offlineSong['artworkPath'];
             if (artworkPath is String) {
               song['artworkPath'] = artworkPath;

@@ -23,6 +23,7 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:musify/constants/app_constants.dart';
 import 'package:musify/extensions/l10n.dart';
+import 'package:musify/services/playlist_download_service.dart';
 import 'package:musify/services/playlists_manager.dart';
 import 'package:musify/services/settings_manager.dart';
 import 'package:musify/theme/app_shape.dart';
@@ -64,9 +65,12 @@ class _PlaylistFolderPageState extends State<PlaylistFolderPage> {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<List>(
-      valueListenable: userPlaylistFolders,
-      builder: (context, _, __) {
+    return AnimatedBuilder(
+      animation: Listenable.merge([
+        userPlaylistFolders,
+        offlinePlaylistService.offlinePlaylists,
+      ]),
+      builder: (context, _) {
         final isOffline = offlineMode.value;
         final playlists = isOffline
             ? getPlaylistsInFolder(

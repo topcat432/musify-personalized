@@ -34,6 +34,8 @@ import 'package:musify/extensions/l10n.dart';
 import 'package:musify/localization/app_localizations.dart';
 import 'package:musify/screens/spotify_incoming_files_page.dart';
 import 'package:musify/services/audio_service.dart';
+import 'package:musify/services/common_services.dart'
+    show startOfflineAudioValidation;
 import 'package:musify/services/data_manager.dart';
 import 'package:musify/services/io_service.dart';
 import 'package:musify/services/listening_stats_service.dart';
@@ -425,6 +427,7 @@ Future<void> initialisation() async {
 
   applicationDirPath = (await getApplicationDocumentsDirectory()).path;
   await FilePaths.ensureDirectoriesExist();
+  startOfflineAudioValidation();
 }
 
 void handleIncomingLink(Uri? uri) async {

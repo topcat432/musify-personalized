@@ -20,7 +20,6 @@
  */
 
 import 'dart:async';
-import 'dart:io';
 
 import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
@@ -32,7 +31,9 @@ import 'package:musify/models/playback_source_info.dart';
 import 'package:musify/models/position_data.dart';
 import 'package:musify/services/common_services.dart';
 import 'package:musify/services/data_manager.dart';
+import 'package:musify/services/io_service.dart';
 import 'package:musify/services/listening_stats_service.dart';
+import 'package:musify/services/offline_audio_integrity.dart';
 import 'package:musify/services/online_audio_source.dart';
 import 'package:musify/services/settings_manager.dart';
 import 'package:musify/services/sponsor_skip_target.dart';
@@ -1969,10 +1970,15 @@ class MusifyAudioHandler extends BaseAudioHandler {
       if (ytid != null && ytid.isNotEmpty) {
         final offlineSong = getOfflineSongByYtid(ytid);
         if (offlineSong.isNotEmpty) {
-          final audioPath = offlineSong['audioPath']?.toString();
-          if (audioPath != null && audioPath.isNotEmpty) {
-            final f = File(audioPath);
-            if (await f.exists()) {
+          final audioPath =
+              offlineSong['audioPath']?.toString() ??
+              FilePaths.getAudioPath(ytid);
+          if (audioPath.isNotEmpty) {
+            final check = await checkOfflineAudio(
+              offlineSong,
+              fallbackPath: audioPath,
+            );
+            if (check.playable) {
               songData['audioPath'] = audioPath;
               if (offlineSong['artworkPath'] != null) {
                 songData['artworkPath'] = offlineSong['artworkPath'];
@@ -1995,8 +2001,11 @@ class MusifyAudioHandler extends BaseAudioHandler {
     try {
       final path = songData['audioPath']?.toString();
       if (path != null && path.isNotEmpty) {
-        final f = File(path);
-        if (await f.exists()) return true;
+        // A registered row is authoritative: a stale queue path must not mask
+        // corrupt saved data or silently route it to the provider.
+        if (getOfflineSongByYtid(songData['ytid']?.toString() ?? '').isNotEmpty)
+          return false;
+        if ((await checkOfflineAudio(songData)).playable) return true;
       }
     } catch (_) {}
 
@@ -2142,6 +2151,14 @@ class MusifyAudioHandler extends BaseAudioHandler {
 
   Future<_PlaybackSource?> _resolvePlaybackSource(Map songData) async {
     final isOffline = await _resolveOfflineAndSetPaths(songData);
+    if (!isOffline &&
+        (getOfflineSongByYtid(songData['ytid']?.toString() ?? '').isNotEmpty ||
+            (songData['audioPath'] is String &&
+                (songData['audioPath'] as String).isNotEmpty))) {
+      _lastError =
+          'Saved audio is unavailable. The saved entry has been preserved.';
+      return null;
+    }
     if (offlineMode.value && !isOffline) {
       _lastError = 'Saved audio is unavailable in offline mode.';
       logger.log('Offline mode has no saved audio; skipping online resolution');
@@ -2204,8 +2221,12 @@ class MusifyAudioHandler extends BaseAudioHandler {
       return null;
     }
 
-    final file = File(audioPath);
-    if (await file.exists()) {
+    final registered = getOfflineSongByYtid(song['ytid']?.toString() ?? '');
+    final check = await checkOfflineAudio(
+      registered.isEmpty ? song : registered,
+      fallbackPath: audioPath,
+    );
+    if (check.playable && check.path == audioPath) {
       return audioPath;
     }
 
@@ -2218,8 +2239,7 @@ class MusifyAudioHandler extends BaseAudioHandler {
 
     if (offlineSong.isNotEmpty && offlineSong['audioPath'] != null) {
       final fallbackPath = offlineSong['audioPath'];
-      final fallbackFile = File(fallbackPath);
-      if (await fallbackFile.exists()) {
+      if ((await checkOfflineAudio(offlineSong)).playable) {
         song['audioPath'] = fallbackPath;
         return fallbackPath;
       }

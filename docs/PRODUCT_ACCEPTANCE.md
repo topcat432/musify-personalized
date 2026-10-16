@@ -1,5 +1,45 @@
 # Product acceptance ledger
 
+## Offline completion integrity repair, 2026-10-16
+
+Source `6c215fff9cc7d7ac0ed3fd5b1f63b1e6799f915c` passed
+[exact CI38805804001](https://github.com/topcat432/musify-personalized/actions/runs/38805804001):
+1,092 app tests, 40 Linux visuals, Android builds and Windows lifecycle.
+Its approved sign-only run38820007973 produced code300000018 with publication
+skipped. The artifact is **not native-qualified for release**: after one approved
+disposable-emulator download and an interrupted host transport, guest restart
+showed a saved row with zero-byte audio/artwork and a retained marker declaring
+a complete nonempty body/checksum. Playback was not attempted. Native cause and
+original supervisor completion/flag restoration remain unknown; later recovery
+shutdown/restoration is separate. The immutable fixture, marker and exact APK
+remain outside Git. Private proof `code18-recording2-zero-byte-proof-20261016.json`
+has SHA256 `5070d116298edcf079e4ca1ad9e1bfd030090ee22d29c2abd3bcfdb29e81b9d1`.
+The phone remains on code17; no new phone/provider operation occurred.
+
+Nine synthetic negative controls fail on unchanged6c. They reproduce acceptance
+gaps, not the native incident's cause. The authorized bounded repair checks
+received/disk length and SHA256, requests a nontruncating OS file flush, publishes
+without replacing collisions and compensates only while file identity and
+payload proof agree. File flush does not prove directory-entry/power-loss safety.
+Registered invalid files remain visible/unavailable and preserved without an
+automatic redownload; playback/startup/playlist completion honor the same proof.
+Optional artwork must be nonempty and safely published before a path is saved.
+
+New completed offline-song maps add `offlineAudioBytes`/`offlineAudioSha256`;
+there is no box/schema-version migration or rewrite of existing rows. Positive
+legacy files without proof stay compatible with honestly unknown integrity;
+matching retained markers are honored. Partial metadata fails closed. Old
+binaries ignore the additive fields and lack this protection; this does not
+authorize production downgrade, restore or migration. Synthetic old/partial-state,
+restart, cancellation, collision, compensation, concurrency and UI qualification
+belong to the same batch. Clean analysis, all 93 focused cases and all 1,143 aggregate app tests pass.
+Both strict Windows visual suites remain FAIL (16+24); all 40 actual PNGs are
+byte-identical to the retained Windows control. References/comparisons are
+unchanged; representative expected/actual/diff images were inspected. Successor
+exact Linux CI and combined closure review remain pending. Exact signed-source native/restart/data/playback and actual-phone
+acceptance remain separate gates; no new signing or promotion is authorized.
+
+
 ## Metadata lifetime and failure ownership, 2026-10-15
 
 f9f34ab exact CI38799881113 passed analysis, 1,080 app tests, 40 Linux visuals,

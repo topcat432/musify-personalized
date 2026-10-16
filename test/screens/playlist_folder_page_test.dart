@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:musify/screens/playlist_folder_page.dart';
+import 'package:musify/services/common_services.dart';
+import 'package:musify/services/io_service.dart';
 import 'package:musify/services/playlist_download_service.dart';
 import 'package:musify/services/playlists_manager.dart';
 import 'package:musify/services/settings_manager.dart';
@@ -20,9 +22,12 @@ void main() {
   setUp(() async {
     hiveRoot = await Directory.systemTemp.createTemp('playlist-folder-test-');
     Hive.init(hiveRoot.path);
+    applicationDirPath = hiveRoot.path;
     await initPriorityReviewHive();
     resetPriorityReviewGlobals();
     offlinePlaylistService.offlinePlaylists.value = [];
+    userOfflineSongs.value = [];
+    offlineAudioChecks.value = {};
   });
 
   tearDown(() async {
@@ -96,16 +101,34 @@ void main() {
       playlist('p1', 'Midnight Drive'),
       playlist('p2', 'Golden Hour'),
     ]);
+    final rows = (await tester.runAsync(() async {
+      final valid = File('${hiveRoot.path}/valid.m4a');
+      final empty = File('${hiveRoot.path}/empty.m4a');
+      await valid.writeAsBytes([1, 2, 3, 4], flush: true);
+      await empty.writeAsBytes([], flush: true);
+      final rows = [
+        {'ytid': 'valid', 'audioPath': valid.path},
+        {'ytid': 'empty', 'audioPath': empty.path},
+      ];
+      await Hive.box('userNoBackup').put('offlineSongs', rows);
+      return rows;
+    }))!;
+    userOfflineSongs.value = rows;
     offlinePlaylistService.offlinePlaylists.value = [
-      {'ytid': 'p1', 'title': 'Midnight Drive'},
+      {'ytid': 'p1', 'title': 'Midnight Drive', 'list': [rows.first]},
+      {'ytid': 'p2', 'title': 'Golden Hour', 'list': [rows.last]},
     ];
     offlineMode.value = true;
-
     await pumpFolder(tester, folderId: 'folder-1', folderName: 'Road Trip');
+    expect(find.text('Midnight Drive'), findsNothing);
+    await tester.runAsync(refreshOfflineAudioAvailability);
+    await tester.pumpAndSettle();
 
     expect(find.text('Midnight Drive'), findsOneWidget);
     expect(find.text('Golden Hour'), findsNothing);
     expect(find.text('1 playlist'), findsOneWidget);
+    expect(Hive.box('userNoBackup').get('offlineSongs'), rows);
+    expect(File(rows.last['audioPath']!).lengthSync(), 0);
   });
 
   testWidgets('the rename dialog opens pre-filled with the current name', (

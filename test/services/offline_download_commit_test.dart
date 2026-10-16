@@ -58,6 +58,56 @@ void main() {
         expectedBytes: expected ?? bytes.length,
       );
 
+  for (final kind in [
+    'empty',
+    'interrupted',
+    'complete',
+    'collision',
+    'existing-empty',
+  ]) {
+    test('optional artwork $kind never registers a false path', () async {
+      final id = 'art-$kind';
+      final art = File(FilePaths.getArtworkPath(id));
+      if (kind == 'existing-empty') await art.writeAsBytes([]);
+      var calls = 0;
+      expect(
+        await makeSongOffline(
+          {
+            ...song(id),
+            'highResImage': 'https://example.invalid/art',
+            'artworkPath': '/unrelated/inherited.jpg',
+          },
+          audioLoader: (_) async => body([1, 2, 3, 4]),
+          artworkLoader: (_) async {
+            calls++;
+            if (kind == 'interrupted')
+              throw StateError('synthetic interrupted response');
+            if (kind == 'collision')
+              await art.writeAsBytes([9, 9], flush: true);
+            return kind == 'empty' ? [] : [3, 4, 5];
+          },
+        ),
+        isTrue,
+      );
+      final rows = Hive.box('userNoBackup').get('offlineSongs') as List;
+      final row = rows.whereType<Map>().singleWhere((row) => row['ytid'] == id);
+      expect(row['artworkPath'], kind == 'complete' ? art.path : isNull);
+      if (kind == 'complete') expect(await art.readAsBytes(), [3, 4, 5]);
+      if (kind == 'collision') expect(await art.readAsBytes(), [9, 9]);
+      if (kind == 'existing-empty') {
+        expect(calls, 0);
+        expect(await art.length(), 0);
+      }
+      expect(
+        await art.parent
+            .list()
+            .where((entry) => entry.path.endsWith('.part'))
+            .isEmpty,
+        isTrue,
+      );
+    });
+  }
+
   test(
     'owned retry preserves a final payload referenced by another registered identity',
     () async {
@@ -469,6 +519,62 @@ void main() {
     },
   );
 
+  testWidgets(
+    'registered empty or tampered playlist member cannot be skipped or marked complete',
+    (tester) async {
+      await tester.pumpWidget(
+        priorityReviewApp(
+          child: const Scaffold(),
+          brightness: Brightness.light,
+        ),
+      );
+      final context = tester.element(find.byType(Scaffold));
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.runAsync(() async {
+        for (final bytes in [
+          <int>[],
+          [9, 9, 9, 9],
+        ]) {
+          final id = bytes.isEmpty ? 'playlist-empty' : 'playlist-tampered';
+          final file = File(FilePaths.getAudioPath(id));
+          await file.writeAsBytes(bytes, flush: true);
+          final row = {
+            ...song(id),
+            'audioPath': file.path,
+            'offlineAudioBytes': 4,
+            'offlineAudioSha256': sha256.convert([1, 2, 3, 4]).toString(),
+          };
+          final registry = [...userOfflineSongs.value, row];
+          await Hive.box('userNoBackup').put('offlineSongs', registry);
+          userOfflineSongs.value = registry;
+          final playlist = {
+            'ytid': '$id-list',
+            'title': 'Synthetic playlist',
+            'list': [song(id)],
+          };
+          offlinePlaylistService.offlinePlaylists.value = [playlist];
+          var calls = 0;
+          await offlinePlaylistService.downloadPlaylist(
+            context,
+            playlist,
+            audioLoader: (_) async {
+              calls++;
+              return body([1, 2, 3, 4]);
+            },
+          );
+          expect(calls, 0);
+          expect(
+            offlinePlaylistService.isPlaylistDownloaded('$id-list'),
+            isFalse,
+          );
+          expect(isPlaylistFullyOffline([song(id)]), isFalse);
+          expect(await file.readAsBytes(), bytes);
+          expect(Hive.box('userNoBackup').get('offlineSongs'), registry);
+        }
+      });
+    },
+  );
+
   testWidgets('typed playlist rows without artwork remain complete on repeat', (
     tester,
   ) async {
@@ -621,6 +727,183 @@ void main() {
     );
     expect(userOfflineSongs.value.map((row) => row['ytid']), ['keep-owned']);
   });
+
+  test(
+    'final-path collision at publication preserves the other file',
+    () async {
+      const id = 'publication-collision';
+      final finalFile = File(FilePaths.getAudioPath(id));
+      expect(
+        await makeSongOffline(
+          song(id),
+          audioLoader: (_) async => body([1, 2, 3, 4]),
+          commitProbe: (boundary) async {
+            if (boundary == OfflineCommitBoundary.beforeRename)
+              await finalFile.writeAsBytes([8, 8, 8], flush: true);
+          },
+        ),
+        isFalse,
+      );
+      expect(await finalFile.readAsBytes(), [8, 8, 8]);
+      expect(userOfflineSongs.value.map((row) => row['ytid']), ['keep-owned']);
+    },
+  );
+
+  test(
+    'registry compensation preserves a replacement at the final path',
+    () async {
+      const id = 'compensation-replacement';
+      final finalFile = File(FilePaths.getAudioPath(id));
+      expect(
+        await makeSongOffline(
+          song(id),
+          audioLoader: (_) async => body([1, 2, 3, 4]),
+          registryWriter: (_, _) async {
+            await finalFile.delete();
+            await finalFile.writeAsBytes([8, 8, 8], flush: true);
+            throw StateError(
+              'Synthetic registration failure after replacement',
+            );
+          },
+        ),
+        isFalse,
+      );
+      expect(await finalFile.exists(), isTrue);
+      expect(await finalFile.readAsBytes(), [8, 8, 8]);
+      expect(userOfflineSongs.value.map((row) => row['ytid']), ['keep-owned']);
+    },
+  );
+
+  for (final boundary in [
+    OfflineCommitBoundary.beforeRename,
+    OfflineCommitBoundary.afterRename,
+  ]) {
+    test(
+      'truncation at ${boundary.name} cannot publish damaged audio',
+      () async {
+        const id = 'publication-truncated';
+        final registry = List<dynamic>.from(userOfflineSongs.value);
+        expect(
+          await makeSongOffline(
+            song(id),
+            audioLoader: (_) async => body([1, 2, 3, 4]),
+            commitProbe: (at) async {
+              if (at != boundary) return;
+              final target = boundary == OfflineCommitBoundary.afterRename
+                  ? File(FilePaths.getAudioPath(id))
+                  : Directory(
+                      FilePaths.getAudioPath(id),
+                    ).parent.listSync().whereType<File>().singleWhere(
+                      (file) =>
+                          file.path.contains(id) && file.path.endsWith('.part'),
+                    );
+              await target.writeAsBytes([], flush: true);
+            },
+          ),
+          isFalse,
+        );
+        expect(Hive.box('userNoBackup').get('offlineSongs'), registry);
+      },
+    );
+  }
+
+  for (final exists in [false, true]) {
+    test(
+      'registered ${exists ? "empty" : "missing"} audio is not successful and is preserved',
+      () async {
+        final id = 'registered-invalid-$exists';
+        final file = File(FilePaths.getAudioPath(id));
+        if (exists) await file.writeAsBytes([]);
+        final row = {...song(id), 'audioPath': file.path};
+        final registry = [...userOfflineSongs.value, row];
+        await Hive.box('userNoBackup').put('offlineSongs', registry);
+        userOfflineSongs.value = registry;
+        var calls = 0;
+        expect(
+          await makeSongOffline(
+            song(id),
+            audioLoader: (_) async {
+              calls++;
+              return body([1, 2, 3, 4]);
+            },
+          ),
+          isFalse,
+        );
+        expect(calls, 0);
+        expect(await file.exists(), exists);
+        if (exists) expect(await file.length(), 0);
+        expect(Hive.box('userNoBackup').get('offlineSongs'), registry);
+      },
+    );
+  }
+
+  for (final replacement in <List<int>>[
+    [],
+    [9, 9, 9, 9],
+  ]) {
+    test(
+      'fault after stream completion cannot publish ${replacement.isEmpty ? "empty" : "changed"} payload',
+      () async {
+        const id = 'fault-before-publication';
+        final registry = List<dynamic>.from(userOfflineSongs.value);
+        final result = await makeSongOffline(
+          song(id),
+          audioLoader: (_) async => body([1, 2, 3, 4]),
+          commitProbe: (boundary) async {
+            if (boundary == OfflineCommitBoundary.bodyFlushed) {
+              final partial = Directory(FilePaths.getAudioPath(id)).parent
+                  .listSync()
+                  .whereType<File>()
+                  .singleWhere(
+                    (file) =>
+                        file.path.contains(id) && file.path.endsWith('.part'),
+                  );
+              await partial.writeAsBytes(replacement, flush: true);
+            }
+          },
+        );
+        expect(result, isFalse);
+        expect(Hive.box('userNoBackup').get('offlineSongs'), registry);
+      },
+    );
+  }
+
+  test(
+    'completed registration whose payload later becomes empty survives restart without false success',
+    () async {
+      const id = 'registered-after-interruption';
+      expect(
+        await makeSongOffline(
+          song(id),
+          audioLoader: (_) async => body([1, 2, 3, 4]),
+        ),
+        isTrue,
+      );
+      final file = File(FilePaths.getAudioPath(id));
+      await file.writeAsBytes(
+        [],
+        flush: true,
+      ); // Synthetic storage-loss state, not a claim about its native cause.
+      final registry = Hive.box('userNoBackup').get('offlineSongs');
+      await Hive.close();
+      await initPriorityReviewHive();
+      reloadSongLibraryStateFromStorage();
+      var calls = 0;
+      expect(
+        await makeSongOffline(
+          song(id),
+          audioLoader: (_) async {
+            calls++;
+            return body([5, 6, 7, 8]);
+          },
+        ),
+        isFalse,
+      );
+      expect(calls, 0);
+      expect(await file.length(), 0);
+      expect(Hive.box('userNoBackup').get('offlineSongs'), registry);
+    },
+  );
 
   test(
     'failed body preserves existing library and permits bounded explicit retry',

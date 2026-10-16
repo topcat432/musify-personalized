@@ -202,9 +202,11 @@ List<PopupMenuEntry<String>> _buildSongMenuItems({
                   color: colorScheme.primary,
                 ),
                 const SizedBox(width: 8),
-                Text(
-                  value ? removeOfflineText : makeOfflineText,
-                  style: TextStyle(color: colorScheme.secondary),
+                Flexible(
+                  child: Text(
+                    value ? removeOfflineText : makeOfflineText,
+                    style: TextStyle(color: colorScheme.secondary),
+                  ),
                 ),
               ],
             );
@@ -403,6 +405,11 @@ class _SongBarState extends State<SongBar> {
     _songOfflineStatus = ValueNotifier(isOffline);
     userLikedSongsList.addListener(_syncLikeStatus);
     userOfflineSongs.addListener(_syncOfflineStatus);
+    offlineAudioChecks.addListener(_syncOfflineAvailability);
+  }
+
+  void _syncOfflineAvailability() {
+    if (mounted) setState(() {});
   }
 
   void _syncLikeStatus() {
@@ -439,6 +446,7 @@ class _SongBarState extends State<SongBar> {
   void dispose() {
     userLikedSongsList.removeListener(_syncLikeStatus);
     userOfflineSongs.removeListener(_syncOfflineStatus);
+    offlineAudioChecks.removeListener(_syncOfflineAvailability);
     _songLikeStatus.dispose();
     _songOfflineStatus.dispose();
     super.dispose();
@@ -447,6 +455,10 @@ class _SongBarState extends State<SongBar> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final saved = getOfflineSongByYtid(_ytid);
+    final canPlay = saved.isEmpty || isOfflineSongPlayable(saved);
+    final checking =
+        saved.isNotEmpty && !offlineAudioChecks.value.containsKey(_ytid);
     final _plays = widget.showPlayTime
         ? (widget.song['listeningCount'] is int)
               ? widget.song['listeningCount'] as int
@@ -459,7 +471,7 @@ class _SongBarState extends State<SongBar> {
       borderRadius: widget.borderRadius,
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: _handleSongTap,
+        onTap: canPlay ? _handleSongTap : null,
         child: Padding(
           padding:
               widget.barPadding ??
@@ -489,11 +501,25 @@ class _SongBarState extends State<SongBar> {
               const SizedBox(width: 14),
 
               Expanded(
-                child: _SongInfo(
-                  title: _songTitle,
-                  artist: _songArtist,
-                  plays: _plays,
-                  colorScheme: colorScheme,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _SongInfo(
+                      title: _songTitle,
+                      artist: _songArtist,
+                      plays: _plays,
+                      colorScheme: colorScheme,
+                    ),
+                    if (!canPlay)
+                      Text(
+                        checking
+                            ? 'Checking saved audio'
+                            : 'Saved audio is unavailable',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: colorScheme.error,
+                        ),
+                      ),
+                  ],
                 ),
               ),
 
@@ -508,7 +534,8 @@ class _SongBarState extends State<SongBar> {
                   onRemove: widget.onRemove,
                   onRename: () => _handleRenameSong(context),
                 ),
-                itemBuilder: (context) => _buildMenuItems(context, colorScheme),
+                itemBuilder: (context) =>
+                    _buildMenuItems(context, colorScheme, canPlay: canPlay),
               ),
             ],
           ),
@@ -627,8 +654,9 @@ class _SongBarState extends State<SongBar> {
 
   List<PopupMenuEntry<String>> _buildMenuItems(
     BuildContext context,
-    ColorScheme colorScheme,
-  ) {
+    ColorScheme colorScheme, {
+    bool canPlay = true,
+  }) {
     final canRename = widget.isFromLikedSongs || widget.playlistId != null;
 
     return _buildSongMenuItems(
@@ -636,7 +664,7 @@ class _SongBarState extends State<SongBar> {
       colorScheme: colorScheme,
       songLikeStatus: _songLikeStatus,
       songOfflineStatus: _songOfflineStatus,
-      showQueueActions: widget.showQueueActions,
+      showQueueActions: widget.showQueueActions && canPlay,
       isRecentSong: widget.isRecentSong == true,
       canRename: canRename,
       canRemove: widget.onRemove != null,

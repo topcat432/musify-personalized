@@ -19,6 +19,7 @@
  *     please visit: https://github.com/gokadzev/Musify
  */
 
+import 'dart:async';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:musify/constants/app_constants.dart';
@@ -70,6 +71,7 @@ class _UserSongsPageState extends State<UserSongsPage> {
     super.initState();
     _searchController = TextEditingController();
     _searchFocusNode = FocusNode();
+    if (widget.page == 'offline') unawaited(refreshOfflineAudioAvailability());
   }
 
   @override
@@ -96,11 +98,14 @@ class _UserSongsPageState extends State<UserSongsPage> {
               : widget.page == 'offline'
               ? userOfflineSongs
               : userRecentlyPlayed,
-          builder: (_, songsList, __) => _buildCustomScrollView(
-            title,
-            icon,
-            songsList.length,
-            isOfflineSongs,
+          builder: (_, songsList, __) => ValueListenableBuilder(
+            valueListenable: offlineAudioChecks,
+            builder: (_, ___, ____) => _buildCustomScrollView(
+              title,
+              icon,
+              songsList.length,
+              isOfflineSongs,
+            ),
           ),
         ),
       ),
@@ -176,30 +181,41 @@ class _UserSongsPageState extends State<UserSongsPage> {
                   child: FilledButton.icon(
                     icon: const Icon(FluentIcons.play_24_filled),
                     label: Text(context.l10n!.play),
-                    onPressed: () {
-                      final songsList = widget.page == 'liked'
-                          ? userLikedSongsList.value
-                          : widget.page == 'offline'
-                          ? userOfflineSongs.value
-                          : userRecentlyPlayed.value;
-                      var sortedList = songsList;
-                      if (isOfflineSongs) {
-                        sortedList = _sortOfflineSongsLocal(
-                          songsList,
-                          _getCurrentOfflineSortType(),
-                        );
-                      }
-                      final playlist = {
-                        'ytid': '',
-                        'title': title,
-                        'source': 'user-created',
-                        'list': sortedList,
-                      };
-                      audioHandler.playPlaylistSong(
-                        playlist: playlist,
-                        songIndex: 0,
-                      );
-                    },
+                    onPressed:
+                        isOfflineSongs &&
+                            !userOfflineSongs.value.whereType<Map>().any(
+                              isOfflineSongPlayable,
+                            )
+                        ? null
+                        : () {
+                            final songsList = widget.page == 'liked'
+                                ? userLikedSongsList.value
+                                : widget.page == 'offline'
+                                ? userOfflineSongs.value
+                                : userRecentlyPlayed.value;
+                            var sortedList = songsList;
+                            if (isOfflineSongs) {
+                              sortedList = _sortOfflineSongsLocal(
+                                songsList,
+                                _getCurrentOfflineSortType(),
+                              );
+                            }
+                            final playlist = {
+                              'ytid': '',
+                              'title': title,
+                              'source': 'user-created',
+                              'list': isOfflineSongs
+                                  ? sortedList
+                                        .whereType<Map>()
+                                        .where(isOfflineSongPlayable)
+                                        .toList()
+                                  : sortedList,
+                            };
+                            audioHandler.playPlaylistSong(
+                              playlist: playlist,
+                              songIndex: 0,
+                            );
+                          },
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -211,28 +227,38 @@ class _UserSongsPageState extends State<UserSongsPage> {
                     ),
                     icon: const Icon(FluentIcons.arrow_shuffle_24_filled),
                     label: Text(context.l10n!.shuffle),
-                    onPressed: () async {
-                      final songs = widget.page == 'liked'
-                          ? userLikedSongsList.value
-                          : widget.page == 'offline'
-                          ? userOfflineSongs.value
-                          : userRecentlyPlayed.value;
-                      if (songs.isEmpty) return;
-                      final orderedSongs = List<Map>.from(
-                        songs.whereType<Map>(),
-                      );
-                      if (orderedSongs.isEmpty) return;
-                      // Queue in natural order, then enable shuffle through
-                      // the real toggle so `shuffleNotifier`/the persisted
-                      // setting/the restorable original order all stay
-                      // consistent with what this button did.
-                      await audioHandler.addPlaylistToQueue(
-                        orderedSongs,
-                        replace: true,
-                        startIndex: 0,
-                        shuffle: true,
-                      );
-                    },
+                    onPressed:
+                        isOfflineSongs &&
+                            !userOfflineSongs.value.whereType<Map>().any(
+                              isOfflineSongPlayable,
+                            )
+                        ? null
+                        : () async {
+                            final songs = widget.page == 'liked'
+                                ? userLikedSongsList.value
+                                : widget.page == 'offline'
+                                ? userOfflineSongs.value
+                                : userRecentlyPlayed.value;
+                            if (songs.isEmpty) return;
+                            final orderedSongs = List<Map>.from(
+                              songs.whereType<Map>().where(
+                                (row) =>
+                                    !isOfflineSongs ||
+                                    isOfflineSongPlayable(row),
+                              ),
+                            );
+                            if (orderedSongs.isEmpty) return;
+                            // Queue in natural order, then enable shuffle through
+                            // the real toggle so `shuffleNotifier`/the persisted
+                            // setting/the restorable original order all stay
+                            // consistent with what this button did.
+                            await audioHandler.addPlaylistToQueue(
+                              orderedSongs,
+                              replace: true,
+                              startIndex: 0,
+                              shuffle: true,
+                            );
+                          },
                   ),
                 ),
               ],
@@ -350,7 +376,12 @@ class _UserSongsPageState extends State<UserSongsPage> {
           'ytid': '',
           'title': title,
           'source': 'user-created',
-          'list': sortedList,
+          'list': isOfflineSongs
+              ? sortedList
+                    .whereType<Map>()
+                    .where(isOfflineSongPlayable)
+                    .toList()
+              : sortedList,
         };
 
         if (displayList.isEmpty) {
