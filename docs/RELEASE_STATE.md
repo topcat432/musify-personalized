@@ -5,7 +5,8 @@
 The fresh synthetic errno probe reproduced the original helper refusal under the
 app UID: process link,explicit libc link and libc linkat each returned-1/errno13
 (EACCES),with no destination created and the8192-byte source preserved. This is
-consistent with [AOSP's untrusted-app hard-link prohibition](https://android.googlesource.com/platform/system/sepolicy/+/0d8e2fe39e92f22006460b45c7705cf06e3c30b1/private/app_neverallows.te).
+confirmed by retained SELinux `{ link }` denials for untrusted_app,permissive=0,
+and consistent with [AOSP's untrusted-app hard-link prohibition](https://android.googlesource.com/platform/system/sepolicy/+/0d8e2fe39e92f22006460b45c7705cf06e3c30b1/private/app_neverallows.te).
 It is not resolved by changing the symbol to linkat. The original debug APK and
 four Hive baselines passed immediate and independent cold verification afterward.
 All prior synthetic namespaces and the offline checkpoint remain retained.
@@ -26,12 +27,14 @@ residual without a surviving durable inode witness is conservatively retained;
 it is never automatically deleted or adopted using checksum equality alone.
 Existing marker/partial-state behavior remains covered by the regression suite.
 
-Local analysis passes;1164 Windows tests pass with6 Linux-specific cases skipped.
+Local analysis passes;1164 Windows tests pass. After the ARM UAPI flag correction,
+63 targeted Windows tests pass with7 Linux-specific cases skipped.
 The Linux move/syscall regressions cover collisions,competing writers,same-byte
 replacement,descriptor cleanup,successor registry ownership and registration
 failure/restart behavior. Those cases and native Android qualification are still
 pending; host hard-link success does not qualify Android. Both strict Windows
-visual suites are being rerun without reference/comparison changes. Promotion,
+visual suites still FAIL16+24;all40 actuals are byte-identical to retained control.
+Representative before/after/diff images were inspected;no references or comparisons changed. Promotion,
 signing,provider,phone and publication gates remain held.
 
 ## Direct namespace diagnosis and fresh native failure, 2026-10-16

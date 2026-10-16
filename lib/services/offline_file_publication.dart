@@ -117,6 +117,10 @@ int? offlineRenameNoReplaceSyscallNumber(Abi abi) => switch (abi) {
   _ => null,
 };
 
+/// ARM's Linux UAPI assigns O_NOFOLLOW a different bit from the other ABIs.
+int offlineReadOnlyNoFollowFlags(Abi abi) =>
+    0x80000 | (abi == Abi.androidArm || abi == Abi.linuxArm ? 0x8000 : 0x20000);
+
 OfflineFilePublication _publishByNoReplaceMove(
   File source,
   File destination, {
@@ -165,7 +169,7 @@ OfflineFilePublication _publishByNoReplaceMove(
   try {
     to = encode(destination.absolute.path);
     // O_RDONLY | O_NOFOLLOW | O_CLOEXEC: pin this inode, never a symlink target.
-    fd = open(from, 0x20000 | 0x80000);
+    fd = open(from, offlineReadOnlyNoFollowFlags(Abi.current()));
     if (fd < 0) {
       final code = errno.value;
       throw FileSystemException(

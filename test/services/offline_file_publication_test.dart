@@ -18,7 +18,33 @@ void main() {
     expect(offlineRenameNoReplaceSyscallNumber(Abi.androidIA32), 353);
     expect(offlineRenameNoReplaceSyscallNumber(Abi.androidX64), 316);
     expect(offlineRenameNoReplaceSyscallNumber(Abi.windowsX64), isNull);
+    expect(offlineReadOnlyNoFollowFlags(Abi.androidArm), 0x88000);
+    expect(offlineReadOnlyNoFollowFlags(Abi.androidArm64), 0xa0000);
+    expect(offlineReadOnlyNoFollowFlags(Abi.androidIA32), 0xa0000);
+    expect(offlineReadOnlyNoFollowFlags(Abi.androidX64), 0xa0000);
   });
+  test(
+    'no-replace move rejects a symlink source without moving its target',
+    () async {
+      final source = File('${root.path}/source');
+      final alias = Link('${root.path}/alias');
+      final target = File('${root.path}/target');
+      await source.writeAsBytes([1, 2, 3]);
+      await alias.create(source.path);
+      expect(
+        () => publishOfflineFile(
+          File(alias.path),
+          target,
+          useNoReplaceMove: true,
+        ),
+        throwsA(isA<FileSystemException>()),
+      );
+      expect(await source.readAsBytes(), [1, 2, 3]);
+      expect(await alias.target(), source.path);
+      expect(await target.exists(), isFalse);
+    },
+    skip: !Platform.isLinux,
+  );
   for (final mode in [
     'default',
     if (Platform.isLinux) ...['move', 'syscall'],
