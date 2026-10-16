@@ -1,5 +1,28 @@
 # Musify Personalized current state
 
+## Bounded component follow-up stopped at preflight, 2026-10-16
+
+The single authorized follow-up on source
+`e5e7f7c4c5ce742c0654f370b846db4a1af86081` stopped before installing or
+launching the probe. The exact namespace-absence command, `run-as` on the debug
+package followed by `test ! -e` on the synthetic private path, returned1 with
+empty stdout/stderr. The earlier read-only `test -d` observation and a later cold
+check both returned negative. These conflicting predicates do not establish
+namespace presence or absence; the earlier absence claim below is provisional.
+No namespace was removed and no component retry occurred. There is no new
+native component result or helper-failure attribution.
+
+The original debug APK remained installed throughout; no reinstall was needed.
+Immediate preservation and a subsequent no-snapshot-load cold boot verified
+the retained APK hash, signer,UID10209,version300004002 and all four Hive
+hashes,sizes,modes. No Hive writes or normal app UI launch occurred. Exact command
+exit/stdout/stderr and bounded cold app-logcat were retained outside Git; no
+tagged probe terminal error appeared. The checkpoint manifest and invalid
+production fixture proof hashes remain unchanged. All3 additional device-free
+follow-up contracts pass. At05:22:22Z the owned isolated target had0 processes
+and its lease was free. Component qualification remains blocked by ambiguous
+preflight evidence; playback and phone release gates remain open.
+
 ## Preserving debug APK recovery and two cold boots, 2026-10-16
 
 After exact CI38851788633 succeeded for
