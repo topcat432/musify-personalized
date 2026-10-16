@@ -43,9 +43,15 @@ import 'package:musify/utilities/queue_entry_utils.dart';
 import 'package:musify/utilities/queue_retry_utils.dart';
 import 'package:rxdart/rxdart.dart';
 
+typedef OfflinePlaybackValidator = Future<OfflineAudioCheck> Function(Map row, {String? fallbackPath});
+typedef PlaybackUrlLoader = Future<String?> Function(String id, bool isLive);
+
 class MusifyAudioHandler extends BaseAudioHandler {
-  MusifyAudioHandler({AudioPlayer? player, OnlineSourceFactory? sourceFactory})
-    : _onlineSourceFactory = sourceFactory ?? onlineAudioSource {
+  MusifyAudioHandler({AudioPlayer? player, OnlineSourceFactory? sourceFactory,
+    OfflinePlaybackValidator? offlineValidator, PlaybackUrlLoader? streamUrlLoader})
+    : _onlineSourceFactory = sourceFactory ?? onlineAudioSource,
+      _offlineValidator = offlineValidator ?? checkOfflineAudio,
+      _streamUrlLoader = streamUrlLoader ?? fetchSongStreamUrl {
     _androidEqualizer = AndroidEqualizer();
     audioPlayer =
         player ??
@@ -81,6 +87,10 @@ class MusifyAudioHandler extends BaseAudioHandler {
   late final AndroidEqualizer _androidEqualizer;
   late final AudioPlayer audioPlayer;
   final OnlineSourceFactory _onlineSourceFactory;
+  final OfflinePlaybackValidator _offlineValidator;
+  final PlaybackUrlLoader _streamUrlLoader;
+  Future<String?> _fetchSongUrl(dynamic id, dynamic isLive) =>
+      _streamUrlLoader(id.toString(), isLive == true);
   bool _equalizerInitialized = false;
   Future<bool>? _equalizerInitFuture;
   DateTime _equalizerRetryNotBefore = DateTime.fromMillisecondsSinceEpoch(0);
@@ -1590,7 +1600,7 @@ class MusifyAudioHandler extends BaseAudioHandler {
         preloadUrl = null;
       } else {
         // fetchSongStreamUrl handles caching, freshness checks, and validation
-        preloadUrl = await fetchSongStreamUrl(ytid, nextSong['isLive'] ?? false)
+        preloadUrl = await _fetchSongUrl(ytid, nextSong['isLive'] ?? false)
             .timeout(
               const Duration(seconds: 8),
               onTimeout: () {
@@ -1974,7 +1984,7 @@ class MusifyAudioHandler extends BaseAudioHandler {
               offlineSong['audioPath']?.toString() ??
               FilePaths.getAudioPath(ytid);
           if (audioPath.isNotEmpty) {
-            final check = await checkOfflineAudio(
+            final check = await _offlineValidator(
               offlineSong,
               fallbackPath: audioPath,
             );
@@ -2005,7 +2015,7 @@ class MusifyAudioHandler extends BaseAudioHandler {
         // corrupt saved data or silently route it to the provider.
         if (getOfflineSongByYtid(songData['ytid']?.toString() ?? '').isNotEmpty)
           return false;
-        if ((await checkOfflineAudio(songData)).playable) return true;
+        if ((await _offlineValidator(songData)).playable) return true;
       }
     } catch (_) {}
 
@@ -2089,7 +2099,7 @@ class MusifyAudioHandler extends BaseAudioHandler {
       }
 
       if (_isStaleTransition(transitionId)) return false;
-      final playback = await _resolvePlaybackSource(songData);
+      final playback = await _resolvePlaybackSource(songData, transitionId: transitionId);
 
       // Abort if a newer song was requested while we were fetching the stream URL.
       // This is the primary guard against the race condition where a slow streaming
@@ -2149,60 +2159,30 @@ class MusifyAudioHandler extends BaseAudioHandler {
     }
   }
 
-  Future<_PlaybackSource?> _resolvePlaybackSource(Map songData) async {
+  Future<_PlaybackSource?> _resolvePlaybackSource(Map songData, {int? transitionId}) async {
     final isOffline = await _resolveOfflineAndSetPaths(songData);
+    if (_isStaleTransition(transitionId)) return null;
     if (!isOffline &&
         (getOfflineSongByYtid(songData['ytid']?.toString() ?? '').isNotEmpty ||
             (songData['audioPath'] is String &&
                 (songData['audioPath'] as String).isNotEmpty))) {
-      _lastError =
-          'Saved audio is unavailable. The saved entry has been preserved.';
+      _lastError = 'Saved audio is unavailable. The saved entry has been preserved.';
       return null;
     }
     if (offlineMode.value && !isOffline) {
       _lastError = 'Saved audio is unavailable in offline mode.';
-      logger.log('Offline mode has no saved audio; skipping online resolution');
       return null;
     }
     final songUrl = await _getPlaybackUrl(songData, isOffline);
-
+    if (_isStaleTransition(transitionId)) return null;
     if (songUrl == null || songUrl.isEmpty) {
-      if (!isOffline) {
-        logger.log('Failed to get song URL for ${songData['ytid']}');
-        return null;
-      }
-
-      // If offline mode is enabled, do NOT fall back to online streams.
-      // This prevents network requests while the user explicitly requested
-      // offline-only operation.
-      try {
-        if (offlineMode.value) {
-          logger.log(
-            'Offline mode enabled and offline file missing for ${songData['ytid']}. Not falling back to online.',
-          );
-          return null;
-        }
-      } catch (_) {
-        // If offlineMode isn't available for some reason, continue with fallback.
-      }
-
-      logger.log(
-        'Offline file missing for ${songData['ytid']}, switching to online',
-      );
-
-      final onlineUrl = await fetchSongStreamUrl(
-        songData['ytid'],
-        songData['isLive'] ?? false,
-      );
-
-      if (onlineUrl == null || onlineUrl.isEmpty) {
-        logger.log('Failed to get song URL for ${songData['ytid']}');
-        return null;
-      }
-
-      return _PlaybackSource(songUrl: onlineUrl, isOffline: false);
+      // A local selection keeps its source identity through later checks too.
+      // Deletion/corruption or codec failure never authorizes a provider route.
+      _lastError = isOffline
+          ? 'Saved audio is unavailable. The saved entry has been preserved.'
+          : 'Failed to get song URL';
+      return null;
     }
-
     return _PlaybackSource(songUrl: songUrl, isOffline: isOffline);
   }
 
@@ -2211,7 +2191,7 @@ class MusifyAudioHandler extends BaseAudioHandler {
       return _getOfflineSongUrl(song);
     }
 
-    return fetchSongStreamUrl(song['ytid'], song['isLive'] ?? false);
+    return _fetchSongUrl(song['ytid'], song['isLive'] ?? false);
   }
 
   Future<String?> _getOfflineSongUrl(Map song) async {
@@ -2222,7 +2202,7 @@ class MusifyAudioHandler extends BaseAudioHandler {
     }
 
     final registered = getOfflineSongByYtid(song['ytid']?.toString() ?? '');
-    final check = await checkOfflineAudio(
+    final check = await _offlineValidator(
       registered.isEmpty ? song : registered,
       fallbackPath: audioPath,
     );
@@ -2239,7 +2219,7 @@ class MusifyAudioHandler extends BaseAudioHandler {
 
     if (offlineSong.isNotEmpty && offlineSong['audioPath'] != null) {
       final fallbackPath = offlineSong['audioPath'];
-      if ((await checkOfflineAudio(offlineSong)).playable) {
+      if ((await _offlineValidator(offlineSong)).playable) {
         song['audioPath'] = fallbackPath;
         return fallbackPath;
       }
@@ -2348,21 +2328,8 @@ class MusifyAudioHandler extends BaseAudioHandler {
       }
 
       if (isOffline) {
-        // If offline mode is explicitly enabled, do not attempt any online
-        // fallback — respect the user's offline-only preference.
-        try {
-          if (offlineMode.value) {
-            return false;
-          }
-        } catch (_) {
-          // If offlineMode isn't accessible, fallthrough to attempt fallback.
-        }
-
-        return _attemptOfflineFallback(
-          song,
-          mediaId: mediaId,
-          transitionId: transitionId,
-        );
+        _lastError = 'Saved audio is unavailable. The saved entry has been preserved.';
+        return false;
       }
 
       if (allowOnlineRetry) {
@@ -2376,7 +2343,7 @@ class MusifyAudioHandler extends BaseAudioHandler {
           await deleteData('cache', cacheKey);
           if (_isStaleTransition(transitionId)) return false;
 
-          final refreshedUrl = await fetchSongStreamUrl(
+          final refreshedUrl = await _fetchSongUrl(
             songId,
             song['isLive'] ?? false,
           );
@@ -2407,35 +2374,6 @@ class MusifyAudioHandler extends BaseAudioHandler {
       _lastError = e.toString();
       return false;
     }
-  }
-
-  Future<bool> _attemptOfflineFallback(
-    Map song, {
-    String? mediaId,
-    int? transitionId,
-  }) async {
-    // Do not attempt any network calls when offline mode is enabled.
-    if (offlineMode.value || _isStaleTransition(transitionId)) return false;
-
-    final onlineUrl = await fetchSongStreamUrl(
-      song['ytid'],
-      song['isLive'] ?? false,
-    );
-    if (_isStaleTransition(transitionId)) return false;
-    if (onlineUrl != null && onlineUrl.isNotEmpty) {
-      final onlineSource = await buildAudioSource(song, onlineUrl, false);
-      if (onlineSource != null) {
-        return _setAudioSourceAndPlay(
-          song,
-          onlineSource,
-          onlineUrl,
-          false,
-          mediaId: mediaId,
-          transitionId: transitionId,
-        );
-      }
-    }
-    return false;
   }
 
   Future<void> playNext(Map song) async {

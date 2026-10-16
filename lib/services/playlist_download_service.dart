@@ -35,6 +35,15 @@ import 'package:musify/services/io_service.dart';
 import 'package:musify/services/playlists_manager.dart';
 import 'package:musify/utilities/flutter_toast.dart';
 
+enum OfflinePlaylistCompletionBoundary {
+  membersValidated,
+  relatedSongsValidated,
+  registryCommitted,
+}
+
+typedef OfflinePlaylistCompletionProbe =
+    Future<void> Function(OfflinePlaylistCompletionBoundary boundary);
+
 class OfflinePlaylistService {
   factory OfflinePlaylistService() => _instance;
   OfflinePlaylistService._internal() {
@@ -47,6 +56,9 @@ class OfflinePlaylistService {
   final Map<String, ValueNotifier<DownloadProgress>> downloadProgressNotifiers =
       {};
   final List<String> activeDownloads = [];
+  final _playlistOwners = <String, Object>{};
+  int _clearGeneration = 0;
+  bool _clearing = false;
 
   // List of playlists that are fully available offline
   final offlinePlaylists = ValueNotifier<List<dynamic>>(
@@ -79,7 +91,9 @@ class OfflinePlaylistService {
     BuildContext context,
     Map playlist, {
     OfflineAudioLoader? audioLoader,
+    OfflinePlaylistCompletionProbe? completionProbe,
   }) async {
+    if (_clearing) return;
     final playlistId = playlist['ytid'] as String? ?? playlist['title'];
 
     if (playlistId == null || playlistId.isEmpty) {
@@ -104,6 +118,15 @@ class OfflinePlaylistService {
     final progressNotifier = getProgressNotifier(playlistId)
       ..value = DownloadProgress(total: songsList.length);
     activeDownloads.add(playlistId);
+    final owner = Object();
+    final generation = _clearGeneration;
+    _playlistOwners[playlistId] = owner;
+    bool owns() =>
+        generation == _clearGeneration &&
+        !_clearing &&
+        identical(_playlistOwners[playlistId], owner) &&
+        identical(downloadProgressNotifiers[playlistId], progressNotifier) &&
+        !progressNotifier.value.isCancelled;
 
     try {
       final songQueue = Queue<dynamic>.from(songsList);
@@ -118,10 +141,12 @@ class OfflinePlaylistService {
             songQueue,
             progressNotifier,
             audioLoader: audioLoader,
+            owns: owns,
           ),
       ]).timeout(
         Duration(minutes: songsList.length * 2),
         onTimeout: () {
+          if (!owns()) return <void>[];
           logger.log('Download timeout for playlist $playlistId');
           progressNotifier.value.isCancelled = true;
           progressNotifier.notifyListeners();
@@ -129,23 +154,30 @@ class OfflinePlaylistService {
         },
       );
 
+      if (!owns()) return;
       // Handle completion
       await _handleDownloadCompletion(
         context,
         playlistId,
         playlist,
         progressNotifier,
+        completionProbe: completionProbe,
+        owns: owns,
       );
     } catch (e, stackTrace) {
-      logger.log(
-        'Error during playlist download',
-        error: e,
-        stackTrace: stackTrace,
-      );
-      activeDownloads.remove(playlistId);
-      cleanupProgressNotifier(playlistId);
-      if (context.mounted) {
-        showToast(context, '${context.l10n!.error}: $e');
+      if (owns()) {
+        logger.log(
+          'Error during playlist download',
+          error: e,
+          stackTrace: stackTrace,
+        );
+        if (context.mounted) showToast(context, '${context.l10n!.error}: $e');
+      }
+    } finally {
+      if (identical(_playlistOwners[playlistId], owner)) {
+        _playlistOwners.remove(playlistId);
+        activeDownloads.remove(playlistId);
+        cleanupProgressNotifier(playlistId);
       }
     }
   }
@@ -154,107 +186,103 @@ class OfflinePlaylistService {
     BuildContext context,
     String playlistId,
     Map playlist,
-    ValueNotifier<DownloadProgress> progressNotifier,
-  ) async {
-    try {
-      // Remove from active downloads
-      activeDownloads.remove(playlistId);
-
-      final songsList = playlist['list'] as List<dynamic>;
-      var membersValid = true;
-      for (final song in songsList) {
-        if (song is! Map ||
-            !await validateRegisteredOfflineSong(
-              song['ytid']?.toString() ?? '',
-            ))
-          membersValid = false;
-      }
-
-      // Offline availability requires every member, not a successful majority.
-      if (!progressNotifier.value.isCancelled &&
-          membersValid &&
-          progressNotifier.value.failed == 0 &&
-          progressNotifier.value.completed == songsList.length) {
-        // Create an offline version of the playlist
-        final offlinePlaylist = {
-          ...playlist,
-          'ytid': playlistId,
-          'title': playlist['title'],
-          'image': playlist['image'],
-          'source': playlist['source'],
-          'list': songsList,
-          'downloadedAt': DateTime.now().millisecondsSinceEpoch,
-        };
-
-        // Add to offline playlists
-        final updatedPlaylists = List<dynamic>.from(offlinePlaylists.value);
-
-        final existingIndex = updatedPlaylists.indexWhere(
-          (p) => p['ytid'] == playlistId,
-        );
-
-        if (existingIndex != -1) {
-          updatedPlaylists[existingIndex] = offlinePlaylist;
-        } else {
-          updatedPlaylists.add(offlinePlaylist);
-        }
-
-        // Also mark albums/playlists whose songs are now fully offline
-        final offlineSongIds = <String>{};
-        for (final row in userOfflineSongs.value.whereType<Map>()) {
-          final id = row['ytid']?.toString() ?? '';
-          if (await validateRegisteredOfflineSong(id)) offlineSongIds.add(id);
-        }
-        for (final p in playlists) {
-          final pList = p['list'] as List?;
-          if (pList == null ||
-              pList.isEmpty ||
-              p['ytid'] == playlistId ||
-              isPlaylistDownloaded(p['ytid']?.toString() ?? '')) {
-            continue;
-          }
-          if (pList.every((s) => offlineSongIds.contains(s['ytid']))) {
-            updatedPlaylists.add({
-              ...p,
-              'list': pList,
-              'downloadedAt': DateTime.now().millisecondsSinceEpoch,
-            });
-          }
-        }
-
-        await addOrUpdateData<List>(
-          'userNoBackup',
-          'offlinePlaylists',
-          updatedPlaylists,
-        );
-        await Hive.box('userNoBackup').flush();
-        offlinePlaylists.value = updatedPlaylists;
-
-        if (context.mounted) {
-          showToast(
-            context,
-            '${context.l10n!.playlistDownloaded}: ${progressNotifier.value.completed}/${songsList.length}',
-          );
-        }
-      } else if (!progressNotifier.value.isCancelled) {
-        // Cancelled toast is shown by cancelDownload, only show failure toast here.
-        if (context.mounted) {
-          showToast(
-            context,
-            '${context.l10n!.downloadFailed}: ${progressNotifier.value.failed}/${songsList.length}',
-          );
-        }
-      }
-
-      // Clean up the progress notifier now that the download is fully done.
-      cleanupProgressNotifier(playlistId);
-    } catch (e, stackTrace) {
-      logger.log(
-        'Error handling download completion',
-        error: e,
-        stackTrace: stackTrace,
-      );
+    ValueNotifier<DownloadProgress> progressNotifier, {
+    required bool Function() owns,
+    OfflinePlaylistCompletionProbe? completionProbe,
+  }) async {
+    if (!owns()) return;
+    final songsList = playlist['list'] as List<dynamic>;
+    var membersValid = true;
+    for (final song in songsList) {
+      if (song is! Map ||
+          !await validateRegisteredOfflineSong(song['ytid']?.toString() ?? ''))
+        membersValid = false;
+      if (!owns()) return;
     }
+    if (completionProbe != null)
+      await completionProbe(OfflinePlaylistCompletionBoundary.membersValidated);
+    if (!owns()) return;
+    if (!membersValid ||
+        progressNotifier.value.failed != 0 ||
+        progressNotifier.value.completed != songsList.length) {
+      if (context.mounted)
+        showToast(
+          context,
+          '${context.l10n!.downloadFailed}: ${progressNotifier.value.failed}/${songsList.length}',
+        );
+      return;
+    }
+    final offlineSongIds = <String>{};
+    for (final row in List<dynamic>.from(
+      userOfflineSongs.value,
+    ).whereType<Map>()) {
+      final id = row['ytid']?.toString() ?? '';
+      if (await validateRegisteredOfflineSong(id)) offlineSongIds.add(id);
+      if (!owns()) return;
+    }
+    if (completionProbe != null)
+      await completionProbe(
+        OfflinePlaylistCompletionBoundary.relatedSongsValidated,
+      );
+    if (!owns()) return;
+    final published = await serializeOfflineRegistryMutation(() async {
+      if (!owns()) return false;
+      final box = Hive.box('userNoBackup');
+      final current = box.get('offlinePlaylists', defaultValue: <dynamic>[]);
+      if (current is! List)
+        throw StateError('Offline playlist registry is not a list');
+      final updated = List<dynamic>.from(current);
+      final offlinePlaylist = {
+        ...playlist,
+        'ytid': playlistId,
+        'list': songsList,
+        'downloadedAt': DateTime.now().millisecondsSinceEpoch,
+      };
+      final index = updated.indexWhere(
+        (row) => row is Map && row['ytid'] == playlistId,
+      );
+      if (index == -1) {
+        updated.add(offlinePlaylist);
+      } else {
+        updated[index] = offlinePlaylist;
+      }
+      for (final p in playlists) {
+        final list = p['list'] as List?;
+        if (list == null ||
+            list.isEmpty ||
+            p['ytid'] == playlistId ||
+            updated.any((row) => row is Map && row['ytid'] == p['ytid']))
+          continue;
+        if (list.every(
+          (row) => row is Map && offlineSongIds.contains(row['ytid']),
+        )) {
+          updated.add({
+            ...p,
+            'list': list,
+            'downloadedAt': DateTime.now().millisecondsSinceEpoch,
+          });
+        }
+      }
+      if (!owns()) return false;
+      await box.put('offlinePlaylists', updated);
+      await box.flush();
+      // A clear requested during the write is ordered behind us, and owns the
+      // final empty state; this completion cannot update UI or announce success.
+      if (!owns()) return false;
+      offlinePlaylists.value = List<dynamic>.from(box.get('offlinePlaylists'));
+      return true;
+    });
+    if (!published || !owns()) return;
+    if (completionProbe != null)
+      await completionProbe(
+        OfflinePlaylistCompletionBoundary.registryCommitted,
+      );
+    if (!owns()) return;
+    if (context.mounted)
+      showToast(
+        context,
+        '${context.l10n!.playlistDownloaded}: ${progressNotifier.value.completed}/${songsList.length}',
+      );
   }
 
   Future<void> cancelDownload(BuildContext context, String playlistId) async {
@@ -384,65 +412,43 @@ class OfflinePlaylistService {
   }
 
   Future<void> deleteAllDownloads() async {
-    await cancelOfflineSongDownloads();
-    // Cancel all active downloads first and wait for them to stop
-    final activeIds = List<String>.from(activeDownloads);
-    for (final id in activeIds) {
-      final notifier = downloadProgressNotifiers[id];
-      if (notifier != null) {
-        notifier.value.isCancelled = true;
-        notifier.notifyListeners();
-      }
+    final generation = ++_clearGeneration;
+    _clearing = true;
+    _playlistOwners.clear();
+    for (final notifier in downloadProgressNotifiers.values) {
+      notifier.value.isCancelled = true;
+      notifier.notifyListeners();
     }
-
-    const maxWaitTime = Duration(seconds: 30);
-    final startTime = DateTime.now();
-    while (activeDownloads.isNotEmpty) {
-      if (DateTime.now().difference(startTime) > maxWaitTime) {
-        logger.log('Timeout waiting for downloads to cancel before delete');
-        activeDownloads.clear();
-        break;
-      }
-      await Future.delayed(const Duration(milliseconds: 100));
-    }
-
+    // Logical owners are invalid immediately; a stalled scan need not finish
+    // before clear, and can never publish after it eventually resumes.
+    activeDownloads.clear();
     try {
-      final tracksDir = Directory('$applicationDirPath/${FilePaths.tracksDir}');
-      final artworksDir = Directory(
-        '$applicationDirPath/${FilePaths.artworksDir}',
-      );
-
-      if (await tracksDir.exists()) {
-        await tracksDir.delete(recursive: true);
-      }
-      if (await artworksDir.exists()) {
-        await artworksDir.delete(recursive: true);
-      }
-
-      await FilePaths.ensureDirectoriesExist();
-
-      userOfflineSongs.value = [];
-
-      offlinePlaylists.value = [];
-
-      for (final notifier in downloadProgressNotifiers.values) {
-        notifier.dispose();
-      }
-      downloadProgressNotifiers.clear();
-      activeDownloads.clear();
-
-      await addOrUpdateData<List>('userNoBackup', 'offlineSongs', []);
-      await addOrUpdateData<List>('userNoBackup', 'offlinePlaylists', []);
-      await Hive.box('userNoBackup').flush();
-
-      logger.log('All downloads deleted successfully');
-    } catch (e, stackTrace) {
-      logger.log(
-        'Error deleting all downloads',
-        error: e,
-        stackTrace: stackTrace,
-      );
-      rethrow;
+      await cancelOfflineSongDownloads();
+      await serializeOfflineRegistryMutation(() async {
+        final tracksDir = Directory(
+          '$applicationDirPath/${FilePaths.tracksDir}',
+        );
+        final artworksDir = Directory(
+          '$applicationDirPath/${FilePaths.artworksDir}',
+        );
+        if (await tracksDir.exists()) await tracksDir.delete(recursive: true);
+        if (await artworksDir.exists())
+          await artworksDir.delete(recursive: true);
+        await FilePaths.ensureDirectoriesExist();
+        final box = Hive.box('userNoBackup');
+        await box.put('offlineSongs', <dynamic>[]);
+        await box.put('offlinePlaylists', <dynamic>[]);
+        await box.flush();
+        userOfflineSongs.value = [];
+        offlinePlaylists.value = [];
+        for (final notifier in downloadProgressNotifiers.values) {
+          notifier.dispose();
+        }
+        downloadProgressNotifiers.clear();
+        logger.log('All downloads deleted successfully');
+      });
+    } finally {
+      if (generation == _clearGeneration) _clearing = false;
     }
   }
 
@@ -465,8 +471,9 @@ class OfflinePlaylistService {
     Queue<dynamic> songQueue,
     ValueNotifier<DownloadProgress> progressNotifier, {
     OfflineAudioLoader? audioLoader,
+    required bool Function() owns,
   }) async {
-    while (songQueue.isNotEmpty && !progressNotifier.value.isCancelled) {
+    while (songQueue.isNotEmpty && owns()) {
       final song = songQueue.removeFirst();
 
       try {
@@ -480,7 +487,11 @@ class OfflinePlaylistService {
         }
 
         // Skip if already offline
-        if (await validateRegisteredOfflineSong(song['ytid'].toString())) {
+        final valid = await validateRegisteredOfflineSong(
+          song['ytid'].toString(),
+        );
+        if (!owns()) return;
+        if (valid) {
           // Find the existing offline song to get the correct audioPath
           final offlineSong = getOfflineSongByYtid(song['ytid']);
           if (offlineSong.isNotEmpty) {
@@ -503,8 +514,9 @@ class OfflinePlaylistService {
           final success = await makeSongOffline(
             song,
             audioLoader: audioLoader,
-            shouldCancel: () => progressNotifier.value.isCancelled,
+            shouldCancel: () => !owns(),
           );
+          if (!owns()) return;
           if (success) {
             progressNotifier.value.completed++;
           } else {
@@ -513,6 +525,7 @@ class OfflinePlaylistService {
           progressNotifier.notifyListeners();
         }
       } catch (e, stackTrace) {
+        if (!owns()) return;
         logger.log(
           'Failed to download song: ${song?['title']}',
           error: e,

@@ -8,11 +8,12 @@ import 'package:hive/hive.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:musify/models/playback_source_info.dart';
+import 'package:musify/services/offline_audio_integrity.dart';
 import 'package:musify/services/stream_request_context.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:musify/services/audio_service.dart';
 import 'package:musify/services/common_services.dart'
-    show songStreamUrlCacheKey, userOfflineSongs;
+    show songStreamUrlCacheKey, userOfflineSongs, userRecentlyPlayed;
 import 'package:musify/services/settings_manager.dart';
 import 'package:musify/services/online_audio_source.dart';
 import 'package:rxdart/rxdart.dart';
@@ -27,6 +28,177 @@ void main() {
       await Hive.openBox(name);
     }
   });
+
+  for (final stage in ['recheck', 'native']) {
+    for (final control in ['stop', 'new selection']) {
+      test(
+        'late local $stage failure cannot publish stale error or history after $control',
+        () async {
+          offlineMode.value = false;
+          sponsorBlockSupport.value = false;
+          playNextSongAutomatically.value = false;
+          repeatNotifier.value = AudioServiceRepeatMode.none;
+          final oldId = 'late-local-$stage-$control',
+              newId = 'new-local-$stage-$control';
+          final oldFile = File('${directory.path}/$oldId.m4a'),
+              newFile = File('${directory.path}/$newId.m4a');
+          await oldFile.writeAsBytes([1, 2, 3, 4], flush: true);
+          await newFile.writeAsBytes([1, 2, 3, 4], flush: true);
+          Map<String, dynamic> row(String id, File file) => {
+            'ytid': id,
+            'title': id,
+            'highResImage': '',
+            'audioPath': file.path,
+            'offlineAudioBytes': 4,
+            'offlineAudioSha256': sha256.convert([1, 2, 3, 4]).toString(),
+          };
+          final old = row(oldId, oldFile),
+              next = row(newId, newFile),
+              rows = [old, next];
+          await Hive.box('userNoBackup').put('offlineSongs', rows);
+          userOfflineSongs.value = rows;
+          await Hive.box('user').put('recentlyPlayedSongs', []);
+          userRecentlyPlayed.value = [];
+          final entered = Completer<void>(), release = Completer<void>();
+          var checks = 0, providerCalls = 0;
+          Future<void> damage() async => oldFile.writeAsBytes([], flush: true);
+          final player = stage == 'native'
+              ? _GatedLocalFailurePlayer(entered, release, damage)
+              : _PendingPlayer();
+          final handler = MusifyAudioHandler(
+            player: player,
+            offlineValidator: (entry, {fallbackPath}) async {
+              if (stage == 'recheck' &&
+                  entry['ytid'] == oldId &&
+                  ++checks == 2) {
+                entered.complete();
+                await release.future;
+                await damage();
+              }
+              return checkOfflineAudio(entry, fallbackPath: fallbackPath);
+            },
+            streamUrlLoader: (_, __) async {
+              providerCalls++;
+              return null;
+            },
+          );
+          final pending = handler.addPlaylistToQueue(
+            [old],
+            replace: true,
+            startIndex: 0,
+          );
+          try {
+            await entered.future;
+            if (control == 'stop') {
+              await handler.stop();
+            } else {
+              await handler.addPlaylistToQueue(
+                [next],
+                replace: true,
+                startIndex: 0,
+              );
+            }
+            release.complete();
+            await pending;
+            await Future<void>.delayed(const Duration(milliseconds: 20));
+            await Hive.box('user').flush();
+            expect(providerCalls, 0);
+            expect(handler.playbackState.value.errorMessage, isNull);
+            if (control == 'new selection')
+              expect(handler.currentSong?['ytid'], newId);
+            else
+              expect(player.playing, isFalse);
+            expect(
+              (Hive.box('user').get('recentlyPlayedSongs', defaultValue: [])
+                      as List)
+                  .whereType<Map>()
+                  .where((r) => r['ytid'] == oldId),
+              isEmpty,
+            );
+            expect(Hive.box('userNoBackup').get('offlineSongs'), rows);
+            expect(await oldFile.length(), 0);
+          } finally {
+            if (!release.isCompleted) release.complete();
+            await pending;
+            await handler.stop();
+            await player.dispose();
+            await Hive.box('userNoBackup').put('offlineSongs', []);
+            userOfflineSongs.value = [];
+          }
+        },
+      );
+    }
+  }
+
+  for (final stage in ['recheck', 'native']) {
+    for (final kind in ['delete', 'tamper']) {
+      test(
+        'review residual local $kind at $stage never resolves provider',
+        () async {
+          offlineMode.value = false;
+          sponsorBlockSupport.value = false;
+          playNextSongAutomatically.value = false;
+          final id = 'residual-$stage-$kind';
+          final file = File('${directory.path}/$id.m4a');
+          await file.writeAsBytes([1, 2, 3, 4], flush: true);
+          final row = <String, dynamic>{
+            'ytid': id,
+            'title': id,
+            'highResImage': '',
+            'audioPath': file.path,
+            'offlineAudioBytes': 4,
+            'offlineAudioSha256': sha256.convert([1, 2, 3, 4]).toString(),
+          };
+          await Hive.box('userNoBackup').put('offlineSongs', [row]);
+          userOfflineSongs.value = [row];
+          Future<void> damage() async {
+            if (kind == 'delete') {
+              await file.delete();
+            } else {
+              await file.writeAsBytes([9, 9, 9, 9], flush: true);
+            }
+          }
+
+          final fallback = File('${directory.path}/$id-fallback.m4a');
+          await fallback.writeAsBytes([7]);
+          var checks = 0, requests = 0;
+          final player = stage == 'native'
+              ? _LocalFailurePlayer(damage)
+              : _PendingPlayer();
+          final handler = MusifyAudioHandler(
+            player: player,
+            offlineValidator: (entry, {fallbackPath}) async {
+              final check = await checkOfflineAudio(
+                entry,
+                fallbackPath: fallbackPath,
+              );
+              if (++checks == 1 && stage == 'recheck') await damage();
+              return check;
+            },
+            streamUrlLoader: (_, __) async {
+              requests++;
+              return 'https://example.invalid/controlled';
+            },
+            sourceFactory: (_, {tag, onUnavailable}) =>
+                AudioSource.file(fallback.path, tag: tag),
+          );
+          try {
+            expect(await handler.playSong(row), isFalse);
+            expect(requests, 0);
+            expect(Hive.box('userNoBackup').get('offlineSongs'), [row]);
+            expect(await file.exists(), kind != 'delete');
+            if (kind == 'tamper')
+              expect(await file.readAsBytes(), [9, 9, 9, 9]);
+          } finally {
+            await handler.stop();
+            await player.dispose();
+            await Hive.box('userNoBackup').put('offlineSongs', []);
+            userOfflineSongs.value = [];
+          }
+        },
+      );
+    }
+  }
 
   for (final online in [false, true]) {
     for (final registered in [false, true]) {
@@ -974,5 +1146,58 @@ class _DelayedPausePlayer extends _PendingPlayer {
   Future<void> stop() async {
     stopCalls++;
     await super.stop();
+  }
+}
+
+class _LocalFailurePlayer extends _PendingPlayer {
+  _LocalFailurePlayer(this.damage);
+  final Future<void> Function() damage;
+  var first = true;
+  @override
+  Future<Duration?> setAudioSource(
+    AudioSource source, {
+    bool preload = true,
+    int? initialIndex,
+    Duration? initialPosition,
+  }) async {
+    if (first) {
+      first = false;
+      await damage();
+      throw StateError('Synthetic local decoder load failure');
+    }
+    return super.setAudioSource(
+      source,
+      preload: preload,
+      initialIndex: initialIndex,
+      initialPosition: initialPosition,
+    );
+  }
+}
+
+class _GatedLocalFailurePlayer extends _PendingPlayer {
+  _GatedLocalFailurePlayer(this.entered, this.release, this.damage);
+  final Completer<void> entered, release;
+  final Future<void> Function() damage;
+  var first = true;
+  @override
+  Future<Duration?> setAudioSource(
+    AudioSource source, {
+    bool preload = true,
+    int? initialIndex,
+    Duration? initialPosition,
+  }) async {
+    if (first) {
+      first = false;
+      entered.complete();
+      await release.future;
+      await damage();
+      throw StateError('Synthetic late local failure');
+    }
+    return super.setAudioSource(
+      source,
+      preload: preload,
+      initialIndex: initialIndex,
+      initialPosition: initialPosition,
+    );
   }
 }

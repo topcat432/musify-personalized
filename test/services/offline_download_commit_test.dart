@@ -58,6 +58,194 @@ void main() {
         expectedBytes: expected ?? bytes.length,
       );
 
+  for (final fail in [false, true]) {
+    test(
+      'review residual removal serializes with commit, failure=$fail',
+      () async {
+        final entered = Completer<void>(), release = Completer<void>();
+        var removalEntered = false;
+        final download = makeSongOffline(
+          song('serialized-remove-$fail'),
+          audioLoader: (_) async => body([1, 2, 3, 4]),
+          commitProbe: (at) async {
+            if (at == OfflineCommitBoundary.beforeRename) {
+              entered.complete();
+              await release.future;
+            }
+          },
+          registryWriter: fail
+              ? (box, values) async {
+                  await box.put('offlineSongs', values);
+                  throw StateError('Synthetic writer failure');
+                }
+              : null,
+        );
+        await entered.future;
+        final removal = removeSongFromOffline(
+          'keep-owned',
+          mutationProbe: () async {
+            removalEntered = true;
+          },
+        );
+        try {
+          await Future<void>.delayed(Duration.zero);
+          expect(
+            removalEntered,
+            isFalse,
+            reason: 'Removal must not mutate inside another registry commit',
+          );
+        } finally {
+          release.complete();
+          await Future.wait([download, removal]);
+        }
+        expect(
+          (Hive.box('userNoBackup').get('offlineSongs') as List)
+              .whereType<Map>()
+              .any((r) => r['ytid'] == 'keep-owned'),
+          isFalse,
+        );
+      },
+    );
+  }
+  for (final sameId in [false, true]) {
+    test(
+      'review residual rollback preserves newer durable row, same identity=$sameId',
+      () async {
+        final id = 'rollback-newer-$sameId';
+        late Map<String, dynamic> newer;
+        expect(
+          await makeSongOffline(
+            song(id),
+            audioLoader: (_) async => body([1, 2, 3, 4]),
+            registryWriter: (box, values) async {
+              await box.put('offlineSongs', values);
+              newer = sameId
+                  ? {
+                      ...(values.last as Map).cast<String, dynamic>(),
+                      'title': 'Newer durable row',
+                    }
+                  : {
+                      'ytid': 'new-durable',
+                      'title': 'Newer durable row',
+                      'audioPath': FilePaths.getAudioPath('keep-owned'),
+                    };
+              final latest = List<dynamic>.from(values);
+              if (sameId) {
+                latest[latest.length - 1] = newer;
+              } else {
+                latest.add(newer);
+              }
+              await box.put('offlineSongs', latest);
+              await box.flush();
+              throw StateError('Synthetic failure after a newer durable write');
+            },
+          ),
+          isFalse,
+        );
+        final rows = Hive.box('userNoBackup').get('offlineSongs') as List;
+        expect(
+          rows.whereType<Map>().where((r) => r['title'] == 'Newer durable row'),
+          [newer],
+        );
+        if (sameId)
+          expect(await File(FilePaths.getAudioPath(id)).readAsBytes(), [
+            1,
+            2,
+            3,
+            4,
+          ]);
+      },
+    );
+  }
+  test(
+    'review residual rollback preserves newer in-place durable row',
+    () async {
+      const id = 'rollback-in-place';
+      expect(
+        await makeSongOffline(
+          song(id),
+          audioLoader: (_) async => body([1, 2, 3, 4]),
+          registryWriter: (box, values) async {
+            await box.put('offlineSongs', values);
+            (values.last as Map)['title'] = 'Newer in-place durable row';
+            await box.put('offlineSongs', values);
+            await box.flush();
+            throw StateError(
+              'Synthetic failure after in-place durable revision',
+            );
+          },
+        ),
+        isFalse,
+      );
+      expect(
+        (Hive.box('userNoBackup').get('offlineSongs') as List)
+            .whereType<Map>()
+            .singleWhere((row) => row['ytid'] == id)['title'],
+        'Newer in-place durable row',
+      );
+      expect(await File(FilePaths.getAudioPath(id)).readAsBytes(), [
+        1,
+        2,
+        3,
+        4,
+      ]);
+    },
+  );
+
+  for (final boundary in [
+    OfflinePlaylistCompletionBoundary.membersValidated,
+    OfflinePlaylistCompletionBoundary.relatedSongsValidated,
+  ]) {
+    testWidgets(
+      'review residual clear-all owns pending playlist completion at ${boundary.name}',
+      (tester) async {
+        await tester.pumpWidget(
+          priorityReviewApp(
+            child: const Scaffold(),
+            brightness: Brightness.light,
+          ),
+        );
+        final context = tester.element(find.byType(Scaffold));
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.runAsync(() async {
+          final entered = Completer<void>(), release = Completer<void>();
+          var completions = 0;
+          final task = offlinePlaylistService.downloadPlaylist(
+            context,
+            {
+              'ytid': 'clear-completion',
+              'title': 'Synthetic',
+              'list': [song('keep-owned')],
+            },
+            completionProbe: (at) async {
+              if (at == boundary) {
+                entered.complete();
+                await release.future;
+              }
+              if (at == OfflinePlaylistCompletionBoundary.registryCommitted)
+                completions++;
+            },
+          );
+          await entered.future;
+          try {
+            await offlinePlaylistService.deleteAllDownloads();
+          } finally {
+            release.complete();
+          }
+          await task;
+          expect(Hive.box('userNoBackup').get('offlineSongs'), isEmpty);
+          expect(
+            Hive.box('userNoBackup').get('offlinePlaylists', defaultValue: []),
+            isEmpty,
+          );
+          expect(userOfflineSongs.value, isEmpty);
+          expect(offlinePlaylistService.offlinePlaylists.value, isEmpty);
+          expect(completions, 0);
+        });
+      },
+    );
+  }
+
   for (final kind in [
     'empty',
     'interrupted',

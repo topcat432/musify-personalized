@@ -856,6 +856,37 @@ Future<T> _serializeOfflineCommit<T>(Future<T> Function() action) {
   return result;
 }
 
+/// Song and playlist registry commits/removals share this mutation order.
+Future<T> serializeOfflineRegistryMutation<T>(Future<T> Function() action) =>
+    _serializeOfflineCommit(action);
+
+Object? _snapshotOfflineRegistryValue(Object? value) {
+  if (value is Map)
+    return value.map(
+      (key, entry) => MapEntry(key, _snapshotOfflineRegistryValue(entry)),
+    );
+  if (value is List) return value.map(_snapshotOfflineRegistryValue).toList();
+  return value;
+}
+
+bool _sameOfflineRegistryValue(Object? left, Object? right) {
+  if (left is Map && right is Map)
+    return left.length == right.length &&
+        left.keys.every(
+          (key) =>
+              right.containsKey(key) &&
+              _sameOfflineRegistryValue(left[key], right[key]),
+        );
+  if (left is List && right is List) {
+    if (left.length != right.length) return false;
+    for (var i = 0; i < left.length; i++) {
+      if (!_sameOfflineRegistryValue(left[i], right[i])) return false;
+    }
+    return true;
+  }
+  return left == right;
+}
+
 String _offlinePathKey(String value) => Platform.isWindows
     ? value.split(Platform.pathSeparator).join('/').toLowerCase()
     : value;
@@ -1126,6 +1157,10 @@ Future<bool> _makeSongOffline(
     if (saved != null) return validateRegisteredOfflineSong(ytid);
 
     final offlineSong = Map<String, dynamic>.from(song as Map);
+    Object? ownedRowSnapshot;
+    bool ownsSavedRow(dynamic row) =>
+        identical(row, offlineSong) &&
+        _sameOfflineRegistryValue(row, ownedRowSnapshot);
 
     final audioPath = FilePaths.getAudioPath(ytid);
     final audioFile = File(audioPath);
@@ -1246,19 +1281,12 @@ Future<bool> _makeSongOffline(
 
         await validatePayload(partial!);
         final box = Hive.box('userNoBackup');
-        final hadRegistry = box.containsKey('offlineSongs');
-        final previous = box.get('offlineSongs', defaultValue: <dynamic>[]);
-        if (previous is! List)
-          throw StateError('Offline registry is not a valid list');
-        final updatedOfflineSongs = List<dynamic>.from(previous);
-        final storedIndex = updatedOfflineSongs.indexWhere(
-          (entry) => entry is Map && entry['ytid'] == ytid,
+        final initialRegistry = box.get(
+          'offlineSongs',
+          defaultValue: <dynamic>[],
         );
-        if (storedIndex != -1) {
-          updatedOfflineSongs[storedIndex] = offlineSong;
-        } else {
-          updatedOfflineSongs.add(offlineSong);
-        }
+        if (initialRegistry is! List)
+          throw StateError('Offline registry is not a valid list');
         final candidateMarker = File('${partial.path}.owner.json');
         if (await candidateMarker.exists())
           throw StateError('Offline ownership marker already exists');
@@ -1288,6 +1316,18 @@ Future<bool> _makeSongOffline(
           await commitProbe(OfflineCommitBoundary.afterRename);
         await validatePayload(audioFile, linked: true);
         await flushOfflineFile(audioFile);
+        final hadRegistry = box.containsKey('offlineSongs');
+        // Read immediately before the write; do not publish the earlier snapshot.
+        final latestRegistry = box.get(
+          'offlineSongs',
+          defaultValue: <dynamic>[],
+        );
+        if (latestRegistry is! List || cancelled())
+          throw StateError('Offline registration cancelled or superseded');
+        if (latestRegistry.whereType<Map>().any((row) => row['ytid'] == ytid))
+          throw StateError('A newer saved row owns this recording');
+        ownedRowSnapshot = _snapshotOfflineRegistryValue(offlineSong);
+        final updatedOfflineSongs = [...latestRegistry, offlineSong];
         try {
           await (registryWriter ??
               (box, values) =>
@@ -1299,26 +1339,53 @@ Future<bool> _makeSongOffline(
           if (commitProbe != null)
             await commitProbe(OfflineCommitBoundary.registryFlushed);
           await validatePayload(audioFile, linked: true);
+          final durable = box.get('offlineSongs', defaultValue: <dynamic>[]);
+          if (cancelled() || durable is! List || !durable.any(ownsSavedRow))
+            throw StateError('Offline registration lost ownership');
         } catch (_) {
-          if (hadRegistry) {
-            await box.put('offlineSongs', previous);
-          } else {
-            await box.delete('offlineSongs');
+          final durable = box.get('offlineSongs', defaultValue: <dynamic>[]);
+          // Only undo our actual row object. A newer row/list is never replaced
+          // by a full prior snapshot, even if its recording/path is identical.
+          if (durable is List && durable.any(ownsSavedRow)) {
+            final retained = durable
+                .where((row) => !ownsSavedRow(row))
+                .toList();
+            if (!hadRegistry &&
+                retained.isEmpty &&
+                identical(durable, updatedOfflineSongs)) {
+              await box.delete('offlineSongs');
+            } else {
+              await box.put('offlineSongs', retained);
+            }
+            await box.flush();
           }
-          await box.flush();
+          final current = box.get('offlineSongs', defaultValue: <dynamic>[]);
+          if (current is List)
+            userOfflineSongs.value = List<dynamic>.from(current);
           try {
+            final referenced =
+                current is! List ||
+                current.whereType<Map>().any(
+                  (row) =>
+                      row['audioPath'] is String &&
+                      _offlinePathKey(row['audioPath']) ==
+                          _offlinePathKey(audioFile.path),
+                );
             canRemoveCommitted =
+                !referenced &&
                 await FileSystemEntity.identical(
                   partial.path,
                   audioFile.path,
                 ) &&
                 (await checkOfflineAudio(offlineSong)).playable;
+            // Keep compensation under the same registry mutation owner.
+            if (canRemoveCommitted) await audioFile.delete();
           } catch (_) {
             canRemoveCommitted = false;
           }
           rethrow;
         }
-        userOfflineSongs.value = updatedOfflineSongs;
+        userOfflineSongs.value = List<dynamic>.from(box.get('offlineSongs'));
         _offlineCheckedRows[ytid] = _offlineRowKey(offlineSong);
         offlineAudioChecks.value = {
           ...offlineAudioChecks.value,
@@ -1335,8 +1402,6 @@ Future<bool> _makeSongOffline(
         error: e,
         stackTrace: st,
       );
-      if (canRemoveCommitted && committed != null && await committed!.exists())
-        await committed!.delete();
       return false;
     }
 
@@ -1356,6 +1421,13 @@ Future<bool> _makeSongOffline(
     if (commitProbe != null)
       await commitProbe(OfflineCommitBoundary.beforeReturn);
     final completed = await checkOfflineAudio(offlineSong);
+    final finalRegistry = Hive.box(
+      'userNoBackup',
+    ).get('offlineSongs', defaultValue: <dynamic>[]);
+    if (cancelled() ||
+        finalRegistry is! List ||
+        !finalRegistry.any(ownsSavedRow))
+      return false;
     _offlineCheckedRows[ytid] = _offlineRowKey(offlineSong);
     offlineAudioChecks.value = {...offlineAudioChecks.value, ytid: completed};
     return completed.playable;
@@ -1379,7 +1451,11 @@ Future<bool> _makeSongOffline(
   }
 }
 
-Future<bool> removeSongFromOffline(dynamic songId) async {
+Future<bool> removeSongFromOffline(
+  dynamic songId, {
+  Future<void> Function()? mutationProbe,
+}) => _serializeOfflineCommit(() async {
+  if (mutationProbe != null) await mutationProbe();
   try {
     final audioPath = FilePaths.getAudioPath(songId);
     final audioFile = File(audioPath);
@@ -1403,15 +1479,14 @@ Future<bool> removeSongFromOffline(dynamic songId) async {
     }
 
     try {
-      userOfflineSongs.value = List.from(userOfflineSongs.value)
-        ..removeWhere((song) => song['ytid'] == songId);
-      unawaited(
-        addOrUpdateData<List>(
-          'userNoBackup',
-          'offlineSongs',
-          userOfflineSongs.value,
-        ),
-      );
+      final box = Hive.box('userNoBackup');
+      final current = box.get('offlineSongs', defaultValue: <dynamic>[]);
+      if (current is! List) throw StateError('Offline registry is not a list');
+      final retained = List<dynamic>.from(current)
+        ..removeWhere((song) => song is Map && song['ytid'] == songId);
+      await box.put('offlineSongs', retained);
+      await box.flush();
+      userOfflineSongs.value = retained;
     } catch (e, st) {
       logger.log(
         'Error updating offline songs registry after removal',
@@ -1429,7 +1504,7 @@ Future<bool> removeSongFromOffline(dynamic songId) async {
     );
     return false;
   }
-}
+});
 
 Future<List<int>?> _fetchOfflineArtwork(String url) async {
   final response = await ProxyManager().getProxiedResponse(Uri.parse(url));

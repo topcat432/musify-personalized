@@ -1,5 +1,41 @@
 # Product acceptance ledger
 
+## Offline async ownership closure, 2026-10-16
+
+`5cd97d0ce07fb5477f1a0c7eb6c120609f95d882` passed
+[exact CI38837316380](https://github.com/topcat432/musify-personalized/actions/runs/38837316380):
+1,143 app tests, 40 Linux visuals, analysis, Windows lifecycle and Android builds.
+It remains withheld after consolidated review identified three related await
+ownership gaps. These are source-proven preservation risks, not a proven cause
+of the earlier native zero-byte incident. Ten deterministic negative controls
+fail on5cd behavior with acceptance-boundary instrumentation only; failed
+launchers and all incomplete runs remain retained separately.
+
+The one correction batch keeps local playback local after a later integrity or
+native-load failure, with no automatic provider fallback and no stale error or
+history after Stop/new selection. Song removals share the commit serializer;
+commit rereads the durable list immediately before writing, and rollback removes
+only its own unchanged row. A newer row, including an in-place durable edit,
+is preserved along with any file it references. File compensation remains under
+the mutation owner. Playlist requests carry individual owners and a clear
+generation across validation scans; completion and clear serialize final writes,
+and stale completion cannot republish either registry or announce success.
+
+Clean analysis, all110 focused cases (retaining all93 prior cases), and all1,158
+aggregate app tests pass. The cleanup fixture now persists its synthetic rows
+before removal; all file/membership/reopen assertions remain intact. Both strict
+Windows visual suites remain FAIL16+24; all40 actuals are byte-identical to the
+retained Windows control, with references/comparators unchanged and representative
+actual/diff images inspected. Successor exact CI and combined closure review
+remain gates before signing. Android hard-link capability/FFI/restart proof is a
+separate native gate; a synthetic debug-only alternate entrypoint is prepared
+outside Git but has not been compiled or run. An unsupported/cross-mount refusal
+must fail closed. Generic helper errors currently do not retain native errno,
+and a file flush does not establish directory-entry or power-loss durability.
+No production successor signing, provider, phone or emulator operation occurred.
+The preserved invalid fixture/marker and code18 artifact remain unchanged.
+
+
 ## Offline completion integrity repair, 2026-10-16
 
 Source `6c215fff9cc7d7ac0ed3fd5b1f63b1e6799f915c` passed

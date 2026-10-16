@@ -66,6 +66,10 @@ void main() {
           ],
         },
       ];
+      await Hive.box('userNoBackup').putAll({
+        'offlineSongs': songs,
+        'offlinePlaylists': offlinePlaylistService.offlinePlaylists.value,
+      });
       await Hive.box('user').put('likedSongs', userLikedSongsList.value);
       await Hive.box('user').put('customPlaylists', userCustomPlaylists.value);
       await offlinePlaylistService.removeOfflinePlaylist('remove-me');
