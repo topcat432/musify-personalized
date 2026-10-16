@@ -1,5 +1,34 @@
 # Musify Personalized current state
 
+## Preserving debug APK recovery and two cold boots, 2026-10-16
+
+After exact CI38851788633 succeeded for
+`b0463e0d0c55efca7bcf1f97132b6a1d3084fc46`, the owner-approved recovery
+created an offline C: checkpoint of all40 mutable AVD/parent-config files:
+9,443,853,119 bytes, source/copy/reopened hashes matching, copied backing chains
+contained within the checkpoint. Originals were unchanged during checkpointing.
+This is a verified offline checkpoint, not an independently restored backup.
+
+Only isolated emulator-5560 / musify_isolated_acceptance_api35 was repaired.
+The identical retained debug APK was reinstalled with `--no-streaming -r`, then
+force-stopped and synced. Exact command exit/stdout/stderr were retained; all
+three returned0. Immediate verification and two no-snapshot-load cold boots
+verified saved/reopened APK SHA256
+`cb062973a316761fedcc3feeac60d1cfa6ce01141817c1e33a07a596965e977c`,
+the original debug signer,UID10209,version300004002 and all four retained Hive
+hashes,byte lengths and600 modes. No Hive overwrite or automatic restore occurred.
+All6 device-free recovery contracts pass. No normal app UI or component probe
+was launched; this is original-debug-APK persistence proof, not current candidate
+playback,phone,production-signing or power-loss qualification.
+
+The previously approved read-only namespace inspection then ran with unchanged
+APK/Hive identity. Neither old private/external probe namespace was present and
+no old tagged logcat was retained. This does not prove the earlier probe never
+started; its failed operation and the prior APK-directory-loss mechanism remain
+unproven. Successful recovery does not establish that sync caused or fixed that
+loss. Current guest data had4.33GiB free and no matching current-boot storage-error
+log messages; these are not restore-time disk evidence.
+
 ## Synthetic Android publication attempt, 2026-10-16
 
 Follow-up diagnosis confirms the attempted APK contains its exact compiled
@@ -24,8 +53,12 @@ The immediate APK/four-Hive match below remains retained, but it does not prove
 APK presence after cold restart. The directory-loss mechanism and the original
 probe's failed operation remain unproven. Component/install gates remain closed.
 
-The isolated-only failure-branch diagnostic is hash-pinned,runs once within the
-remaining unchanged boot budget,and cannot satisfy readiness. All29 local
+The isolated-only failure-branch diagnostic is hash-pinned,runs once,and cannot
+satisfy readiness. Child commands use remaining time,but its35-second outer logger
+plus bounded cleanup is an overall bound; stalled host filesystem work can exceed
+the nominal150-second boot window. The separately approved recovery has its own
+90-second body/100-second logger window; verification uses60/70seconds. No strict
+150-second total is claimed. All29 local
 device-free lifecycle mocks pass, including prior package failure followed by a
 successful getprop and budget exhaustion: current stage and last package failure
 are retained separately. Private exact command/exit/stdout/stderr records remain
