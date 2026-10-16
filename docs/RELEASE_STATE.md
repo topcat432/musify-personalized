@@ -1,5 +1,20 @@
 # Musify Personalized current state
 
+## Bounded rehearsal ADB calls, 2026-10-16
+
+Native probe review found that the outer storage session admits resources but
+does not impose an execution timeout. Rehearsal ADB clients now use the existing
+owned-command runner with a five-second deadline. Boot and shutdown calls also
+cap that deadline by the remaining phase budget; shutdown identity verification
+and graceful kill share the fifteen-second cleanup budget. A client timeout
+fails the operation and leaves existing identity/refusal checks in force. The
+runner owns only its newly launched process tree, never an existing ADB server;
+there is no server kill, process adoption or emulator force kill.
+All23 device-free timeout/lifecycle mocks and all3 synthetic owned-console
+contracts pass, including actual synthetic process timeout. This qualifies the
+source change separately from native execution. The external probe is bound to isolated
+emulator-5560 / musify_isolated_acceptance_api35, with its review gate closed.
+
 ## Legacy canonical-reference compensation closure, 2026-10-16
 
 `d48f45ed257b79dae32b956a5680147e659ea853` passed
@@ -13,7 +28,9 @@ paths. The new row and exact payload survive reopen; explicit shared-path cases
 remain retained. Clean analysis, all111 focused cases and all1,159 aggregate
 app tests pass. Strict Windows visuals remain FAIL16+24 with all40 actuals
 byte-identical to the prior control and no reference/comparator changes.
-Successor exact CI and narrow closure review remain pending; no signing or
+Successor `403e82f11cfa60788688d135f291afb3876b25b8` passed independent
+narrow closure review and [exact CI38842357393](https://github.com/topcat432/musify-personalized/actions/runs/38842357393);
+no signing or
 native/provider/phone action is authorized by these source results. The existing
 debug publication probe imports unchanged helper files, verified by exact source
 hashes; it is component evidence only, not successor whole-app qualification.

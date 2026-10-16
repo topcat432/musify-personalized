@@ -12,7 +12,16 @@ Describe 'Owned emulator lifecycle' {
         $global:mockCallbackRan=$false;$global:mockCallbackFailure=$false
         $global:mockBootFailure=$false;$global:mockAdmissionFailure=$false
         $global:mockPackageWait=$false;$global:mockPackagePolls=0
+        $global:mockIdentityTimeout=$false;$global:mockIdentityPolls=0;$global:mockShutdownTimeout=$false
         $global:mockIdentity='musify_rehearsal_api35'
+        $global:mockLeaseHeld=$false;$global:mockLeaseBusy=$false
+        Mock New-MusifyOwnedRehearsalLease {
+            $lease=[pscustomobject]@{}
+            $lease|Add-Member ScriptMethod WaitOne {param($milliseconds);if($global:mockLeaseBusy){return $false};if($global:mockLeaseHeld){throw 'Synthetic leaked lease'};$global:mockLeaseHeld=$true;return $true}
+            $lease|Add-Member ScriptMethod ReleaseMutex {$global:mockLeaseHeld=$false}
+            $lease|Add-Member ScriptMethod Dispose {}
+            $lease
+        }
         Mock Get-MusifyRehearsalAdmission {
             [pscustomobject]@{CFreeBytes=100GB;VFreeBytes=100GB;CommittedBytes=$(if($global:mockAdmissionFailure){79GB}else{10GB});CommitLimit=100GB}
         }
@@ -31,8 +40,15 @@ Describe 'Owned emulator lifecycle' {
                 if($global:mockPackageWait -and $global:mockPackagePolls -eq 1){throw 'Synthetic package manager not ready'}
                 if($Arguments[-1] -eq 'android'){'package:/system/framework/framework-res.apk'}else{'package:/data/app/owned/base.apk'}
             }
-            elseif($Arguments[1] -eq 'avd'){$global:mockIdentity}
-            elseif($Arguments[1] -eq 'kill'){$global:mockAlive=$false}
+            elseif($Arguments[1] -eq 'avd'){
+                $global:mockIdentityPolls++
+                if($global:mockIdentityTimeout -and $global:mockIdentityPolls -eq 1){throw 'Owned ADB deadline: emu'}
+                $global:mockIdentity
+            }
+            elseif($Arguments[1] -eq 'kill'){
+                if($global:mockShutdownTimeout){throw 'Owned ADB deadline: emu'}
+                $global:mockAlive=$false
+            }
         }
     }
     It 'launches once and shuts down after successful callback; restores environment' {
@@ -50,6 +66,25 @@ Describe 'Owned emulator lifecycle' {
         $global:mockAlive | Should Be $false
         Assert-MockCalled Invoke-MusifyOwnedAdb -Scope It -Times 1 -Exactly -ParameterFilter {$Arguments[1] -eq 'kill'}
     }
+    It 'identity timeout skips callback and still verifies graceful finally shutdown' {
+        $global:mockIdentityTimeout=$true
+        $prior=$env:ANDROID_AVD_HOME
+        {Invoke-MusifyOwnedRehearsal -HarnessScript $callback -ApprovedHarnessSha256 $hash} | Should Throw 'Owned ADB deadline'
+        $global:mockCallbackRan | Should Be $false
+        $global:mockAlive | Should Be $false
+        ([string]$env:ANDROID_AVD_HOME -ceq [string]$prior) | Should Be $true
+        Assert-MockCalled Invoke-MusifyOwnedAdb -Scope It -Times 1 -Exactly -ParameterFilter {$Arguments[1] -eq 'kill'}
+    }
+    It 'shutdown timeout fails without force kill and releases lease and environment' {
+        $global:mockShutdownTimeout=$true
+        $prior=$env:ANDROID_AVD_HOME
+        {Invoke-MusifyOwnedRehearsal -HarnessScript $callback -ApprovedHarnessSha256 $hash} | Should Throw 'Owned ADB deadline'
+        $global:mockAlive | Should Be $true
+        ([string]$env:ANDROID_AVD_HOME -ceq [string]$prior) | Should Be $true
+        $global:mockAlive=$false;$global:mockShutdownTimeout=$false
+        Invoke-MusifyOwnedRehearsal -HarnessScript $callback -ApprovedHarnessSha256 $hash
+        $global:mockAlive | Should Be $false
+    }
     It 'waits for exact package readiness before callback' {
         $global:mockPackageWait=$true
         Invoke-MusifyOwnedRehearsal -HarnessScript $callback -ApprovedHarnessSha256 $hash
@@ -66,6 +101,12 @@ Describe 'Owned emulator lifecycle' {
     It 'refuses a pre-existing process without launch or shutdown' {
         $global:mockPreexisting=$true
         {Invoke-MusifyOwnedRehearsal -HarnessScript $callback -ApprovedHarnessSha256 $hash} | Should Throw 'Pre-existing'
+        Assert-MockCalled Start-Process -Scope It -Times 0 -Exactly
+        Assert-MockCalled Invoke-MusifyOwnedAdb -Scope It -Times 0 -Exactly
+    }
+    It 'refuses a busy lease without launching or touching a device' {
+        $global:mockLeaseBusy=$true
+        {Invoke-MusifyOwnedRehearsal -HarnessScript $callback -ApprovedHarnessSha256 $hash} | Should Throw 'lease busy'
         Assert-MockCalled Start-Process -Scope It -Times 0 -Exactly
         Assert-MockCalled Invoke-MusifyOwnedAdb -Scope It -Times 0 -Exactly
     }
@@ -120,3 +161,31 @@ Describe 'Owned emulator lifecycle' {
         {Invoke-MusifyOwnedRehearsal -ColdBootSaved -HarnessScript $callback -ApprovedHarnessSha256 $hash} | Should Throw 'Saved-only'
         Assert-MockCalled Start-Process -Scope It -Times 0 -Exactly
     }}
+
+Describe 'Bounded owned ADB client' {
+    BeforeEach {
+        Mock Invoke-MusifyOwnedAdbProcess {[pscustomobject]@{ExitCode=0;Output='synthetic'}}
+    }
+    It 'passes exact isolated serial and a five-second deadline to the owned runner' {
+        Invoke-MusifyOwnedAdb -Serial emulator-5560 -Arguments @('emu','avd','name') | Should Be 'synthetic'
+        Assert-MockCalled Invoke-MusifyOwnedAdbProcess -Scope It -Times 1 -Exactly -ParameterFilter {$TimeoutSeconds -eq 5 -and $Command[1] -eq '-s' -and $Command[2] -eq 'emulator-5560' -and $Command[3] -eq 'emu'}
+    }
+    It 'propagates owned client timeout without retry or server termination' {
+        Mock Invoke-MusifyOwnedAdbProcess {[pscustomobject]@{ExitCode=124;Output=''}}
+        {Invoke-MusifyOwnedAdb -Serial emulator-5560 -Arguments @('emu','kill')} | Should Throw 'Owned ADB deadline'
+        Assert-MockCalled Invoke-MusifyOwnedAdbProcess -Scope It -Times 1 -Exactly
+    }
+    It 'propagates client failure rather than accepting its output' {
+        Mock Invoke-MusifyOwnedAdbProcess {[pscustomobject]@{ExitCode=1;Output='not proof'}}
+        {Invoke-MusifyOwnedAdb -Serial emulator-5560 -Arguments @('emu','avd','name')} | Should Throw 'Owned ADB command failed'
+    }
+    It 'caps each call by the remaining phase budget' {
+        $remaining=Get-MusifyOwnedAdbTimeout ([datetime]::UtcNow.AddSeconds(2))
+        ($remaining -gt 0 -and $remaining -le 2) | Should Be $true
+        (Get-MusifyOwnedAdbTimeout ([datetime]::UtcNow.AddSeconds(60))) | Should Be 5
+    }
+    It 'refuses an expired phase before launching a client' {
+        {Get-MusifyOwnedAdbTimeout ([datetime]::UtcNow.AddSeconds(-1))} | Should Throw 'phase deadline'
+        Assert-MockCalled Invoke-MusifyOwnedAdbProcess -Scope It -Times 0 -Exactly
+    }
+}

@@ -6,10 +6,23 @@ function Get-MusifyOwnedEmulator([string]$AvdName='musify_rehearsal_api35') {
         [regex]::Match([string]$_.CommandLine,'(?:-avd\s+|@)([^\s"]+)').Groups[1].Value -eq $AvdName
     })
 }
-function Invoke-MusifyOwnedAdb([string[]]$Arguments,[string]$Serial='emulator-5556') {
-    $result = & 'C:\devtools\android-sdk\platform-tools\adb.exe' -s $Serial @Arguments 2>&1
-    if ($LASTEXITCODE -ne 0) { throw "Owned ADB command failed: $($Arguments[0])" }
-    $result
+function Invoke-MusifyOwnedAdbProcess([string[]]$Command,[double]$TimeoutSeconds) {
+    $python=(Get-Command python -ErrorAction Stop).Source
+    $runner=Join-Path $PSScriptRoot 'owned_command.py'
+    $output = & $python $runner --timeout-seconds $TimeoutSeconds -- @Command 2>&1
+    [pscustomobject]@{ExitCode=$LASTEXITCODE;Output=$output}
+}
+function Get-MusifyOwnedAdbTimeout([datetime]$Deadline) {
+    $remaining=($Deadline-[datetime]::UtcNow).TotalSeconds
+    if ($remaining -le 0) {throw 'Owned ADB phase deadline'}
+    [math]::Min(5,$remaining)
+}
+function Invoke-MusifyOwnedAdb([string[]]$Arguments,[string]$Serial='emulator-5556',
+    [ValidateRange(0.001,5)][double]$TimeoutSeconds=5) {
+    $result=Invoke-MusifyOwnedAdbProcess -Command (@('C:\devtools\android-sdk\platform-tools\adb.exe','-s',$Serial)+$Arguments) -TimeoutSeconds $TimeoutSeconds
+    if ($result.ExitCode -eq 124) {throw "Owned ADB deadline: $($Arguments[0])"}
+    if ($result.ExitCode -ne 0) {throw "Owned ADB command failed: $($Arguments[0])"}
+    $result.Output
 }
 function Get-MusifyRehearsalAdmission {
     $memory=Get-CimInstance Win32_PerfFormattedData_PerfOS_Memory
@@ -20,6 +33,9 @@ function Get-MusifyRehearsalAdmission {
         CommittedBytes=[double]$memory.CommittedBytes
         CommitLimit=[double]$memory.CommitLimit
     }
+}
+function New-MusifyOwnedRehearsalLease {
+    [Threading.Mutex]::new($false,'Local\MusifyRehearsalApi35StorageLease')
 }
 function Invoke-MusifyOwnedRehearsal {
     [CmdletBinding()]
@@ -57,7 +73,7 @@ function Invoke-MusifyOwnedRehearsal {
         (Get-FileHash -LiteralPath $harness).Hash -ne $ApprovedHarnessSha256) {
         throw 'Callback hash mismatch'
     }
-    $lease=[Threading.Mutex]::new($false,'Local\MusifyRehearsalApi35StorageLease')
+    $lease=New-MusifyOwnedRehearsalLease
     $held=$false
     $priorAvd=$env:ANDROID_AVD_HOME
     try {
@@ -76,10 +92,10 @@ function Invoke-MusifyOwnedRehearsal {
             do {
                 Start-Sleep -Seconds 2
                 try {
-                    $booted=(Invoke-MusifyOwnedAdb -Serial $serial -Arguments @('shell','getprop','sys.boot_completed')|Out-String).Trim() -eq '1'
+                    $booted=(Invoke-MusifyOwnedAdb -Serial $serial -TimeoutSeconds (Get-MusifyOwnedAdbTimeout $end) -Arguments @('shell','getprop','sys.boot_completed')|Out-String).Trim() -eq '1'
                     if ($booted) {
                         $packageName=if($BootstrapSaved){'android'}else{'com.topcat432.musifypersonalized.preview.debug'}
-                        $package=Invoke-MusifyOwnedAdb -Serial $serial -Arguments @('shell','pm','path',$packageName)|Out-String
+                        $package=Invoke-MusifyOwnedAdb -Serial $serial -TimeoutSeconds (Get-MusifyOwnedAdbTimeout $end) -Arguments @('shell','pm','path',$packageName)|Out-String
                         $booted=if($BootstrapSaved){$package -match '(?m)^package:/system/.+\.apk\s*$'}else{$package -match '(?m)^package:/data/app/.+/base\.apk\s*$'}
                     }
                 } catch {$booted=$false}
@@ -95,11 +111,11 @@ function Invoke-MusifyOwnedRehearsal {
         } finally {
             $owned=@(Get-MusifyOwnedEmulator -AvdName $avdName)
             if ($owned.Count) {
-                if (@($owned|Where-Object {$_.CreationDate.ToUniversalTime() -lt $started}).Count) {throw 'Foreign process; shutdown refused'}
-                $identity=Invoke-MusifyOwnedAdb -Serial $serial -Arguments @('emu','avd','name')|Out-String
-                if ($identity -notmatch ('(?m)^'+[regex]::Escape($avdName)+'\s*$')) {throw 'Unverified AVD; shutdown refused'}
-                Invoke-MusifyOwnedAdb -Serial $serial -Arguments @('emu','kill')|Out-Null
                 $end=[datetime]::UtcNow.AddSeconds(15)
+                if (@($owned|Where-Object {$_.CreationDate.ToUniversalTime() -lt $started}).Count) {throw 'Foreign process; shutdown refused'}
+                $identity=Invoke-MusifyOwnedAdb -Serial $serial -TimeoutSeconds (Get-MusifyOwnedAdbTimeout $end) -Arguments @('emu','avd','name')|Out-String
+                if ($identity -notmatch ('(?m)^'+[regex]::Escape($avdName)+'\s*$')) {throw 'Unverified AVD; shutdown refused'}
+                Invoke-MusifyOwnedAdb -Serial $serial -TimeoutSeconds (Get-MusifyOwnedAdbTimeout $end) -Arguments @('emu','kill')|Out-Null
                 while (@(Get-MusifyOwnedEmulator -AvdName $avdName).Count -and [datetime]::UtcNow -lt $end) {Start-Sleep -Seconds 1}
                 if (@(Get-MusifyOwnedEmulator -AvdName $avdName).Count) {throw 'Graceful shutdown incomplete; no force kill'}
             }
