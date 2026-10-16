@@ -1,5 +1,29 @@
 # Musify Personalized current state
 
+## Synthetic Android publication attempt, 2026-10-16
+
+`acd2a87156da82234a766be7f2ee913c42ba7697` passed
+[exact CI38845249046](https://github.com/topcat432/musify-personalized/actions/runs/38845249046):
+1,159 tests,40 Linux visuals,analysis,Windows lifecycle and required builds.
+The independently reviewed component probe ran on owned isolated emulator-5560,
+musify_isolated_acceptance_api35, after fresh admission and lease acquisition.
+Its fresh receipt timed out: native component qualification remains FAILED and
+the failed receipt does not identify which component operation failed.
+The preservation callback restored the pinned original debug APK in finally and
+verified identical APK hash,UID,version and all four Hive hashes,sizes,modes.
+The wrapper completed graceful shutdown; no owned target process remained and
+the lease was released. No Hive overwrite,production-package,phone,provider or
+production-signing operation occurred. This proves that attempt's preservation,
+not whole-app playback or power-loss durability.
+
+Pre-install failures remain retained: a CRLF-sensitive UID parser was corrected
+and covered by a device-free regression; an older probe version was refused.
+A necessary debug-only rebuild matched the installed debug version without
+downgrade. The probe source stayed unchanged; read-only snapshot paths now follow
+the pinned Hive library's lowercase physical filenames. All21 external
+preservation contracts pass. Private APK/Hive snapshots and failure lineage stay
+outside Git in the existing acceptance evidence tree.
+
 ## Bounded rehearsal ADB calls, 2026-10-16
 
 Native probe review found that the outer storage session admits resources but
