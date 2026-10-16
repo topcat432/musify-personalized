@@ -7,17 +7,29 @@ source/run-id literals and matches the configured namespace/activity. The prior
 callback did not retain launch stdout or probe logcat, so its missing receipt
 does not identify a helper failure. The external collector now retries empty or
 partial JSON only within the unchanged35-second deadline, rejects other-run
-receipts, and retains launch output and the last bounded read failure; all27
+receipts, and retains launch output and the last bounded read failure; all28
 device-free contracts pass. This collection race is not attributed as the cause
 of the earlier deadline.
 
-Read-only namespace inspection is currently blocked before its callback: guest
-boot completes, but `pm path` for the debug package returns nonzero/no path until
-the unchanged boot deadline. No readiness bypass,reinstall or namespace change
-was performed. The last successful APK/Hive preservation proof below is retained;
-current guest debug-package state requires read-only reconciliation before any
-new component attempt. Lifecycle diagnostics retain bounded command context and
-the last meaningful boot failure; all25 local device-free lifecycle mocks pass.
+Bounded read-only package diagnostics establish why namespace inspection is
+blocked. Guest boot and the package service are ready; user0 is the sole/current
+user. Package settings retain UID10209,version300004002,installed=true but pkg=null.
+The recorded debug APK code directory and base.apk do not exist; boot logcat
+reports missing metadata and a missing scanned package. Normal package queries
+and run-as cannot resolve it. This is not evidence that another user was selected.
+The verified isolated AVD,data path and backing chain match; cold boot/no-snapshot
+load flags remained set. Qcow metadata flags are not filesystem integrity proof.
+No snapshot restore,reinstall,clear,permission bypass or namespace change occurred.
+The immediate APK/four-Hive match below remains retained, but it does not prove
+APK presence after cold restart. The directory-loss mechanism and the original
+probe's failed operation remain unproven. Component/install gates remain closed.
+
+The isolated-only failure-branch diagnostic is hash-pinned,runs once within the
+remaining unchanged boot budget,and cannot satisfy readiness. All29 local
+device-free lifecycle mocks pass, including prior package failure followed by a
+successful getprop and budget exhaustion: current stage and last package failure
+are retained separately. Private exact command/exit/stdout/stderr records remain
+outside Git in the existing acceptance evidence tree.
 
 `acd2a87156da82234a766be7f2ee913c42ba7697` passed
 [exact CI38845249046](https://github.com/topcat432/musify-personalized/actions/runs/38845249046):

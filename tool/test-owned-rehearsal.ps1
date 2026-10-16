@@ -6,10 +6,14 @@ $fixture='C:\Users\james\Documents\Codex\2026-10-10\task\musify-source-compariso
 $callback=Join-Path $fixture 'callback.ps1'
 Set-Content -LiteralPath $callback -Value "if (`$global:mockCallbackFailure) {throw 'Synthetic callback failure'}; `$global:mockCallbackRan=`$true"
 $hash=(Get-FileHash -LiteralPath $callback).Hash
+$diagnosticCallback=Join-Path $fixture 'readiness-diagnostic.ps1'
+Set-Content -LiteralPath $diagnosticCallback -Value 'param($BudgetSeconds);$global:mockDiagnosticRan++;$global:mockDiagnosticBudget=$BudgetSeconds;$global:mockDiagnosticSawAcceptance=$global:mockCallbackRan'
+$diagnosticHash=(Get-FileHash -LiteralPath $diagnosticCallback).Hash
 Describe 'Owned emulator lifecycle' {
     BeforeEach {
         $global:mockAlive=$false;$global:mockPreexisting=$false
         $global:mockCallbackRan=$false;$global:mockCallbackFailure=$false
+        $global:mockDiagnosticRan=0;$global:mockDiagnosticBudget=0;$global:mockDiagnosticSawAcceptance=$false
         $global:mockBootFailure=$false;$global:mockAdmissionFailure=$false
         $global:mockPackageWait=$false;$global:mockPackagePolls=0
         $global:mockIdentityTimeout=$false;$global:mockIdentityPolls=0;$global:mockShutdownTimeout=$false
@@ -91,6 +95,23 @@ Describe 'Owned emulator lifecycle' {
         $global:mockPackagePolls | Should Be 2
         $global:mockCallbackRan | Should Be $true
         $global:mockAlive | Should Be $false
+    }
+    It 'runs pinned isolated diagnostic once before readiness without satisfying the acceptance gate' {
+        $global:mockIdentity='musify_isolated_acceptance_api35';$global:mockPackageWait=$true
+        Invoke-MusifyOwnedRehearsal -Target isolated -ColdBootSaved -HarnessScript $callback -ApprovedHarnessSha256 $hash -ReadinessDiagnosticScript $diagnosticCallback -ApprovedReadinessDiagnosticSha256 $diagnosticHash
+        $global:mockDiagnosticRan | Should Be 1
+        ($global:mockDiagnosticBudget -gt 0 -and $global:mockDiagnosticBudget -le 30) | Should Be $true
+        $global:mockDiagnosticSawAcceptance | Should Be $false
+        $global:mockPackagePolls | Should Be 2
+        $global:mockCallbackRan | Should Be $true
+    }
+    It 'refuses diagnostic hash mismatch before launch' {
+        {Invoke-MusifyOwnedRehearsal -Target isolated -ColdBootSaved -HarnessScript $callback -ApprovedHarnessSha256 $hash -ReadinessDiagnosticScript $diagnosticCallback -ApprovedReadinessDiagnosticSha256 ('0'*64)} | Should Throw 'diagnostic identity'
+        Assert-MockCalled Start-Process -Scope It -Times 0 -Exactly
+    }
+    It 'refuses readiness diagnostics on the protected original target' {
+        {Invoke-MusifyOwnedRehearsal -HarnessScript $callback -ApprovedHarnessSha256 $hash -ReadinessDiagnosticScript $diagnosticCallback -ApprovedReadinessDiagnosticSha256 $diagnosticHash} | Should Throw 'isolated-only'
+        Assert-MockCalled Start-Process -Scope It -Times 0 -Exactly
     }
     It 'gracefully shuts down after boot failure without invoking callback' {
         $global:mockBootFailure=$true
@@ -191,6 +212,15 @@ Describe 'Bounded owned ADB client' {
     It 'retains the last meaningful boot response when its phase budget expires' {
         (Get-MusifyOwnedBootStatus 'sys.boot_completed=0' 'Owned ADB phase deadline') | Should Be 'sys.boot_completed=0'
         (Get-MusifyOwnedBootStatus 'sys.boot_completed=0' 'Owned ADB command failed: offline') | Should Be 'Owned ADB command failed: offline'
+    }
+    It 'retains prior package failure across successful getprop and package budget exhaustion' {
+        $state=@{Stage='boot';Current='none';LastPackageFailure='none'}
+        Update-MusifyOwnedReadinessDiagnostic $state 'package' 'pm path exit1 no path' -Failed
+        Update-MusifyOwnedReadinessDiagnostic $state 'boot' 'sys.boot_completed=1'
+        Update-MusifyOwnedReadinessDiagnostic $state 'package' 'Owned ADB phase deadline' -Failed
+        $state.Stage | Should Be 'package'
+        $state.Current | Should Be 'sys.boot_completed=1'
+        $state.LastPackageFailure | Should Be 'pm path exit1 no path'
     }
     It 'caps each call by the remaining phase budget' {
         $remaining=Get-MusifyOwnedAdbTimeout ([datetime]::UtcNow.AddSeconds(2))

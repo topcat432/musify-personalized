@@ -22,6 +22,11 @@ function Get-MusifyOwnedBootStatus([string]$Previous,[string]$Current) {
     if($Current -eq 'Owned ADB phase deadline'){return $Previous}
     $Current
 }
+function Update-MusifyOwnedReadinessDiagnostic([hashtable]$State,[string]$Stage,[string]$Status,[switch]$Failed) {
+    $State.Stage=$Stage
+    if($Status -and $Status -ne 'Owned ADB phase deadline'){$State.Current=$Status}
+    if($Failed -and $Stage -eq 'package' -and $Status -and $Status -ne 'Owned ADB phase deadline'){$State.LastPackageFailure=$Status}
+}
 function Invoke-MusifyOwnedAdb([string[]]$Arguments,[string]$Serial='emulator-5556',
     [ValidateRange(0.001,5)][double]$TimeoutSeconds=5) {
     $result=Invoke-MusifyOwnedAdbProcess -Command (@('C:\devtools\android-sdk\platform-tools\adb.exe','-s',$Serial)+$Arguments) -TimeoutSeconds $TimeoutSeconds
@@ -52,11 +57,22 @@ function Invoke-MusifyOwnedRehearsal {
         [switch]$CheckOnly,
         [ValidateSet('original','saved','isolated')][string]$Target='original',
         [switch]$BootstrapSaved,
-        [switch]$ColdBootSaved
+        [switch]$ColdBootSaved,
+        [string]$ReadinessDiagnosticScript,
+        [string]$ApprovedReadinessDiagnosticSha256
     )
     $ErrorActionPreference='Stop'
     if (($BootstrapSaved -and $Target -ne 'saved') -or ($ColdBootSaved -and $Target -eq 'original')) {throw 'Saved-only launch option refused for original AVD'}
     if ($Target -eq 'isolated' -and -not $ColdBootSaved) {throw 'Isolated target requires explicit cold boot'}
+    $diagnostic=$null
+    if($ReadinessDiagnosticScript -or $ApprovedReadinessDiagnosticSha256){
+        if($Target -ne 'isolated'){throw 'Readiness diagnostics are isolated-only'}
+        $diagnostic=(Resolve-Path -LiteralPath $ReadinessDiagnosticScript).ProviderPath
+        if([IO.Path]::GetExtension($diagnostic) -ne '.ps1' -or
+            -not $diagnostic.StartsWith('C:\Users\james\Documents\Codex\2026-10-10\task\musify-source-comparison\',[StringComparison]::OrdinalIgnoreCase) -or
+            $ApprovedReadinessDiagnosticSha256 -notmatch '^[a-fA-F0-9]{64}$' -or
+            (Get-FileHash -LiteralPath $diagnostic).Hash -ne $ApprovedReadinessDiagnosticSha256){throw 'Readiness diagnostic identity mismatch'}
+    }
     $profiles=@{
         original=@{Name='musify_rehearsal_api35';Serial='emulator-5556';Home='C:\Users\james\Documents\Codex\2026-10-10\task\musify-source-comparison\emulator-rehearsal\avds';Gpu='swiftshader_indirect'}
         saved=@{Name='musify_saved_acceptance_api35';Serial='emulator-5558';Home='V:\Storage-Recovery-20261013\ProjectWork\musify-saved-acceptance\avds';Gpu='swiftshader_indirect'}
@@ -97,23 +113,45 @@ function Invoke-MusifyOwnedRehearsal {
             $end=[datetime]::UtcNow.AddSeconds(150)
             $booted=$false
             $lastBootStatus='No boot response yet'
+            $diagnosticRan=$false
+            $readinessState=@{Stage='boot';Current='No boot response yet';LastPackageFailure='none'}
             do {
                 Start-Sleep -Seconds 2
                 try {
+                    $bootPhase='boot'
+                    Update-MusifyOwnedReadinessDiagnostic $readinessState 'boot'
                     $status=(Invoke-MusifyOwnedAdb -Serial $serial -TimeoutSeconds (Get-MusifyOwnedAdbTimeout $end) -Arguments @('shell','getprop','sys.boot_completed')|Out-String).Trim()
                     $lastBootStatus='sys.boot_completed='+$status
+                    Update-MusifyOwnedReadinessDiagnostic $readinessState 'boot' $lastBootStatus
                     $booted=$status -eq '1'
                     if ($booted) {
                         $packageName=if($BootstrapSaved){'android'}else{'com.topcat432.musifypersonalized.preview.debug'}
+                        $bootPhase='package'
+                        Update-MusifyOwnedReadinessDiagnostic $readinessState 'package'
                         $package=Invoke-MusifyOwnedAdb -Serial $serial -TimeoutSeconds (Get-MusifyOwnedAdbTimeout $end) -Arguments @('shell','pm','path',$packageName)|Out-String
                         $lastBootStatus='package readiness='+$package.Trim()
+                        Update-MusifyOwnedReadinessDiagnostic $readinessState 'package' $lastBootStatus
                         $booted=if($BootstrapSaved){$package -match '(?m)^package:/system/.+\.apk\s*$'}else{$package -match '(?m)^package:/data/app/.+/base\.apk\s*$'}
                     }
-                } catch {$booted=$false;$lastBootStatus=Get-MusifyOwnedBootStatus $lastBootStatus $_.Exception.Message}
+                } catch {
+                    $booted=$false;$lastBootStatus=Get-MusifyOwnedBootStatus $lastBootStatus $_.Exception.Message
+                    Update-MusifyOwnedReadinessDiagnostic $readinessState $bootPhase $_.Exception.Message -Failed
+                    if($diagnostic -and -not $diagnosticRan -and $bootPhase -eq 'package' -and ($end-[datetime]::UtcNow).TotalSeconds -gt 10){
+                        $diagnosticRan=$true
+                        $owned=@(Get-MusifyOwnedEmulator -AvdName $avdName)
+                        if(-not $owned.Count -or @($owned|Where-Object {$_.CreationDate.ToUniversalTime() -lt $started}).Count){throw 'Diagnostic process ownership mismatch'}
+                        $identity=Invoke-MusifyOwnedAdb -Serial $serial -TimeoutSeconds (Get-MusifyOwnedAdbTimeout $end) -Arguments @('emu','avd','name')|Out-String
+                        if($identity -notmatch ('(?m)^'+[regex]::Escape($avdName)+'\s*$')){throw 'Diagnostic AVD identity mismatch'}
+                        & $diagnostic -BudgetSeconds ([math]::Min(30,($end-[datetime]::UtcNow).TotalSeconds-5))
+                        # Diagnostics never satisfy readiness or invoke the acceptance callback.
+                    }
+                }
             } while (-not $booted -and [datetime]::UtcNow -lt $end)
             if (-not $booted) {
                 if($lastBootStatus.Length -gt 512){$lastBootStatus=$lastBootStatus.Substring(0,512)}
-                throw "Owned emulator boot deadline; last bounded status: $lastBootStatus"
+                $priorPackageFailure=[string]$readinessState.LastPackageFailure
+                if($priorPackageFailure.Length -gt 512){$priorPackageFailure=$priorPackageFailure.Substring(0,512)}
+                throw "Owned emulator boot deadline; stage=$($readinessState.Stage); last bounded status: $lastBootStatus; last package failure: $priorPackageFailure"
             }
             $owned=@(Get-MusifyOwnedEmulator -AvdName $avdName)
             if (-not $owned.Count -or @($owned|Where-Object {$_.CreationDate.ToUniversalTime() -lt $started}).Count) {throw 'Unexpected emulator process ownership'}
