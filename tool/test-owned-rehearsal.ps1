@@ -179,6 +179,19 @@ Describe 'Bounded owned ADB client' {
         Mock Invoke-MusifyOwnedAdbProcess {[pscustomobject]@{ExitCode=1;Output='not proof'}}
         {Invoke-MusifyOwnedAdb -Serial emulator-5560 -Arguments @('emu','avd','name')} | Should Throw 'Owned ADB command failed'
     }
+    It 'retains bounded client error output for diagnosis' {
+        Mock Invoke-MusifyOwnedAdbProcess {[pscustomobject]@{ExitCode=1;Output=('synthetic specific error '+('x'*1000))}}
+        try {Invoke-MusifyOwnedAdb -Serial emulator-5560 -Arguments @('shell','getprop','sys.boot_completed');throw 'Expected client failure'}
+        catch {
+            $_.Exception.Message | Should Match 'synthetic specific error'
+            $_.Exception.Message | Should Match 'shell getprop sys.boot_completed'
+            ($_.Exception.Message.Length -lt 600) | Should Be $true
+        }
+    }
+    It 'retains the last meaningful boot response when its phase budget expires' {
+        (Get-MusifyOwnedBootStatus 'sys.boot_completed=0' 'Owned ADB phase deadline') | Should Be 'sys.boot_completed=0'
+        (Get-MusifyOwnedBootStatus 'sys.boot_completed=0' 'Owned ADB command failed: offline') | Should Be 'Owned ADB command failed: offline'
+    }
     It 'caps each call by the remaining phase budget' {
         $remaining=Get-MusifyOwnedAdbTimeout ([datetime]::UtcNow.AddSeconds(2))
         ($remaining -gt 0 -and $remaining -le 2) | Should Be $true

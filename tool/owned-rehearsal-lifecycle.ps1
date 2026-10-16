@@ -17,11 +17,18 @@ function Get-MusifyOwnedAdbTimeout([datetime]$Deadline) {
     if ($remaining -le 0) {throw 'Owned ADB phase deadline'}
     [math]::Min(5,$remaining)
 }
+function Get-MusifyOwnedBootStatus([string]$Previous,[string]$Current) {
+    # Budget exhaustion is a wrapper condition, not the preceding guest/client result.
+    if($Current -eq 'Owned ADB phase deadline'){return $Previous}
+    $Current
+}
 function Invoke-MusifyOwnedAdb([string[]]$Arguments,[string]$Serial='emulator-5556',
     [ValidateRange(0.001,5)][double]$TimeoutSeconds=5) {
     $result=Invoke-MusifyOwnedAdbProcess -Command (@('C:\devtools\android-sdk\platform-tools\adb.exe','-s',$Serial)+$Arguments) -TimeoutSeconds $TimeoutSeconds
-    if ($result.ExitCode -eq 124) {throw "Owned ADB deadline: $($Arguments[0])"}
-    if ($result.ExitCode -ne 0) {throw "Owned ADB command failed: $($Arguments[0])"}
+    $detail=([string]($result.Output -join "`n"))
+    if($detail.Length -gt 512){$detail=$detail.Substring(0,512)}
+    if ($result.ExitCode -eq 124) {throw "Owned ADB deadline: $($Arguments -join ' '); $detail"}
+    if ($result.ExitCode -ne 0) {throw "Owned ADB command failed: $($Arguments -join ' '); $detail"}
     $result.Output
 }
 function Get-MusifyRehearsalAdmission {
@@ -89,18 +96,25 @@ function Invoke-MusifyOwnedRehearsal {
             Start-Process -FilePath 'C:\devtools\android-sdk\emulator\emulator.exe' -ArgumentList $launchArgs -WindowStyle Hidden | Out-Null
             $end=[datetime]::UtcNow.AddSeconds(150)
             $booted=$false
+            $lastBootStatus='No boot response yet'
             do {
                 Start-Sleep -Seconds 2
                 try {
-                    $booted=(Invoke-MusifyOwnedAdb -Serial $serial -TimeoutSeconds (Get-MusifyOwnedAdbTimeout $end) -Arguments @('shell','getprop','sys.boot_completed')|Out-String).Trim() -eq '1'
+                    $status=(Invoke-MusifyOwnedAdb -Serial $serial -TimeoutSeconds (Get-MusifyOwnedAdbTimeout $end) -Arguments @('shell','getprop','sys.boot_completed')|Out-String).Trim()
+                    $lastBootStatus='sys.boot_completed='+$status
+                    $booted=$status -eq '1'
                     if ($booted) {
                         $packageName=if($BootstrapSaved){'android'}else{'com.topcat432.musifypersonalized.preview.debug'}
                         $package=Invoke-MusifyOwnedAdb -Serial $serial -TimeoutSeconds (Get-MusifyOwnedAdbTimeout $end) -Arguments @('shell','pm','path',$packageName)|Out-String
+                        $lastBootStatus='package readiness='+$package.Trim()
                         $booted=if($BootstrapSaved){$package -match '(?m)^package:/system/.+\.apk\s*$'}else{$package -match '(?m)^package:/data/app/.+/base\.apk\s*$'}
                     }
-                } catch {$booted=$false}
+                } catch {$booted=$false;$lastBootStatus=Get-MusifyOwnedBootStatus $lastBootStatus $_.Exception.Message}
             } while (-not $booted -and [datetime]::UtcNow -lt $end)
-            if (-not $booted) {throw 'Owned emulator boot deadline'}
+            if (-not $booted) {
+                if($lastBootStatus.Length -gt 512){$lastBootStatus=$lastBootStatus.Substring(0,512)}
+                throw "Owned emulator boot deadline; last bounded status: $lastBootStatus"
+            }
             $owned=@(Get-MusifyOwnedEmulator -AvdName $avdName)
             if (-not $owned.Count -or @($owned|Where-Object {$_.CreationDate.ToUniversalTime() -lt $started}).Count) {throw 'Unexpected emulator process ownership'}
             $identity=Invoke-MusifyOwnedAdb -Serial $serial -Arguments @('emu','avd','name')|Out-String

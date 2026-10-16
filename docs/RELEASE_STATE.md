@@ -2,6 +2,23 @@
 
 ## Synthetic Android publication attempt, 2026-10-16
 
+Follow-up diagnosis confirms the attempted APK contains its exact compiled
+source/run-id literals and matches the configured namespace/activity. The prior
+callback did not retain launch stdout or probe logcat, so its missing receipt
+does not identify a helper failure. The external collector now retries empty or
+partial JSON only within the unchanged35-second deadline, rejects other-run
+receipts, and retains launch output and the last bounded read failure; all27
+device-free contracts pass. This collection race is not attributed as the cause
+of the earlier deadline.
+
+Read-only namespace inspection is currently blocked before its callback: guest
+boot completes, but `pm path` for the debug package returns nonzero/no path until
+the unchanged boot deadline. No readiness bypass,reinstall or namespace change
+was performed. The last successful APK/Hive preservation proof below is retained;
+current guest debug-package state requires read-only reconciliation before any
+new component attempt. Lifecycle diagnostics retain bounded command context and
+the last meaningful boot failure; all25 local device-free lifecycle mocks pass.
+
 `acd2a87156da82234a766be7f2ee913c42ba7697` passed
 [exact CI38845249046](https://github.com/topcat432/musify-personalized/actions/runs/38845249046):
 1,159 tests,40 Linux visuals,analysis,Windows lifecycle and required builds.
