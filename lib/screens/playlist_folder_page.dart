@@ -23,14 +23,19 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:musify/constants/app_constants.dart';
 import 'package:musify/extensions/l10n.dart';
+import 'package:musify/services/playlist_download_service.dart';
 import 'package:musify/services/playlists_manager.dart';
 import 'package:musify/services/settings_manager.dart';
+import 'package:musify/theme/app_shape.dart';
+import 'package:musify/theme/app_spacing.dart';
+import 'package:musify/theme/app_typography.dart';
 import 'package:musify/utilities/app_utils.dart';
 import 'package:musify/utilities/flutter_toast.dart';
 import 'package:musify/utilities/playlist_utils.dart';
 import 'package:musify/widgets/confirmation_dialog.dart';
 import 'package:musify/widgets/dialog_item.dart';
 import 'package:musify/widgets/mini_player_bottom_space.dart';
+import 'package:musify/widgets/personalized_ui.dart';
 import 'package:musify/widgets/playlist_bar.dart';
 
 class PlaylistFolderPage extends StatefulWidget {
@@ -38,10 +43,12 @@ class PlaylistFolderPage extends StatefulWidget {
     super.key,
     required this.folderId,
     required this.folderName,
+    this.youtubePlaylistLoader,
   });
 
   final String folderId;
   final String folderName;
+  final Future<List<dynamic>> Function()? youtubePlaylistLoader;
 
   @override
   State<PlaylistFolderPage> createState() => _PlaylistFolderPageState();
@@ -58,9 +65,12 @@ class _PlaylistFolderPageState extends State<PlaylistFolderPage> {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<List>(
-      valueListenable: userPlaylistFolders,
-      builder: (context, _, __) {
+    return AnimatedBuilder(
+      animation: Listenable.merge([
+        userPlaylistFolders,
+        offlinePlaylistService.offlinePlaylists,
+      ]),
+      builder: (context, _) {
         final isOffline = offlineMode.value;
         final playlists = isOffline
             ? getPlaylistsInFolder(
@@ -80,7 +90,7 @@ class _PlaylistFolderPageState extends State<PlaylistFolderPage> {
                 actions: [
                   PopupMenuButton<String>(
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: AppShape.control,
                     ),
                     color: Theme.of(context).colorScheme.surface,
                     itemBuilder: (context) => [
@@ -183,97 +193,77 @@ class _PlaylistFolderPageState extends State<PlaylistFolderPage> {
   Widget _buildHeader(BuildContext context, int playlistCount) {
     final colorScheme = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
+    final typography = AppTypography.of(context);
     return Container(
       alignment: Alignment.center,
-      padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          ClipPath(
-            clipper: const ShapeBorderClipper(
-              shape: StarBorder(
-                points: 8,
-                pointRounding: 0.8,
-                valleyRounding: 0.2,
-                innerRadiusRatio: 0.6,
-              ),
-            ),
-            child: Container(
-              width: 130,
-              height: 130,
-              color: colorScheme.surfaceContainerHighest,
-              child: Icon(
-                FluentIcons.folder_24_filled,
-                size: 64,
-                color: colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ),
-          const SizedBox(height: 20),
-          Text(
-            _folderName,
-            style: theme.textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: colorScheme.onSurface,
-              letterSpacing: -0.3,
-            ),
-            overflow: TextOverflow.ellipsis,
-            maxLines: 2,
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 10),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-            decoration: BoxDecoration(
-              color: colorScheme.secondaryContainer,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  FluentIcons.text_bullet_list_24_filled,
-                  size: 14,
-                  color: colorScheme.onSecondaryContainer,
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  playlistCount == 1
-                      ? '1 ${context.l10n!.playlist.toLowerCase()}'
-                      : '$playlistCount ${context.l10n!.playlists.toLowerCase()}',
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color: colorScheme.onSecondaryContainer,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.2,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.xxl,
+        AppSpacing.xl,
+        AppSpacing.xxl,
+        AppSpacing.lg,
       ),
-    );
-  }
-
-  Widget _buildEmptyState() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
+      child: PersonalizedReveal(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              FluentIcons.folder_24_regular,
-              size: 64,
-              color: Theme.of(context).colorScheme.onSurface.withAlpha(120),
+            ClipPath(
+              clipper: const ShapeBorderClipper(
+                shape: StarBorder(
+                  points: 8,
+                  pointRounding: 0.8,
+                  valleyRounding: 0.2,
+                  innerRadiusRatio: 0.6,
+                ),
+              ),
+              child: Container(
+                width: 130,
+                height: 130,
+                color: colorScheme.surfaceContainerHighest,
+                child: Icon(
+                  FluentIcons.folder_24_filled,
+                  size: 64,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.xl),
             Text(
-              context.l10n!.emptyFolderMsg,
+              _folderName,
+              style: typography.heroTitle,
+              overflow: TextOverflow.ellipsis,
+              maxLines: 2,
               textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.onSurface.withAlpha(180),
-                fontSize: 16,
+            ),
+            const SizedBox(height: AppSpacing.md - 2),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.md,
+                vertical: AppSpacing.xs + 3,
+              ),
+              decoration: BoxDecoration(
+                color: colorScheme.secondaryContainer,
+                borderRadius: AppShape.pill,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    FluentIcons.text_bullet_list_24_filled,
+                    size: 14,
+                    color: colorScheme.onSecondaryContainer,
+                  ),
+                  const SizedBox(width: AppSpacing.xs + 2),
+                  Text(
+                    playlistCount == 1
+                        ? '1 ${context.l10n!.playlist.toLowerCase()}'
+                        : '$playlistCount ${context.l10n!.playlists.toLowerCase()}',
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: colorScheme.onSecondaryContainer,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -282,9 +272,28 @@ class _PlaylistFolderPageState extends State<PlaylistFolderPage> {
     );
   }
 
+  Widget _buildEmptyState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.xxxl),
+        child: PersonalizedReveal(
+          // Reuses two existing strings rather than inventing new copy:
+          // `noPlaylistsAdded` (already shown elsewhere on this screen, in
+          // the add-playlist dialog's own empty case) as the title, and the
+          // existing `emptyFolderMsg` as the supporting description.
+          child: PersonalizedEmptyState(
+            icon: FluentIcons.folder_24_regular,
+            title: context.l10n!.noPlaylistsAdded,
+            description: context.l10n!.emptyFolderMsg,
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _showAddPlaylistDialog() async {
     final customCandidates = getPlaylistsNotInFolders();
-    final youtubeCandidates = await getUserPlaylistsNotInFolders();
+    final youtubeCandidates = await (widget.youtubePlaylistLoader?.call() ?? getUserPlaylistsNotInFolders());
     final candidates = [...customCandidates, ...youtubeCandidates];
 
     if (!mounted) return;
@@ -314,10 +323,7 @@ class _PlaylistFolderPageState extends State<PlaylistFolderPage> {
           ),
           title: Text(
             context.l10n!.addPlaylist,
-            style: TextStyle(
-              color: colorScheme.onSurface,
-              fontWeight: FontWeight.w600,
-            ),
+            style: AppTypography.of(context).strongTitle,
           ),
           content: SizedBox(
             width: double.maxFinite,
@@ -327,15 +333,18 @@ class _PlaylistFolderPageState extends State<PlaylistFolderPage> {
               itemBuilder: (context, index) {
                 final playlist = candidates[index];
                 return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.xs + 2,
+                  ),
                   child: DialogItem(
                     icon: FluentIcons.text_bullet_list_24_filled,
                     iconColor: colorScheme.tertiary,
                     iconBgColor: colorScheme.tertiaryContainer,
                     label: playlist['title'] ?? '',
-                    onTap: () {
+                    onTap: () async {
                       Navigator.pop(context);
-                      movePlaylistToFolder(playlist, widget.folderId, context);
+                      final result = await movePlaylistToFolder(playlist, widget.folderId, this.context);
+                      if (mounted) showToast(this.context, result);
                     },
                   ),
                 );
@@ -360,9 +369,10 @@ class _PlaylistFolderPageState extends State<PlaylistFolderPage> {
         submitMessage: context.l10n!.remove,
         confirmationMessage: context.l10n!.removeFromFolder,
         onCancel: () => Navigator.of(context).pop(),
-        onSubmit: () {
+        onSubmit: () async {
           Navigator.of(context).pop();
-          movePlaylistToFolder(playlist, null, context);
+          final result = await movePlaylistToFolder(playlist, null, this.context);
+          if (mounted) showToast(this.context, result);
         },
       ),
     );
@@ -381,10 +391,7 @@ class _PlaylistFolderPageState extends State<PlaylistFolderPage> {
         ),
         title: Text(
           context.l10n!.editFolder,
-          style: TextStyle(
-            color: colorScheme.onSurface,
-            fontWeight: FontWeight.w600,
-          ),
+          style: AppTypography.of(context).strongTitle,
         ),
         content: TextFormField(
           decoration: InputDecoration(
@@ -393,7 +400,7 @@ class _PlaylistFolderPageState extends State<PlaylistFolderPage> {
               FluentIcons.text_field_20_regular,
               color: colorScheme.onSurfaceVariant,
             ),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            border: OutlineInputBorder(borderRadius: AppShape.control),
             filled: true,
             fillColor: colorScheme.surfaceContainerLow,
           ),
@@ -433,14 +440,16 @@ class _PlaylistFolderPageState extends State<PlaylistFolderPage> {
   void _showDeleteFolderDialog() {
     showDialog(
       context: context,
-      builder: (context) => ConfirmationDialog(
+      builder: (dialogContext) => ConfirmationDialog(
         submitMessage: context.l10n!.delete,
         confirmationMessage: context.l10n!.deleteFolderQuestion,
-        onCancel: () => Navigator.of(context).pop(),
+        onCancel: () => Navigator.of(dialogContext).pop(),
         onSubmit: () {
-          Navigator.of(context).pop();
+          Navigator.of(dialogContext).pop();
           deletePlaylistFolder(widget.folderId, context);
-          Navigator.of(context).pop(); // Go back to library
+          // The dialog is on the root navigator; the folder belongs to the
+          // Library branch. Pop the page's navigator to preserve the shell.
+          Navigator.of(context).pop();
         },
       ),
     );

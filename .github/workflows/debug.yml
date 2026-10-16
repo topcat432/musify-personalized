@@ -5,7 +5,6 @@ on:
   push:
     branches:
       - master
-      - 'agent/**'
   pull_request:
     branches:
       - master
@@ -19,6 +18,7 @@ concurrency:
 
 env:
   FLUTTER_VERSION: '3.44.5'
+  SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   build:
@@ -29,6 +29,11 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+
+      - name: Verify exact candidate checkout
+        run: test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
@@ -48,6 +53,18 @@ jobs:
         run: |
           flutter --version
           java -version
+
+      - name: Prepare pinned Android build components
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$sdkmanager"
+          # Use the runner's existing license state; reject any new prompt.
+          "$sdkmanager" --install "platforms;android-36" "build-tools;36.0.0" \
+            "ndk;28.2.13676358" "cmake;3.22.1" < <(printf 'n\n')
+          test -f "$ANDROID_HOME/ndk/28.2.13676358/source.properties"
+          test -x "$ANDROID_HOME/cmake/3.22.1/bin/cmake"
 
       - name: Install dependencies
         run: flutter pub get
@@ -71,12 +88,575 @@ jobs:
             fi
           done
 
+      - name: Verify bounded strict platform DEFLATE helper
+        shell: bash
+        run: |
+          set -euo pipefail
+          output="$RUNNER_TEMP/musify-strict-deflate-host"
+          mkdir -p "$output"
+          javac --release 8 -d "$output" android/app/src/main/java/com/gokadzev/musify/StrictDeflate.java tool/StrictDeflateHostTest.java
+          java -Xmx128m -XX:MaxMetaspaceSize=64m -cp "$output" com.gokadzev.musify.StrictDeflateHostTest
+
+      - name: Verify incoming-file policy and bounded reader
+        shell: bash
+        run: |
+          set -euo pipefail
+          output="$RUNNER_TEMP/musify-incoming-host"
+          mkdir -p "$output"
+          javac --release 8 -d "$output" packages/receive_sharing_intent/android/src/main/java/com/kasem/receive_sharing_intent/ImportFileIntentPolicy.java android/app/src/main/java/com/gokadzev/musify/IncomingFileReader.java tool/IncomingFileHostTest.java
+          java -Xmx128m -XX:MaxMetaspaceSize=64m -cp "$output" com.gokadzev.musify.IncomingFileHostTest
+
+      - name: Verify production incoming-channel ownership contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          output="$RUNNER_TEMP/musify-incoming-channel-host"
+          mkdir -p "$output/current" "$output/control"
+          mapfile -t doubles < <(find tool/incoming-channel-host -name '*.java' -print)
+          common=(packages/receive_sharing_intent/android/src/main/java/com/kasem/receive_sharing_intent/ImportFileIntentPolicy.java android/app/src/main/java/com/gokadzev/musify/IncomingFileReader.java)
+          javac --release 8 -d "$output/current" "${doubles[@]}" "${common[@]}" android/app/src/main/java/com/gokadzev/musify/IncomingFileChannel.java
+          java -Xmx128m -XX:MaxMetaspaceSize=64m -cp "$output/current" com.gokadzev.musify.IncomingFileChannelHostTest
+          git fetch --no-tags --depth=1 origin a24730c00e8b0dd3c12a7aa39a5cc42834739c32
+          git show a24730c00e8b0dd3c12a7aa39a5cc42834739c32:android/app/src/main/java/com/gokadzev/musify/IncomingFileChannel.java > "$output/IncomingFileChannel.java"
+          javac --release 8 -d "$output/control" "${doubles[@]}" "${common[@]}" "$output/IncomingFileChannel.java"
+          if java -Xmx128m -XX:MaxMetaspaceSize=64m -cp "$output/control" com.gokadzev.musify.IncomingFileChannelHostTest > "$output/control-result.txt" 2>&1; then
+            echo "Defective channel unexpectedly passed the cancellation contract"
+            exit 1
+          fi
+          grep -Fq 'Finished pending request A must not resurrect after BUSY' "$output/control-result.txt"
+          echo "Exact a24730c channel control reproduced pending-request resurrection."
+      - name: Reproduce authoritative-exclusion defect on exact prior source
+        shell: bash
+        run: |
+          set -euo pipefail
+          original="$GITHUB_WORKSPACE"
+          control="$RUNNER_TEMP/musify-exclusion-control-8ff4297f"
+          git fetch --no-tags --depth=1 origin 8ff4297fbe80b29c073a0c362253f996c6256d02
+          git worktree add --detach "$control" 8ff4297fbe80b29c073a0c362253f996c6256d02
+          cp test/services/spotify_exclusion_routing_contract_test.dart "$control/test/services/"
+          cd "$control"
+          flutter pub get --offline
+          if flutter test --no-pub -j 1 --reporter expanded test/services/spotify_exclusion_routing_contract_test.dart > "$original/whole-exclusion-control.log" 2>&1; then
+            echo "Prior source unexpectedly honored the partial exclusion checkpoint"
+            exit 1
+          fi
+          grep -Fq 'Authoritative permanent exclusion must not be routed' "$original/whole-exclusion-control.log"
+          grep -Fq 'Expected:' "$original/whole-exclusion-control.log"
+          echo "Exact8ff4297f control reproduced authoritative-exclusion omission."
+          test "$(git -C "$original" rev-parse HEAD)" = "$SOURCE_SHA"
+
+      - name: Upload exact prior-source exclusion control log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: whole-exclusion-control-${{ github.run_number }}
+          path: whole-exclusion-control.log
+          if-no-files-found: error
+      - name: Reproduce total and deleted-collection defects on exact prior source
+        shell: bash
+        run: |
+          set -euo pipefail
+          original="$GITHUB_WORKSPACE"
+          control="$RUNNER_TEMP/musify-completeness-control-ce6bf615"
+          git fetch --no-tags --depth=1 origin ce6bf615e13caccd6726c56ac19379661c1e6cbd
+          git worktree add --detach "$control" ce6bf615e13caccd6726c56ac19379661c1e6cbd
+          cp test/services/spotify_source_completeness_contract_test.dart "$control/test/services/"
+          cd "$control"
+          flutter pub get --offline
+          if flutter test --no-pub -j 1 --reporter expanded test/services/spotify_source_completeness_contract_test.dart > "$original/whole-completeness-control.log" 2>&1; then
+            echo "Prior source unexpectedly protected totals and deleted collections"
+            exit 1
+          fi
+          grep -Fq 'Inconsistent declared total must not certify whole source' "$original/whole-completeness-control.log"
+          grep -Fq 'Deleted stored likes must never resurrect from stale cache' "$original/whole-completeness-control.log"
+          grep -Fq 'Deleted playlist collections must never resurrect from stale cache' "$original/whole-completeness-control.log"
+          echo "Exactce6bf615 control reproduced declared-total and deleted-collection defects."
+          test "$(git -C "$original" rev-parse HEAD)" = "$SOURCE_SHA"
+
+      - name: Upload exact prior-source completeness control log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: whole-completeness-control-${{ github.run_number }}
+          path: whole-completeness-control.log
+          if-no-files-found: error
+      - name: Reproduce mutable staged-value rollback defects on exact prior source
+        shell: bash
+        run: |
+          set -euo pipefail
+          original="$GITHUB_WORKSPACE"
+          control="$RUNNER_TEMP/musify-empty-staging-control-3a6eb762"
+          git fetch --no-tags --depth=1 origin 3a6eb7622f53e904de5873858a56e773bc096294
+          git worktree add --detach "$control" 3a6eb7622f53e904de5873858a56e773bc096294
+          cp test/services/spotify_empty_source_playlist_test.dart "$control/test/services/"
+          cd "$control"
+          flutter pub get --offline
+          if flutter test --no-pub -j 1 --reporter expanded --name 'mutable staged' test/services/spotify_empty_source_playlist_test.dart > "$original/empty-staging-control.log" 2>&1; then
+            echo "Prior source unexpectedly preserved mutated staged values"
+            exit 1
+          fi
+          grep -Fq 'Owner metadata mutation must survive staged rollback' "$original/empty-staging-control.log"
+          grep -Fq 'Owner destination mutation must survive staged rollback' "$original/empty-staging-control.log"
+          echo "Exact3a6eb762 control reproduced both mutable staged-value rollback defects."
+          test "$(git -C "$original" rev-parse HEAD)" = "$SOURCE_SHA"
+
+      - name: Upload exact prior-source mutable staging control log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: empty-staging-control-${{ github.run_number }}
+          path: empty-staging-control.log
+          if-no-files-found: error
+      - name: Reproduce committed empty-source reporting defect on exact prior source
+        shell: bash
+        run: |
+          set -euo pipefail
+          original="$GITHUB_WORKSPACE"
+          control="$RUNNER_TEMP/musify-empty-reporting-control-050f00e7"
+          git fetch --no-tags --depth=1 origin 050f00e72f3f812a236c589a926799c6a2180954
+          git worktree add --detach "$control" 050f00e72f3f812a236c589a926799c6a2180954
+          cp test/services/spotify_empty_source_playlist_test.dart "$control/test/services/"
+          cd "$control"
+          flutter pub get --offline
+          if flutter test --no-pub -j 1 --reporter expanded --name 'committed-source change' test/services/spotify_empty_source_playlist_test.dart > "$original/empty-reporting-control.log" 2>&1; then
+            echo "Prior source unexpectedly reported committed/unverified creation truthfully"
+            exit 1
+          fi
+          grep -Fq 'Committed destination must return saved/unverified feedback, not unchanged failure' "$original/empty-reporting-control.log"
+          grep -Fq 'no playlist was changed' "$original/empty-reporting-control.log"
+          echo "Exact050f00e7 control reproduced incorrect unchanged feedback after a committed destination write."
+          test "$(git -C "$original" rev-parse HEAD)" = "$SOURCE_SHA"
+
+      - name: Upload exact prior-source committed reporting control log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: empty-reporting-control-${{ github.run_number }}
+          path: empty-reporting-control.log
+          if-no-files-found: error
+      - name: Verify bounded logger cleanup and exact prior-source resistant-writer control
+        shell: bash
+        run: |
+          set -euo pipefail
+          original="$GITHUB_WORKSPACE"
+          python3 -m py_compile tool/windows_owned_job.py tool/owned_command.py
+          python3 -m unittest discover -s "$original/tool" -p '*command*test.py' -v
+          control="$RUNNER_TEMP/musify-logger-cleanup-control-1192aa56"
+          git fetch --no-tags --depth=1 origin 1192aa56bfb428499d236f665922e93f9015206e
+          git worktree add --detach "$control" 1192aa56bfb428499d236f665922e93f9015206e
+          cp tool/bounded_command_log_test.py "$control/tool/"
+          cd "$control/tool"
+          set +e
+          python3 "$original/tool/bounded_command_log.py" --log "$original/logger-cleanup-control.log" --timeout-seconds 120 -- python3 -m unittest bounded_command_log_test.BoundedCommandLogTest.test_term_resistant_writer_timeout_is_124_and_leaves_no_writer
+          result=$?
+          set -e
+          test "$result" -eq 1
+          grep -Fq 'TimeoutExpired' "$original/logger-cleanup-control.log"
+          grep -Fq 'test_term_resistant_writer_timeout_is_124_and_leaves_no_writer' "$original/logger-cleanup-control.log"
+          echo "Exact1192aa56 control reproduced TERM-resistant writer cleanup failure; fixture cleanup retained."
+          test "$(git -C "$original" rev-parse HEAD)" = "$SOURCE_SHA"
+
+      - name: Upload exact prior-source logger cleanup control log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logger-cleanup-control-${{ github.run_number }}
+          path: logger-cleanup-control.log
+          if-no-files-found: error
+      - name: Reproduce oversized occurrence proposal on exact prior source
+        shell: bash
+        run: |
+          set -euo pipefail
+          original="$GITHUB_WORKSPACE"
+          control="$RUNNER_TEMP/musify-occurrence-capacity-control-6a8d18fc"
+          git fetch --no-tags --depth=1 origin 6a8d18fc3c5f44e0ede564c5f44e63a5863da18d
+          git worktree add --detach "$control" 6a8d18fc3c5f44e0ede564c5f44e63a5863da18d
+          cp test/services/spotify_source_occurrence_plan_test.dart "$control/test/services/"
+          cd "$control"
+          flutter pub get --offline
+          set +e
+          python3 "$original/tool/bounded_command_log.py" --log "$original/occurrence-capacity-control.log" -- flutter test --no-pub -j 1 --reporter expanded --name 'proposed output above capacity' test/services/spotify_source_occurrence_plan_test.dart
+          result=$?
+          set -e
+          test "$result" -eq 1
+          test "$(wc -c < "$original/occurrence-capacity-control.log")" -lt 10485760
+          grep -Fq 'Destination plus appends must fit the 10000-entry restart bound' "$original/occurrence-capacity-control.log"
+          echo "Exact6a8d18fc control reproduced the 10001-entry occurrence proposal."
+          test "$(git -C "$original" rev-parse HEAD)" = "$SOURCE_SHA"
+
+      - name: Upload exact prior-source occurrence capacity control log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: occurrence-capacity-control-${{ github.run_number }}
+          path: occurrence-capacity-control.log
+          if-no-files-found: error
+      - name: Reproduce stale review exclusion on exact prior source
+        shell: bash
+        run: |
+          set -euo pipefail
+          original="$GITHUB_WORKSPACE"
+          control="$RUNNER_TEMP/musify-stale-exclusion-control-2ef03a12"
+          git fetch --no-tags --depth=1 origin 2ef03a12cbd48cc4aef922efc66f4ff30762d490
+          git worktree add --detach "$control" 2ef03a12cbd48cc4aef922efc66f4ff30762d490
+          cp test/services/spotify_stale_exclusion_resolution_test.dart "$control/test/services/"
+          cd "$control"
+          flutter pub get --offline
+          set +e
+          python3 "$original/tool/bounded_command_log.py" --log "$original/stale-review-exclusion-control.log" --timeout-seconds 180 -- flutter test --no-pub --reporter expanded -j 1 test/services/spotify_stale_exclusion_resolution_test.dart --plain-name 'stale review cannot reactivate excluded row: accept=false'
+          result=$?
+          set -e
+          test "$result" -eq 1
+          grep -Fq 'Expected: throws' "$original/stale-review-exclusion-control.log"
+          grep -Fq 'SpotifyResolutionResult' "$original/stale-review-exclusion-control.log"
+          grep -Fq 'stale review cannot reactivate excluded row: accept=false' "$original/stale-review-exclusion-control.log"
+          echo "Exact2ef03a12 control reproduced stale review reactivation of a permanent exclusion."
+          test "$(git -C "$original" rev-parse HEAD)" = "$SOURCE_SHA"
+
+      - name: Upload exact prior-source stale exclusion control log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stale-review-exclusion-control-${{ github.run_number }}
+          path: stale-review-exclusion-control.log
+          if-no-files-found: error
+          retention-days: 7
+      - name: Reproduce rescue overwrite of a newer manual owner on exact prior source
+        shell: bash
+        run: |
+          set -euo pipefail
+          original="$GITHUB_WORKSPACE"
+          control="$RUNNER_TEMP/musify-rescue-owner-control-e2ebb0b8"
+          git fetch --no-tags --depth=1 origin e2ebb0b82a0ef88a42b9ded2220ed886bed559e4
+          git worktree add --detach "$control" e2ebb0b82a0ef88a42b9ded2220ed886bed559e4
+          cp test/services/spotify_rescue_owner_preservation_test.dart "$control/test/services/"
+          cd "$control"
+          flutter pub get --offline
+          set +e
+          python3 "$original/tool/bounded_command_log.py" --log "$original/rescue-owner-control.log" --timeout-seconds 180 -- flutter test --no-pub --reporter expanded -j 1 test/services/spotify_rescue_owner_preservation_test.dart --plain-name 'rescue cannot overwrite a newer real manual decision beside excluded row'
+          result=$?
+          set -e
+          test "$result" -eq 1
+          grep -Fq "Expected: 'owned-newer-manual'" "$original/rescue-owner-control.log"
+          grep -Fq 'Actual: <null>' "$original/rescue-owner-control.log"
+          echo "Exacte2ebb0b8 control reproduced rescue replacing the newer real manual decision."
+          test "$(git -C "$original" rev-parse HEAD)" = "$SOURCE_SHA"
+
+      - name: Upload exact prior-source rescue owner control log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rescue-owner-control-${{ github.run_number }}
+          path: rescue-owner-control.log
+          if-no-files-found: error
+          retention-days: 7
+      - name: Reproduce late manual preview ownership defect on exact prior source
+        shell: bash
+        run: |
+          set -euo pipefail
+          original="$GITHUB_WORKSPACE"
+          control="$RUNNER_TEMP/musify-manual-preview-control-4104ccee"
+          git fetch --no-tags --depth=1 origin 4104ccee8cf150e66026934629ee6ee22fe586a0
+          git worktree add --detach "$control" 4104ccee8cf150e66026934629ee6ee22fe586a0
+          git fetch --no-tags --depth=1 origin 84c488c930ca04bb391bc39d713f0cc43de4e818
+          git show 84c488c930ca04bb391bc39d713f0cc43de4e818:test/screens/spotify_manual_preview_ownership_test.dart > "$control/test/screens/spotify_manual_preview_ownership_test.dart"
+          cd "$control"
+          flutter pub get --offline
+          set +e
+          python3 "$original/tool/bounded_command_log.py" --log "$original/manual-preview-owner-control.log" --timeout-seconds 180 -- flutter test --no-pub --reporter expanded -j 1 test/screens/spotify_manual_preview_ownership_test.dart --plain-name 'late manual preview resolver cannot replace or stop B: failure=false'
+          result=$?
+          set -e
+          test "$result" -eq 1
+          grep -Fq 'STALE_MANUAL_RESOLVER_LOADED_AFTER_B' "$original/manual-preview-owner-control.log"
+          grep -Fq 'url-a' "$original/manual-preview-owner-control.log"
+          grep -Fq 'url-b' "$original/manual-preview-owner-control.log"
+          echo "Exact4104ccee control reproduced late A loading after the newer B preview."
+          test "$(git -C "$original" rev-parse HEAD)" = "$SOURCE_SHA"
+
+      - name: Upload exact prior-source manual preview owner control log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: manual-preview-owner-control-${{ github.run_number }}
+          path: manual-preview-owner-control.log
+          if-no-files-found: error
+          retention-days: 7
+      - name: Reproduce blocked manual preview recovery on exact prior source
+        shell: bash
+        run: |
+          set -euo pipefail
+          original="$GITHUB_WORKSPACE"
+          control="$RUNNER_TEMP/musify-manual-retirement-control-4aa4b161"
+          git fetch --no-tags --depth=1 origin 4aa4b161fea7538f5b457a44adfd5e90f7d53dc6
+          git worktree add --detach "$control" 4aa4b161fea7538f5b457a44adfd5e90f7d53dc6
+          cp test/screens/spotify_manual_preview_retirement_test.dart "$control/test/screens/"
+          cd "$control"
+          flutter pub get --offline
+          set +e
+          python3 "$original/tool/bounded_command_log.py" --log "$original/manual-preview-retirement-control.log" --timeout-seconds 180 -- flutter test --no-pub --reporter expanded -j 1 test/screens/spotify_manual_preview_retirement_test.dart --plain-name 'hung load retires before B and ignores late failure=false'
+          result=$?
+          set -e
+          test "$result" -eq 1
+          grep -Fq 'HUNG_MANUAL_PREVIEW_BLOCKED_SUCCESSOR' "$original/manual-preview-retirement-control.log"
+          grep -Fq 'Actual: []' "$original/manual-preview-retirement-control.log"
+          echo "Exact4aa4b161 control reproduced B blocked behind the unsettled native A load."
+          test "$(git -C "$original" rev-parse HEAD)" = "$SOURCE_SHA"
+
+      - name: Upload exact prior-source manual retirement control log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: manual-preview-retirement-control-${{ github.run_number }}
+          path: manual-preview-retirement-control.log
+          if-no-files-found: error
+          retention-days: 7
+      - name: Reproduce rejected folder move membership loss on exact prior source
+        shell: bash
+        run: |
+          set -euo pipefail
+          original="$GITHUB_WORKSPACE"
+          control="$RUNNER_TEMP/musify-folder-move-control-84c488c9"
+          git fetch --no-tags --depth=1 origin 84c488c930ca04bb391bc39d713f0cc43de4e818
+          git worktree add --detach "$control" 84c488c930ca04bb391bc39d713f0cc43de4e818
+          cp test/services/playlist_folder_move_preservation_test.dart "$control/test/services/"
+          cd "$control"
+          flutter pub get --offline
+          set +e
+          python3 "$original/tool/bounded_command_log.py" --log "$original/folder-move-control.log" --timeout-seconds 180 -- flutter test --no-pub --reporter expanded -j 1 test/services/playlist_folder_move_preservation_test.dart --plain-name 'rejected folder move preserves membership and stored bytes: missing'
+          result=$?
+          set -e
+          test "$result" -eq 1
+          grep -Fq 'REJECTED_FOLDER_MOVE_CHANGED_MEMBERSHIP' "$original/folder-move-control.log"
+          grep -Fq 'Expected:' "$original/folder-move-control.log"
+          echo "Exact84c488c9 control reproduced live membership mutation after a rejected move."
+          test "$(git -C "$original" rev-parse HEAD)" = "$SOURCE_SHA"
+
+      - name: Upload exact prior-source folder move control log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: folder-move-control-${{ github.run_number }}
+          path: folder-move-control.log
+          if-no-files-found: error
+          retention-days: 7
+      - name: Reproduce stale folder source ownership on exact prior source
+        shell: bash
+        run: |
+          set -euo pipefail
+          original="$GITHUB_WORKSPACE"
+          control="$RUNNER_TEMP/musify-folder-source-control-2dbe545c"
+          git fetch --no-tags --depth=1 origin 2dbe545cda7b4f666d7c9ea56298e1986adde0b1
+          git worktree add --detach "$control" 2dbe545cda7b4f666d7c9ea56298e1986adde0b1
+          cp test/services/playlist_folder_move_preservation_test.dart "$control/test/services/playlist_folder_move_preservation_test.dart"
+          cd "$control"
+          flutter pub get --offline
+          set +e
+          python3 "$original/tool/bounded_command_log.py" --log "$original/folder-source-control.log" --timeout-seconds 180 -- flutter test --no-pub --reporter expanded -j 1 test/services/playlist_folder_move_preservation_test.dart --plain-name 'retained source move refuses newer or missing owner: changed-root'
+          result=$?
+          set -e
+          test "$result" -eq 1
+          grep -Fq 'STALE_SOURCE_MOVE_MUST_REFUSE' "$original/folder-source-control.log"
+          grep -Fq 'Expected:' "$original/folder-source-control.log"
+          echo "Exact2dbe545c control reproduced stale folder source ownership."
+          test "$(git -C "$original" rev-parse HEAD)" = "$SOURCE_SHA"
+
+      - name: Upload exact prior-source folder-source-control
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: folder-source-control-${{ github.run_number }}
+          path: folder-source-control.log
+          if-no-files-found: error
+          retention-days: 7
+      - name: Reproduce retained picker source overwrite on exact prior source
+        shell: bash
+        run: |
+          set -euo pipefail
+          original="$GITHUB_WORKSPACE"
+          control="$RUNNER_TEMP/musify-folder-picker-source-control-b006957f"
+          git fetch --no-tags --depth=1 origin b006957f3417aa852a05532d11bf5694ba9ef52a
+          git worktree add --detach "$control" b006957f3417aa852a05532d11bf5694ba9ef52a
+          cp test/screens/playlist_folder_source_picker_test.dart "$control/test/screens/playlist_folder_source_picker_test.dart"
+          cd "$control"
+          flutter pub get --offline
+          set +e
+          python3 "$original/tool/bounded_command_log.py" --log "$original/folder-picker-source-control.log" --timeout-seconds 180 -- flutter test --no-pub --reporter expanded -j 1 test/screens/playlist_folder_source_picker_test.dart --plain-name 'retained folder picker preserves current source: changed'
+          result=$?
+          set -e
+          test "$result" -eq 1
+          grep -Fq 'PICKER_OVERWROTE_CURRENT_SOURCE' "$original/folder-picker-source-control.log"
+          grep -Fq 'Expected:' "$original/folder-picker-source-control.log"
+          echo "Exactb006957f control reproduced retained picker source overwrite."
+          test "$(git -C "$original" rev-parse HEAD)" = "$SOURCE_SHA"
+
+      - name: Upload exact prior-source folder-picker-source-control
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: folder-picker-source-control-${{ github.run_number }}
+          path: folder-picker-source-control.log
+          if-no-files-found: error
+          retention-days: 7
+      - name: Reproduce display sort persisted by folder move on exact prior source
+        shell: bash
+        run: |
+          set -euo pipefail
+          original="$GITHUB_WORKSPACE"
+          control="$RUNNER_TEMP/musify-folder-source-order-control-2dbe545c"
+          git fetch --no-tags --depth=1 origin 2dbe545cda7b4f666d7c9ea56298e1986adde0b1
+          git worktree add --detach "$control" 2dbe545cda7b4f666d7c9ea56298e1986adde0b1
+          cp test/screens/playlist_move_source_order_test.dart "$control/test/screens/playlist_move_source_order_test.dart"
+          cd "$control"
+          flutter pub get --offline
+          set +e
+          python3 "$original/tool/bounded_command_log.py" --log "$original/folder-source-order-control.log" --timeout-seconds 180 -- flutter test --no-pub --reporter expanded -j 1 test/screens/playlist_move_source_order_test.dart --plain-name 'widget sort then move retains canonical source order: title folder=false'
+          result=$?
+          set -e
+          test "$result" -eq 1
+          grep -Fq 'MOVE_PERSISTED_DISPLAY_SORT_AS_SOURCE' "$original/folder-source-order-control.log"
+          grep -Fq 'Expected:' "$original/folder-source-order-control.log"
+          echo "Exact2dbe545c control reproduced display sort persisted by folder move."
+          test "$(git -C "$original" rev-parse HEAD)" = "$SOURCE_SHA"
+
+      - name: Upload exact prior-source folder-source-order-control
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: folder-source-order-control-${{ github.run_number }}
+          path: folder-source-order-control.log
+          if-no-files-found: error
+          retention-days: 7
+      - name: Reproduce manual choice query provenance loss on exact prior source
+        shell: bash
+        run: |
+          set -euo pipefail
+          original="$GITHUB_WORKSPACE"
+          control="$RUNNER_TEMP/musify-manual-query-control-60832f70"
+          git fetch --no-tags --depth=1 origin 60832f706b6902a6a49d30d49468a15f9733d6e9
+          git worktree add --detach "$control" 60832f706b6902a6a49d30d49468a15f9733d6e9
+          cp test/screens/spotify_manual_query_provenance_test.dart "$control/test/screens/spotify_manual_query_provenance_test.dart"
+          cd "$control"
+          flutter pub get --offline
+          set +e
+          python3 "$original/tool/bounded_command_log.py" --log "$original/manual-query-control.log" --timeout-seconds 180 -- flutter test --no-pub --reporter expanded -j 1 test/screens/spotify_manual_query_provenance_test.dart --plain-name 'manual choice retains the result query after edited search text'
+          result=$?
+          set -e
+          test "$result" -eq 1
+          grep -Fq 'MANUAL_CHOICE_SAVED_UNSEARCHED_QUERY' "$original/manual-query-control.log"
+          grep -Fq 'Expected:' "$original/manual-query-control.log"
+          echo "Exact60832f70 control reproduced manual choice query provenance loss."
+          test "$(git -C "$original" rev-parse HEAD)" = "$SOURCE_SHA"
+
+      - name: Upload exact prior-source manual-query-control
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: manual-query-control-${{ github.run_number }}
+          path: manual-query-control.log
+          if-no-files-found: error
+          retention-days: 7
+      - name: Reproduce accepted move membership loss after write failure on exact prior source
+        shell: bash
+        run: |
+          set -euo pipefail
+          original="$GITHUB_WORKSPACE"
+          control="$RUNNER_TEMP/musify-folder-write-failure-control-f048cb41"
+          git fetch --no-tags --depth=1 origin f048cb41ed2301d5b9d18b243d2e5d6890d56b83
+          git worktree add --detach "$control" f048cb41ed2301d5b9d18b243d2e5d6890d56b83
+          cp test/services/playlist_move_write_failure_test.dart "$control/test/services/playlist_move_write_failure_test.dart"
+          cd "$control"
+          flutter pub get --offline
+          set +e
+          python3 "$original/tool/bounded_command_log.py" --log "$original/folder-write-failure-control.log" --timeout-seconds 180 -- flutter test --no-pub --reporter expanded -j 1 test/services/playlist_move_write_failure_test.dart --plain-name 'folder-to-root failure retains original membership after reopen'
+          result=$?
+          set -e
+          test "$result" -eq 1
+          grep -Fq 'MOVE_FAILURE_LOST_SOURCE_MEMBERSHIP' "$original/folder-write-failure-control.log"
+          grep -Fq 'Expected:' "$original/folder-write-failure-control.log"
+          echo "Exactf048cb41 control reproduced accepted move membership loss after write failure."
+          test "$(git -C "$original" rev-parse HEAD)" = "$SOURCE_SHA"
+
+      - name: Upload exact prior-source folder-write-failure-control
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: folder-write-failure-control-${{ github.run_number }}
+          path: folder-write-failure-control.log
+          if-no-files-found: error
+          retention-days: 7
+      - name: Reproduce post-move occurrence writer ownership loss on exact prior source
+        shell: bash
+        run: |
+          set -euo pipefail
+          original="$GITHUB_WORKSPACE"
+          control="$RUNNER_TEMP/musify-folder-move-owner-control-3b5c16a3"
+          git fetch --no-tags --depth=1 origin 3b5c16a3c1dc7c74e59bd27508b53a0eb6b21891
+          git worktree add --detach "$control" 3b5c16a3c1dc7c74e59bd27508b53a0eb6b21891
+          cp test/services/playlist_move_write_failure_test.dart "$control/test/services/playlist_move_write_failure_test.dart"
+          cd "$control"
+          flutter pub get --offline
+          set +e
+          python3 "$original/tool/bounded_command_log.py" --log "$original/folder-move-owner-control.log" --timeout-seconds 180 -- flutter test --no-pub --reporter expanded -j 1 test/services/playlist_move_write_failure_test.dart --plain-name 'move keeps rename and Undo usable: custom-root-folder failed=false'
+          result=$?
+          set -e
+          test "$result" -eq 1
+          grep -Fq 'MOVE_PUBLICATION_LOST_WRITER_OWNERSHIP' "$original/folder-move-owner-control.log"
+          grep -Fq 'Expected:' "$original/folder-move-owner-control.log"
+          echo "Exact3b5c16a3 control reproduced post-move occurrence writer ownership loss."
+          test "$(git -C "$original" rev-parse HEAD)" = "$SOURCE_SHA"
+
+      - name: Upload exact prior-source folder-move-owner-control
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: folder-move-owner-control-${{ github.run_number }}
+          path: folder-move-owner-control.log
+          if-no-files-found: error
+          retention-days: 7
+      - name: Prepare read-only empty-source formatting suggestions
+        shell: bash
+        run: |
+          set -euo pipefail
+          output="$RUNNER_TEMP/musify-empty-source-format"
+          files=(
+            lib/services/playlists_manager.dart
+            test/services/playlist_move_write_failure_test.dart
+            lib/screens/spotify_import_page.dart
+            lib/screens/spotify_source_playlists_page.dart
+            lib/services/spotify_import_destination_service.dart
+            lib/services/spotify_playlist_draft.dart
+            lib/services/spotify_account_playlist_adapter.dart
+            test/services/spotify_account_playlist_test.dart
+            lib/services/spotify_whole_source_readiness.dart
+            test/services/spotify_empty_source_playlist_test.dart
+            test/screens/spotify_empty_source_playlist_page_test.dart
+            test/support/spotify_empty_source_fixture.dart
+            lib/services/spotify_source_occurrence_plan.dart
+            test/services/spotify_source_occurrence_plan_test.dart
+            test/services/spotify_occurrence_existing_schema_test.dart
+          )
+          for file in "${files[@]}"; do
+            mkdir -p "$output/$(dirname "$file")"
+            cp "$file" "$output/$file"
+          done
+          dart format "$output/lib" "$output/test"
+          test "$(du -sb "$output" | cut -f1)" -le 10485760
+          git diff --exit-code
+
+      - name: Upload read-only formatting suggestions
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: empty-source-format-${{ github.run_number }}
+          path: ${{ runner.temp }}/musify-empty-source-format/
+          if-no-files-found: error
+          retention-days: 7
       - name: Analyze Dart code
         id: analyze
         shell: bash
         run: |
           set +e
-          flutter analyze . 2>&1 | tee flutter-analyze.log
+          flutter analyze --no-pub . 2>&1 | tee flutter-analyze.log
           status=${PIPESTATUS[0]}
           echo "status=$status" >> "$GITHUB_OUTPUT"
           exit 0
@@ -94,12 +674,90 @@ jobs:
         if: steps.analyze.outputs.status != '0'
         run: exit 1
 
+      - name: Verify bounded manual preview ownership and retirement regressions
+        run: python3 tool/bounded_command_log.py --log manual-preview-focused.log --timeout-seconds 120 -- flutter test --no-pub --reporter expanded -j 1 test/screens/spotify_manual_preview_ownership_test.dart test/screens/spotify_manual_preview_retirement_test.dart
+
+      - name: Upload focused manual preview regression log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: manual-preview-focused-${{ github.run_number }}
+          path: manual-preview-focused.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Verify bounded manual query provenance regressions
+        run: python3 tool/bounded_command_log.py --log manual-query-focused.log --timeout-seconds 90 -- flutter test --no-pub --reporter expanded -j 1 test/screens/spotify_manual_query_provenance_test.dart
+
+      - name: Upload focused manual query provenance log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: manual-query-focused-${{ github.run_number }}
+          path: manual-query-focused.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Verify bounded canonical playlist ownership and display regressions
+        run: python3 tool/bounded_command_log.py --log playlist-source-focused.log --timeout-seconds 180 -- flutter test --no-pub --reporter expanded -j 1 test/services/playlist_folder_move_preservation_test.dart test/screens/playlist_folder_source_picker_test.dart test/screens/playlist_move_source_order_test.dart test/screens/playlist_page_test.dart test/screens/playlist_song_rename_test.dart test/screens/playlist_slot_undo_test.dart test/services/playlist_move_write_failure_test.dart
+
+      - name: Upload focused canonical playlist regression log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playlist-source-focused-${{ github.run_number }}
+          path: playlist-source-focused.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Reproduce account playlist incompatibility on exact prior source
+        shell: bash
+        run: |
+          set -euo pipefail
+          original="$GITHUB_WORKSPACE"
+          control="$RUNNER_TEMP/musify-account-playlist-control-105ad478"
+          git fetch --no-tags --depth=1 origin 105ad4781a4fada7c9d0664276b1178529caf015
+          git worktree add --detach "$control" 105ad4781a4fada7c9d0664276b1178529caf015
+          mkdir -p "$control/test/fixtures"
+          cp test/services/spotify_account_playlist_test.dart "$control/test/services/"
+          cp test/fixtures/spotify_account_playlists.json "$control/test/fixtures/"
+          cd "$control"
+          flutter pub get --offline
+          control_status=0
+          python3 "$original/tool/bounded_command_log.py" --log "$original/account-playlist-control.log" --timeout-seconds 90 -- flutter test --no-pub --reporter expanded -j 1 test/services/spotify_account_playlist_test.dart --plain-name 'account fixture enters the production file route and preserves ordered gaps and repeats' || control_status=$?
+          test "$control_status" -eq 1
+          grep -Fq 'Unsupported playlist JSON' "$original/account-playlist-control.log"
+          grep -Eq '\+0 -1: Some tests failed\.' "$original/account-playlist-control.log"
+          echo "Exact105ad478 control rejected the evidenced account playlist fixture."
+          test "$(git -C "$original" rev-parse HEAD)" = "$SOURCE_SHA"
+
+      - name: Upload exact prior-source account playlist control log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: account-playlist-control-${{ github.run_number }}
+          path: account-playlist-control.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Verify evidenced account playlist compatibility
+        run: python3 tool/bounded_command_log.py --log account-playlist-focused.log --timeout-seconds 120 -- flutter test --no-pub --reporter expanded -j 1 test/services/spotify_account_playlist_test.dart test/services/spotify_playlist_draft_test.dart
+
+      - name: Upload focused account playlist compatibility log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: account-playlist-focused-${{ github.run_number }}
+          path: account-playlist-focused.log
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Run tests
         id: tests
         shell: bash
         run: |
           set +e
-          flutter test 2>&1 | tee flutter-test.log
+          flutter test --no-pub 2>&1 | tee flutter-test.log
           status=${PIPESTATUS[0]}
           echo "status=$status" >> "$GITHUB_OUTPUT"
           exit 0
@@ -117,23 +775,87 @@ jobs:
         if: steps.tests.outputs.status != '0'
         run: exit 1
 
-      - name: Render visual review screenshots
-        run: >-
-          flutter test tool/visual_review_test.dart
-          --update-goldens
+      - name: Record reference visual environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/visual-environment
+          flutter --version > build/visual-environment/flutter-version.txt
+          if [[ -f "$FLUTTER_ROOT/bin/cache/artifacts/material_fonts/Roboto-Regular.ttf" ]]; then
+            visual_font="$FLUTTER_ROOT/bin/cache/artifacts/material_fonts/Roboto-Regular.ttf"
+          else
+            visual_font=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf
+          fi
+          echo "$visual_font" > build/visual-environment/selected-font.txt
+          sha256sum "$visual_font" | tee build/visual-environment/font-sha256.txt
+          cp "$visual_font" build/visual-environment/visualSans.ttf
+          find "$FLUTTER_ROOT/bin/cache/artifacts/material_fonts" -maxdepth 1 -iname '*license*' -exec cp {} build/visual-environment/ \;
 
-      - name: Upload visual review screenshots
+      - name: Upload reference visual environment
         uses: actions/upload-artifact@v4
         with:
-          name: visual-review-${{ github.run_number }}
-          path: tool/visual_review_goldens/*.png
+          name: visual-environment-${{ github.run_number }}
+          path: build/visual-environment/
           if-no-files-found: error
           retention-days: 14
 
+      - name: Run personalized visual review suite
+        id: visual_review_personalized
+        shell: bash
+        run: |
+          set +e
+          flutter test --no-pub tool/visual_review_test.dart 2>&1 | tee flutter-visual-review-personalized.log
+          status=${PIPESTATUS[0]}
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Upload personalized visual review log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-review-personalized-log-${{ github.run_number }}
+          path: flutter-visual-review-personalized.log
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Run priority visual review suite
+        id: visual_review_priority
+        shell: bash
+        run: |
+          set +e
+          flutter test --no-pub tool/visual_review_priority_test.dart 2>&1 | tee flutter-visual-review-priority.log
+          status=${PIPESTATUS[0]}
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Upload priority visual review log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-review-priority-log-${{ github.run_number }}
+          path: flutter-visual-review-priority.log
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload visual review screenshots and failure diffs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-review-${{ github.run_number }}
+          path: |
+            tool/visual_review_goldens/*.png
+            tool/failures/**
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Fail on visual review mismatches
+        if: steps.visual_review_personalized.outputs.status != '0' || steps.visual_review_priority.outputs.status != '0'
+        run: exit 1
+
       - name: Build universal debug APK
         run: >-
-          flutter build apk --debug --flavor github
-          --dart-define=GIT_SHA=${{ github.sha }}
+          flutter build apk --no-pub --debug --flavor github
+          --dart-define=GIT_SHA=${{ env.SOURCE_SHA }}
 
       - name: Verify debug APK output
         run: test -f build/app/outputs/flutter-apk/app-github-debug.apk
@@ -146,7 +868,7 @@ jobs:
           aapt="$(find "$ANDROID_SDK_ROOT/build-tools" -mindepth 2 -maxdepth 2 -type f -name aapt | sort -V | tail -1)"
           badging="$($aapt dump badging "$apk")"
           permissions="$($aapt dump permissions "$apk")"
-          grep -Fq "package: name='com.topcat432.musifypersonalized.debug'" <<<"$badging"
+          grep -Fq "package: name='com.topcat432.musifypersonalized.preview.debug'" <<<"$badging"
           grep -Fq "application-label:'Musify Personalized DEBUG'" <<<"$badging"
           grep -Fq 'android.permission.REQUEST_INSTALL_PACKAGES' <<<"$permissions"
           ! cmp -s \
@@ -157,7 +879,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          flutter build apk --debug --flavor fdroid -t lib/main_fdroid.dart
+          flutter build apk --no-pub --debug --flavor fdroid -t lib/main_fdroid.dart
           apk=build/app/outputs/flutter-apk/app-fdroid-debug.apk
           test -f "$apk"
           aapt="$(find "$ANDROID_SDK_ROOT/build-tools" -mindepth 2 -maxdepth 2 -type f -name aapt | sort -V | tail -1)"
@@ -170,13 +892,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          build_number=$((200000 + GITHUB_RUN_NUMBER))
-          flutter build apk \
+          build_number=$((300000001 + GITHUB_RUN_NUMBER))
+          flutter build apk --no-pub \
             --release \
             --flavor github \
             --build-number "$build_number" \
-            --build-name "0.1.${GITHUB_RUN_NUMBER}" \
-            --dart-define=GIT_SHA="$GITHUB_SHA"
+            --build-name "0.1.$build_number" \
+            --dart-define=GIT_SHA="$SOURCE_SHA"
 
       - name: Verify unsigned release APK output
         shell: bash
@@ -184,11 +906,145 @@ jobs:
           set -euo pipefail
           apk=build/app/outputs/flutter-apk/app-github-release.apk
           test -f "$apk"
+          test ! -e android/key.properties
+          test ! -e android/app/key.jks
+          unzip -t "$apk" >/dev/null
+          build_number=$((300000001 + GITHUB_RUN_NUMBER))
+          apksigner="$(find "$ANDROID_SDK_ROOT/build-tools" -mindepth 2 -maxdepth 2 -type f -name apksigner | sort -V | tail -1)"
+          test -x "$apksigner"
+          if "$apksigner" verify "$apk" >/dev/null 2>&1; then
+            echo "Verification APK must remain unsigned."
+            exit 1
+          fi
           aapt="$(find "$ANDROID_SDK_ROOT/build-tools" -mindepth 2 -maxdepth 2 -type f -name aapt | sort -V | tail -1)"
           badging="$($aapt dump badging "$apk")"
-          grep -Fq "package: name='com.topcat432.musifypersonalized'" <<<"$badging"
+          grep -Fq "package: name='com.topcat432.musifypersonalized.preview'" <<<"$badging"
+          grep -Fq "versionCode='$build_number'" <<<"$badging"
+          grep -Fq "versionName='0.1.$build_number'" <<<"$badging"
           grep -Fq "application-label:'Musify Personalized'" <<<"$badging"
+          ! grep -Fq 'application-debuggable' <<<"$badging"
 
       # CI builds are verification inputs only. They are deliberately not
       # uploaded because debug signing is ephemeral and unsigned releases are
       # not safe user updates. User-facing APKs come only from signed-release.
+
+  windows-owned-command:
+    name: Windows owned-command lifecycle
+    runs-on: windows-2022
+    timeout-minutes: 8
+    steps:
+      - name: Admit disposable runner disk and memory budget
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:RUNNER_OS -ne 'Windows') { throw 'Native Windows runner required' }
+          # Owner-approved hosted-only exception,2026-10-15 10:12 UTC.
+          # Together: source/action staging, Python fixtures/cache misses, logs,
+          # upload/output costs. No SDK/dependency downloads or snapshots.
+          $expectedWritesPerRoot = [uint64]2147483648
+          $expectedCommit = [uint64]1073741824
+          $diskReserve = [uint64]10737418240
+          $physicalReserve = [uint64]2147483648
+          $roots = @('C:\', [IO.Path]::GetPathRoot($env:GITHUB_WORKSPACE),
+            [IO.Path]::GetPathRoot($env:RUNNER_TEMP), [IO.Path]::GetPathRoot($env:TEMP)) | Select-Object -Unique
+          $volumes = @(Get-CimInstance Win32_Volume)
+          $targets = @(foreach ($root in $roots) {
+            if (-not $root) { throw 'Unknown runner storage root' }
+            $volume = @($volumes | Where-Object DriveLetter -eq $root.TrimEnd('\'))
+            if ($volume.Count -ne 1) { throw "Unknown runner volume for $root" }
+            [pscustomobject]@{ Identity=$volume[0].DeviceID; Root=$root; Free=[uint64]$volume[0].FreeSpace }
+          })
+          $diskEvidence = @(foreach ($group in ($targets | Group-Object Identity)) {
+            # Sum allowances for aliases sharing a volume; free space is not added.
+            $expectedWrites = $expectedWritesPerRoot * $group.Count
+            $free = [uint64](($group.Group | Measure-Object Free -Minimum).Minimum)
+            if ($free -lt ($diskReserve + $expectedWrites)) { throw "Runner disk budget not admitted: free=$free writes=$expectedWrites reserve=$diskReserve" }
+            [pscustomobject]@{ Roots=@($group.Group.Root); FreeBytes=$free;
+              ExpectedWriteBytes=$expectedWrites; RequiredReserveBytes=$diskReserve }
+          })
+          $memory = Get-CimInstance Win32_PerfFormattedData_PerfOS_Memory
+          if ($null -eq $memory -or $null -eq $memory.CommittedBytes -or $null -eq $memory.AvailableBytes -or -not $memory.CommitLimit) { throw 'Runner memory counters are unavailable' }
+          $projectedCommitPercent = 100 * ([double]$memory.CommittedBytes + $expectedCommit) / $memory.CommitLimit
+          if ($projectedCommitPercent -ge 80 -or $memory.AvailableBytes -lt ($physicalReserve + $expectedCommit)) {
+            throw "Runner memory budget not admitted: available=$($memory.AvailableBytes) projectedCommitPercent=$projectedCommitPercent"
+          }
+          $receipt = [ordered]@{ SourceSha=$env:SOURCE_SHA; RunnerOS=$env:RUNNER_OS;
+            WorkflowSha=$env:GITHUB_WORKFLOW_SHA; HostedException='owner-approved 2026-10-15 10:12 UTC';
+            Disk=$diskEvidence; AvailableBytes=$memory.AvailableBytes; CommittedBytes=$memory.CommittedBytes;
+            CommitLimit=$memory.CommitLimit; ExpectedAdditionalCommitBytes=$expectedCommit;
+            PhysicalReserveBytes=$physicalReserve; ProjectedCommitPercent=$projectedCommitPercent;
+            SdkDependencyDownloadBytes=0; SnapshotBytes=0; Admitted=$true }
+          $json = $receipt | ConvertTo-Json -Depth 6
+          if ([Text.Encoding]::UTF8.GetByteCount($json) -gt 16384) { throw 'Admission receipt exceeded its bound' }
+          [IO.File]::WriteAllText("$env:RUNNER_TEMP/windows-owned-admission.json", $json)
+          Write-Output $json
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          set-safe-directory: false
+      - name: Reproduce Windows descendant survival on exact prior logger
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ((git rev-parse HEAD) -ne $env:SOURCE_SHA) { throw 'Wrong candidate checkout' }
+          git fetch --no-tags --depth=1 origin b81ac04976e2d9675ae214db2521e9c2fc4dedeb
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to fetch pinned prior logger source' }
+          $oldLogger = "$env:RUNNER_TEMP/windows-prior-logger.py"
+          $python = (Get-Command python -CommandType Application -ErrorAction Stop).Source
+          & $python -c 'import pathlib,subprocess,sys;pathlib.Path(sys.argv[1]).write_bytes(subprocess.check_output(["git","show","b81ac04976e2d9675ae214db2521e9c2fc4dedeb:tool/bounded_command_log.py"]))' $oldLogger
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to preserve exact prior logger bytes' }
+          $priorOverride = $env:MUSIFY_LOGGER_UNDER_TEST
+          $priorNativeErrorPreference = $PSNativeCommandUseErrorActionPreference
+          $PSNativeCommandUseErrorActionPreference = $false
+          try {
+            $env:MUSIFY_LOGGER_UNDER_TEST = $oldLogger
+            $log = "$env:RUNNER_TEMP/windows-owned-control.log"
+            & $python tool/bounded_command_log.py --log $log --max-bytes 10485760 --timeout-seconds 60 -- $python -m unittest discover -s tool -p 'windows_owned_command_test.py' -k test_exited_leader_pipe_holding_descendant -v
+            $result = $LASTEXITCODE
+          } finally {
+            $env:MUSIFY_LOGGER_UNDER_TEST = $priorOverride
+            $PSNativeCommandUseErrorActionPreference = $priorNativeErrorPreference
+          }
+          $text = [IO.File]::ReadAllText($log)
+          if ($result -ne 1 -or $text -notmatch 'OWNED_WINDOWS_DESCENDANT_SURVIVED' -or $text -notmatch 'FAILED \(failures=1\)') {
+            throw 'Pinned prior logger must fail its descendant-survival assertion'
+          }
+          Write-Output 'Exact b81ac049 Windows control reproduced descendant survival.'
+          exit 0 # The verified negative control's expected native exit is handled.
+      - name: Verify candidate and run bounded native Windows contracts
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ((git rev-parse HEAD) -ne $env:SOURCE_SHA) { throw 'Wrong candidate checkout' }
+          $python = (Get-Command python -CommandType Application -ErrorAction Stop).Source
+          $log = "$env:RUNNER_TEMP/windows-owned-command.log"
+          & $python tool/bounded_command_log.py --log $log --max-bytes 10485760 --timeout-seconds 120 -- $python -m unittest discover -s tool -p 'windows_owned_command_test.py' -v
+          if ($LASTEXITCODE -ne 0) { throw "Windows owned-command contracts failed: $LASTEXITCODE" }
+          $text = [IO.File]::ReadAllText($log)
+          if ($text -match 'skipped' -or $text -notmatch '(?m)^Ran 8 tests in ' -or $text -notmatch '(?m)^OK\r?$') {
+            throw 'All eight native contracts must execute and pass without skips'
+          }
+          $files = @('tool/windows_owned_job.py','tool/windows_owned_command_test.py',
+            'tool/owned_command.py','tool/bounded_command_log.py')
+          $hashes = @(foreach ($file in $files) {
+            [pscustomobject]@{ Path=$file; Sha256=(Get-FileHash -Algorithm SHA256 -LiteralPath $file).Hash.ToLowerInvariant() }
+          })
+          $receipt = [ordered]@{ SourceSha=$env:SOURCE_SHA; NativeWindowsCases=8; Skipped=0;
+            Result='PASS'; Python=$python; SourceFiles=$hashes; LogBytes=(Get-Item -LiteralPath $log).Length;
+            PriorLoggerSource='b81ac04976e2d9675ae214db2521e9c2fc4dedeb';
+            PriorLoggerSha256=(Get-FileHash -Algorithm SHA256 -LiteralPath "$env:RUNNER_TEMP/windows-prior-logger.py").Hash.ToLowerInvariant() }
+          $json = $receipt | ConvertTo-Json -Depth 5
+          if ([Text.Encoding]::UTF8.GetByteCount($json) -gt 16384) { throw 'Result receipt exceeded its bound' }
+          [IO.File]::WriteAllText("$env:RUNNER_TEMP/windows-owned-result.json", $json)
+      - name: Upload bounded Windows lifecycle evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-owned-command-${{ github.run_number }}
+          path: |
+            ${{ runner.temp }}/windows-owned-command.log
+            ${{ runner.temp }}/windows-owned-control.log
+            ${{ runner.temp }}/windows-owned-admission.json
+            ${{ runner.temp }}/windows-owned-result.json
+          if-no-files-found: ignore
+          retention-days: 7

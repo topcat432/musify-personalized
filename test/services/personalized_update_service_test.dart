@@ -14,7 +14,7 @@ void main() {
   final apkBytes = utf8.encode('verified personalized apk fixture');
   final apkSha = sha256.convert(apkBytes).toString();
 
-  Map<String, dynamic> manifestJson({int versionCode = 100000200}) => {
+  Map<String, dynamic> manifestJson({int versionCode = 300000003}) => {
     'schemaVersion': 1,
     'versionCode': versionCode,
     'versionName': '0.1.$versionCode',
@@ -39,7 +39,7 @@ void main() {
               {
                 'name': personalizedUpdateManifestAsset,
                 'browser_download_url':
-                    'https://github.com/topcat432/musify-personalized/releases/download/personalized-v100000200/$personalizedUpdateManifestAsset',
+                    'https://github.com/topcat432/musify-personalized/releases/download/personalized-v300000003/$personalizedUpdateManifestAsset',
               },
             ],
           }),
@@ -57,12 +57,36 @@ void main() {
   }
 
   test(
+    'retains installed preview identity and rejects the old separate app',
+    () {
+      expect(
+        personalizedProductionPackage,
+        'com.topcat432.musifypersonalized.preview',
+      );
+      final oldPackage = manifestJson()
+        ..['packageName'] = 'com.topcat432.musifypersonalized';
+      expect(
+        () => PersonalizedUpdateManifest.fromJson(oldPackage),
+        throwsA(isA<FormatException>()),
+      );
+      final identity = InstalledAppIdentity.fromMap({
+        'packageName': personalizedProductionPackage,
+        'versionName': 'preview.0.1.1',
+        'versionCode': 300000001,
+        'signerSha256': signer,
+      });
+      expect(identity.versionName, 'preview.0.1.1');
+      expect(identity.versionCode, 300000001);
+    },
+  );
+
+  test(
     'offers a signed personalized release with a higher version code',
     () async {
       final platform = _FakeUpdatePlatform(
         identity: const InstalledAppIdentity(
           packageName: personalizedProductionPackage,
-          versionCode: 100000100,
+          versionCode: 300000001,
           signerSha256: signer,
         ),
       );
@@ -74,29 +98,32 @@ void main() {
       final result = await service.check();
 
       expect(result.availability, PersonalizedUpdateAvailability.available);
-      expect(result.manifest.versionCode, 100000200);
+      expect(result.manifest.versionCode, 300000003);
       expect(result.manifest.apkSha256, apkSha);
       service.close();
     },
   );
 
-  test('reports current when the published build is already installed', () async {
-    final service = PersonalizedUpdateService(
-      client: updateClient(manifestJson()),
-      platform: _FakeUpdatePlatform(
-        identity: const InstalledAppIdentity(
-          packageName: personalizedProductionPackage,
-          versionCode: 100000200,
-          signerSha256: signer,
+  test(
+    'reports current when the published build is already installed',
+    () async {
+      final service = PersonalizedUpdateService(
+        client: updateClient(manifestJson()),
+        platform: _FakeUpdatePlatform(
+          identity: const InstalledAppIdentity(
+            packageName: personalizedProductionPackage,
+            versionCode: 300000003,
+            signerSha256: signer,
+          ),
         ),
-      ),
-    );
+      );
 
-    final result = await service.check();
+      final result = await service.check();
 
-    expect(result.availability, PersonalizedUpdateAvailability.current);
-    service.close();
-  });
+      expect(result.availability, PersonalizedUpdateAvailability.current);
+      service.close();
+    },
+  );
 
   test('rejects a release signed by a different Android key', () async {
     final service = PersonalizedUpdateService(
@@ -104,7 +131,7 @@ void main() {
       platform: _FakeUpdatePlatform(
         identity: const InstalledAppIdentity(
           packageName: personalizedProductionPackage,
-          versionCode: 100000100,
+          versionCode: 300000001,
           signerSha256:
               'cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
         ),
@@ -120,7 +147,7 @@ void main() {
     final platform = _FakeUpdatePlatform(
       identity: const InstalledAppIdentity(
         packageName: personalizedProductionPackage,
-        versionCode: 100000100,
+        versionCode: 300000001,
         signerSha256: signer,
       ),
     );
@@ -142,8 +169,7 @@ void main() {
   });
 
   test('rejects update assets outside the personalized GitHub release', () {
-    final json = manifestJson()
-      ..['apkUrl'] = 'https://example.com/musify.apk';
+    final json = manifestJson()..['apkUrl'] = 'https://example.com/musify.apk';
 
     expect(
       () => PersonalizedUpdateManifest.fromJson(json),
@@ -164,12 +190,153 @@ void main() {
     expect(cancellation.isCancelled, isTrue);
     expect(completionCount, 1);
   });
+
+  for (final package in [
+    'com.topcat432.musifypersonalized',
+    '$personalizedProductionPackage.debug',
+  ]) {
+    test('rejects manifest for $package before any APK download', () async {
+      final manifest = manifestJson()..['packageName'] = package;
+      final platform = _FakeUpdatePlatform(
+        identity: const InstalledAppIdentity(
+          packageName: personalizedProductionPackage,
+          versionCode: 300000001,
+          signerSha256: signer,
+        ),
+      );
+      final service = PersonalizedUpdateService(
+        client: updateClient(manifest),
+        platform: platform,
+      );
+      try {
+        await expectLater(service.check(), throwsA(isA<FormatException>()));
+        expect(platform.verifiedPaths, isEmpty);
+      } finally {
+        service.close();
+      }
+    });
+  }
+
+  test('a bad APK checksum removes both final and partial files before Android '
+      'inspection', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'musify-bad-update-',
+    );
+    final platform = _FakeUpdatePlatform(
+      identity: const InstalledAppIdentity(
+        packageName: personalizedProductionPackage,
+        versionCode: 300000001,
+        signerSha256: signer,
+      ),
+    );
+    final json = manifestJson()..['apkSha256'] = 'a' * 64;
+    final service = PersonalizedUpdateService(
+      client: updateClient(json),
+      platform: platform,
+    );
+    try {
+      await expectLater(
+        service.downloadAndVerify(
+          PersonalizedUpdateManifest.fromJson(json),
+          targetRoot: directory,
+        ),
+        throwsA(isA<FormatException>()),
+      );
+      expect(platform.verifiedPaths, isEmpty);
+      expect(
+        await Directory('${directory.path}/updates').list().toList(),
+        isEmpty,
+      );
+    } finally {
+      service.close();
+      await directory.delete(recursive: true);
+    }
+  });
+
+  test('Android inspection rejection removes the downloaded APK without '
+      'offering it as verified', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'musify-rejected-update-',
+    );
+    final platform = _FakeUpdatePlatform(
+      identity: const InstalledAppIdentity(
+        packageName: personalizedProductionPackage,
+        versionCode: 300000001,
+        signerSha256: signer,
+      ),
+      verificationFailure: StateError('Fixture unsigned or untrusted signer'),
+    );
+    final service = PersonalizedUpdateService(
+      client: updateClient(manifestJson()),
+      platform: platform,
+    );
+    try {
+      await expectLater(
+        service.downloadAndVerify(
+          PersonalizedUpdateManifest.fromJson(manifestJson()),
+          targetRoot: directory,
+        ),
+        throwsA(isA<StateError>()),
+      );
+      expect(platform.verifiedPaths, hasLength(1));
+      expect(
+        await Directory('${directory.path}/updates').list().toList(),
+        isEmpty,
+      );
+    } finally {
+      service.close();
+      await directory.delete(recursive: true);
+    }
+  });
+
+  test('an interrupted APK body leaves no partial or verified file', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'musify-interrupted-update-',
+    );
+    final platform = _FakeUpdatePlatform(
+      identity: const InstalledAppIdentity(
+        packageName: personalizedProductionPackage,
+        versionCode: 300000001,
+        signerSha256: signer,
+      ),
+    );
+    Stream<List<int>> interruptedBody() async* {
+      yield [1, 2];
+      throw const HttpException('Fixture disconnected');
+    }
+
+    final client = MockClient.streaming(
+      (request, body) async => http.StreamedResponse(interruptedBody(), 200),
+    );
+    final service = PersonalizedUpdateService(
+      client: client,
+      platform: platform,
+    );
+    try {
+      await expectLater(
+        service.downloadAndVerify(
+          PersonalizedUpdateManifest.fromJson(manifestJson()),
+          targetRoot: directory,
+        ),
+        throwsA(isA<HttpException>()),
+      );
+      expect(platform.verifiedPaths, isEmpty);
+      expect(
+        await Directory('${directory.path}/updates').list().toList(),
+        isEmpty,
+      );
+    } finally {
+      service.close();
+      await directory.delete(recursive: true);
+    }
+  });
 }
 
 class _FakeUpdatePlatform implements PersonalizedUpdatePlatform {
-  _FakeUpdatePlatform({required this.identity});
+  _FakeUpdatePlatform({required this.identity, this.verificationFailure});
 
   final InstalledAppIdentity identity;
+  final Object? verificationFailure;
   final List<String> verifiedPaths = [];
 
   @override
@@ -186,5 +353,6 @@ class _FakeUpdatePlatform implements PersonalizedUpdatePlatform {
     required PersonalizedUpdateManifest manifest,
   }) async {
     verifiedPaths.add(path);
+    if (verificationFailure != null) throw verificationFailure!;
   }
 }

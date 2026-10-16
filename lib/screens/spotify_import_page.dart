@@ -7,22 +7,39 @@
  *     (at your option) any later version.
  */
 
-import 'dart:io';
+import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
+import 'package:musify/screens/spotify_source_playlists_page.dart';
+import 'package:musify/services/spotify_android_deflate_decoder.dart';
 import 'package:musify/services/spotify_csv_importer.dart';
+import 'package:musify/services/spotify_import_file_reader.dart';
 import 'package:musify/services/spotify_import_session_service.dart';
+import 'package:musify/services/spotify_song_list_importer.dart';
+import 'package:musify/services/spotify_zip_archive.dart';
+import 'package:musify/services/spotify_zip_importer.dart';
 import 'package:musify/widgets/personalized_ui.dart';
+
+typedef SpotifyImportReader =
+    Future<Uint8List> Function(PlatformFile file, {Future<void>? cancelled});
 
 class SpotifyImportPage extends StatefulWidget {
   const SpotifyImportPage({
     super.key,
     this.sessionService = const SpotifyImportSessionService(),
+    this.initialPreview,
+    this.readFile = SpotifyImportFileReader.read,
+    this.decodeDeflate = SpotifyAndroidDeflateDecoder.decode,
   });
 
+  /// An already validated incoming preview. Construction never saves it.
+  final SpotifyImportPreview? initialPreview;
   final SpotifyImportSessionService sessionService;
+  final SpotifyImportReader readFile;
+  final SpotifyDeflateDecoder decodeDeflate;
 
   @override
   State<SpotifyImportPage> createState() => _SpotifyImportPageState();
@@ -34,41 +51,94 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
   bool _isReading = false;
   bool _isSaving = false;
   bool _saved = false;
+  Completer<void>? _readCancellation;
 
-  Future<void> _pickCsv() async {
+  @override
+  void initState() {
+    super.initState();
+    _preview = widget.initialPreview;
+  }
+
+  @override
+  void dispose() {
+    _readCancellation?.complete();
+    super.dispose();
+  }
+
+  Future<void> _pickFile() async {
+    if (_isReading || _isSaving) return;
     setState(() {
       _isReading = true;
       _errorMessage = null;
-      _saved = false;
     });
 
     try {
       final result = await FilePicker.pickFiles(
         type: FileType.custom,
-        allowedExtensions: const ['csv'],
-        withData: true,
+        allowedExtensions: const ['csv', 'tsv', 'json', 'zip'],
+        withReadStream: true,
       );
 
-      if (result == null || result.files.isEmpty) return;
-
+      if (!mounted || result == null || result.files.isEmpty) return;
       final selectedFile = result.files.single;
-      var bytes = selectedFile.bytes;
-      if (bytes == null && selectedFile.path != null) {
-        bytes = await File(selectedFile.path!).readAsBytes();
-      }
-      if (bytes == null) {
-        throw const SpotifyImportException(
-          'Musify could not read the selected file.',
+      final cancellation = Completer<void>();
+      _readCancellation = cancellation;
+      final bytes = await widget.readFile(
+        selectedFile,
+        cancelled: cancellation.future,
+      );
+      if (!mounted) return;
+
+      SpotifyImportPreview preview;
+      if (selectedFile.name.toLowerCase().endsWith('.zip')) {
+        final archive = SpotifyZipArchive.inspect(bytes);
+        final name = archive.entries.length == 1
+            ? archive.entries.single.name
+            : await showDialog<String>(
+                context: context,
+                builder: (context) => SimpleDialog(
+                  title: const Text('Choose a song list from this ZIP'),
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 8,
+                      ),
+                      child: Text(
+                        'Only the selected file will be previewed. Compatible named-playlist JSON retains memberships; other files, playlist recreation and synchronization are not included.',
+                      ),
+                    ),
+                    for (final entry in archive.entries)
+                      SimpleDialogOption(
+                        onPressed: () => Navigator.pop(context, entry.name),
+                        child: Text(entry.name),
+                      ),
+                    SimpleDialogOption(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Cancel'),
+                    ),
+                  ],
+                ),
+              );
+        if (!mounted || name == null) return;
+        preview = await archive.parseEntry(
+          name,
+          fileName: selectedFile.name,
+          cancelled: cancellation.future,
+          decodeDeflate: widget.decodeDeflate,
+        );
+      } else {
+        preview = SpotifySongListImporter.parseBytes(
+          bytes,
+          fileName: selectedFile.name,
         );
       }
 
-      final preview = SpotifyCsvImporter.parseBytes(
-        bytes,
-        fileName: selectedFile.name,
-      );
-
       if (!mounted) return;
-      setState(() => _preview = preview);
+      setState(() {
+        _preview = preview;
+        _saved = false;
+      });
     } on SpotifyImportException catch (error) {
       if (!mounted) return;
       setState(() {
@@ -79,16 +149,17 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
       if (!mounted) return;
       setState(() {
         _preview = null;
-        _errorMessage = 'The selected CSV could not be imported.';
+        _errorMessage = 'The selected song list could not be imported.';
       });
     } finally {
+      _readCancellation = null;
       if (mounted) setState(() => _isReading = false);
     }
   }
 
   Future<void> _saveImport() async {
     final preview = _preview;
-    if (preview == null || _isSaving) return;
+    if (preview == null || _isReading || _isSaving || _saved) return;
 
     setState(() => _isSaving = true);
     try {
@@ -99,7 +170,9 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            '${preview.tracks.length} Spotify tracks saved for matching.',
+            preview.tracks.isEmpty
+                ? 'Source playlists saved for review; no songs to match.'
+                : '${preview.tracks.length} Spotify tracks saved for matching.',
           ),
         ),
       );
@@ -118,7 +191,7 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
     final preview = _preview;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Import CSV')),
+      appBar: AppBar(title: const Text('Import song list')),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(18, 12, 18, 32),
         children: [
@@ -127,7 +200,7 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
             icon: Icons.file_upload_outlined,
             title: 'Start with your song list',
             description:
-                'Choose a Spotify, Exportify, or Soundiiz CSV. Musify checks every row before anything is saved.',
+                'Choose CSV, TSV, YourLibrary JSON, a compatible named-playlist backup, or a song list from a ZIP. Musify checks every row before anything is saved.',
           ),
           const SizedBox(height: 24),
           PersonalizedReveal(
@@ -137,13 +210,14 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
               children: [
                 const PersonalizedSectionHeading(
                   title: 'Source file',
-                  description: 'Only compatible .csv files can be selected.',
+                  description:
+                      'CSV/TSV need title and artist columns. JSON imports YourLibrary saved tracks or compatible named-playlist backups. ZIP supports explicit file selection, up to 8 MiB. Compressed ZIP requires Android.',
                 ),
                 const SizedBox(height: 12),
                 _CsvPickerSurface(
                   reading: _isReading,
                   fileName: preview?.fileName,
-                  onPressed: _pickCsv,
+                  onPressed: _isSaving ? null : _pickFile,
                 ),
               ],
             ),
@@ -157,6 +231,19 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
             ),
           ],
           if (preview != null) ...[
+            if (preview.sourcePlaylists.isNotEmpty)
+              OutlinedButton(
+                onPressed: _isReading || _isSaving
+                    ? null
+                    : () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => SpotifySourcePlaylistsPage(
+                            preview: _saved ? null : preview.sourcePlaylists,
+                          ),
+                        ),
+                      ),
+                child: const Text('Review source playlists'),
+              ),
             const SizedBox(height: 18),
             PersonalizedReveal(
               delay: const Duration(milliseconds: 110),
@@ -201,6 +288,11 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
                 ],
               ),
             ),
+            for (final notice in preview.notices)
+              Padding(
+                padding: const EdgeInsets.only(top: 10),
+                child: Text(notice),
+              ),
             if (preview.rejectedRows.isNotEmpty) ...[
               const SizedBox(height: 14),
               PersonalizedSurface(
@@ -210,13 +302,13 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
                   collapsedShape: const Border(),
                   leading: const Icon(Icons.report_gmailerrorred_rounded),
                   title: Text(
-                    '${preview.rejectedRows.length} row${preview.rejectedRows.length == 1 ? '' : 's'} need attention',
+                    '${preview.rejectedRows.length} ${preview.rejectedRows.length == 1 ? 'row needs' : 'rows need'} attention',
                   ),
                   children: [
                     for (final rejected in preview.rejectedRows.take(25))
                       ListTile(
                         dense: true,
-                        title: Text('CSV row ${rejected.sourceRow}'),
+                        title: Text('Source row ${rejected.sourceRow}'),
                         subtitle: Text(rejected.reason),
                       ),
                   ],
@@ -227,7 +319,9 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
             SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
-                onPressed: _isSaving ? null : _saveImport,
+                onPressed: _isReading || _isSaving || _saved
+                    ? null
+                    : _saveImport,
                 icon: _isSaving
                     ? const SizedBox.square(
                         dimension: 18,
@@ -242,7 +336,9 @@ class _SpotifyImportPageState extends State<SpotifyImportPage> {
                   _isSaving
                       ? 'Saving…'
                       : _saved
-                      ? 'Saved for matching'
+                      ? preview.tracks.isEmpty
+                          ? 'Saved source playlists'
+                          : 'Saved for matching'
                       : 'Save and continue',
                 ),
               ),
@@ -276,7 +372,7 @@ class _ImportSummaryCard extends StatelessWidget {
         children: [
           PersonalizedStatusBanner(
             tone: PersonalizedStatusTone.success,
-            title: saved ? 'Ready for matching' : 'CSV validated',
+            title: saved ? 'Ready for matching' : 'Song list validated',
             message: saved
                 ? 'This validated song list is saved on your device.'
                 : 'Review the counts below, then save this list.',
@@ -333,7 +429,7 @@ class _CsvPickerSurface extends StatelessWidget {
 
   final bool reading;
   final String? fileName;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -388,7 +484,7 @@ class _CsvPickerSurface extends StatelessWidget {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.folder_open_outlined),
-            label: Text(reading ? 'Checking file…' : 'Choose .csv file'),
+            label: Text(reading ? 'Checking file…' : 'Choose song list file'),
           ),
         ],
       ),

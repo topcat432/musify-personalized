@@ -20,6 +20,7 @@
  */
 
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/widgets.dart';
 import 'package:hive/hive.dart';
@@ -658,20 +659,241 @@ String renamePlaylistFolder(
   return context?.l10n?.folderUpdated ?? 'Folder updated successfully';
 }
 
-String movePlaylistToFolder(
+Map _currentPlaylistMoveSource(Map requested) {
+  final box = Hive.box('user');
+  final live = <String, List>{
+    'playlistFolders': userPlaylistFolders.value,
+    'customPlaylists': userCustomPlaylists.value,
+    'playlists': userPlaylists.value,
+  };
+  for (final entry in live.entries) {
+    if (!_samePlaylistMoveValue(entry.value, box.get(entry.key, defaultValue: const []))) {
+      throw StateError('Playlist storage changed. Reload the Library.');
+    }
+  }
+  final id = requested['ytid'];
+  if (id is! String || id.trim().isEmpty) {
+    throw StateError('The selected playlist has no current source identity.');
+  }
+  final maps = <Map>[];
+  for (final item in userCustomPlaylists.value) {
+    if (item['ytid'] == id) maps.add(item);
+  }
+  for (final folder in userPlaylistFolders.value) {
+    final children = folder['playlists'] ?? const [];
+    if (children is! List || children.any((child) => child is! Map)) {
+      throw StateError('Folder contents are unreadable. Reload the Library.');
+    }
+    for (final child in children.cast<Map>()) {
+      if (child['ytid'] == id) maps.add(child);
+    }
+  }
+  final rootYoutube = userPlaylists.value.where((value) => value == id).length;
+  if (maps.length + rootYoutube != 1) {
+    throw StateError('The selected playlist source is missing or ambiguous.');
+  }
+  if (maps.isNotEmpty) {
+    final current = maps.single;
+    if (!_samePlaylistMoveValue(current, requested) ||
+        !const ['user-created', 'user-youtube'].contains(current['source'])) {
+      throw StateError('The selected playlist changed. Reload the Library.');
+    }
+    return _copyPlaylistMoveValue(current) as Map;
+  }
+  // Root YouTube ownership is stored as an ID, not as a metadata map. Its
+  // current membership is authoritative; the lookup supplies only that ID's card.
+  if (requested['source'] != 'user-youtube') {
+    throw StateError('The selected playlist source type changed.');
+  }
+  return _copyPlaylistMoveValue(requested) as Map;
+}
+
+dynamic _copyPlaylistMoveValue(dynamic value) {
+  if (value is Uint8List) return Uint8List.fromList(value);
+  if (value is List) return [for (final item in value) _copyPlaylistMoveValue(item)];
+  if (value is Map) return {for (final entry in value.entries) entry.key: _copyPlaylistMoveValue(entry.value)};
+  return value;
+}
+
+bool _samePlaylistMoveValue(dynamic left, dynamic right) {
+  if (left is DateTime || right is DateTime) {
+    return left is DateTime && right is DateTime && left == right && left.isUtc == right.isUtc;
+  }
+  if (left is num || right is num) {
+    return left is num && right is num && left.runtimeType == right.runtimeType && left == right;
+  }
+  if ((left is Uint8List) != (right is Uint8List)) return false;
+  if (left is List && right is List) {
+    if (left.length != right.length) return false;
+    for (var i = 0; i < left.length; i++) {
+      if (!_samePlaylistMoveValue(left[i], right[i])) return false;
+    }
+    return true;
+  }
+  if (left is Map && right is Map) {
+    return left.length == right.length && left.keys.every(
+      (key) => right.containsKey(key) && _samePlaylistMoveValue(left[key], right[key]),
+    );
+  }
+  return left == right;
+}
+
+bool _playlistMoveActive = false;
+
+Map<String, List<dynamic>> _livePlaylistMoveCollections() => {
+  'playlistFolders': userPlaylistFolders.value,
+  'customPlaylists': userCustomPlaylists.value,
+  'playlists': userPlaylists.value,
+};
+
+/// null means saved/uncertain state was retained for reload, never overwritten.
+Future<bool?> _persistPlaylistMove(
+  Map<String, List<dynamic>> staged,
+  String destinationKey,
+  Future<void> Function(String key, List<dynamic>? value)? write,
+) async {
+  final box = Hive.box('user');
+  final before = <String, List<dynamic>>{
+    for (final key in staged.keys)
+      key:
+          _copyPlaylistMoveValue(box.get(key, defaultValue: const []))
+              as List<dynamic>,
+  };
+  // Before/staged values are private frozen copies. Expected maps can share
+  // those values; callbacks and published collections receive separate copies.
+  final beforeLive = before;
+  final present = {for (final key in staged.keys) key: box.containsKey(key)};
+  final expected = Map<String, List<dynamic>>.from(before);
+  final expectedPresence = Map<String, bool>.from(present);
+  final attempted = <String>[];
+  final changed = [
+    destinationKey,
+    ...staged.keys.where((key) => key != destinationKey),
+  ].where((key) => !_samePlaylistMoveValue(before[key], staged[key])).toList();
+  Future<void> persist(String key, List<dynamic>? value) => write != null
+      ? write(key, value)
+      : value == null
+      ? box.delete(key)
+      : box.put(key, value);
+  bool liveMatches(Map value) =>
+      _samePlaylistMoveValue(_livePlaylistMoveCollections(), value);
+  bool storedKeyMatches(String key, dynamic value, bool exists) =>
+      box.containsKey(key) == exists &&
+      _samePlaylistMoveValue(box.get(key, defaultValue: const []), value);
+  bool storedMatches(Map values, Map<String, bool> exists) => staged.keys.every(
+    (key) => storedKeyMatches(key, values[key], exists[key]!),
+  );
+  bool ownedFailureState() =>
+      liveMatches(beforeLive) &&
+      staged.keys.every(
+        (key) =>
+            storedKeyMatches(key, before[key], present[key]!) ||
+            (attempted.contains(key) &&
+                storedKeyMatches(key, staged[key], true)),
+      );
+  Future<bool> restoreOwned() async {
+    // Restore a removed source before undoing the destination addition. If any
+    // owner or restoration becomes uncertain, retain the destination copy.
+    for (final key in attempted.reversed) {
+      if (!ownedFailureState()) return false;
+      if (storedKeyMatches(key, before[key], present[key]!)) continue;
+      try {
+        // The unchanged live owner supplies its original object identities;
+        // selected-occurrence writers require those same stored map instances.
+        await persist(key, present[key]! ? _livePlaylistMoveCollections()[key]! : null);
+      } catch (_) {
+        // A post-save failure is accepted only after checking the actual value.
+      }
+      if (!storedKeyMatches(key, before[key], present[key]!)) return false;
+    }
+    return liveMatches(beforeLive) && storedMatches(before, present);
+  }
+
+  if (!liveMatches(before) || !storedMatches(before, present)) return false;
+  try {
+    for (final key in changed) {
+      if (!liveMatches(beforeLive) ||
+          !storedMatches(expected, expectedPresence))
+        return null;
+      attempted.add(key);
+      await persist(key, _copyPlaylistMoveValue(staged[key]) as List<dynamic>);
+      expected[key] = staged[key]!;
+      expectedPresence[key] = true;
+      if (!liveMatches(beforeLive) ||
+          !storedMatches(expected, expectedPresence))
+        return null;
+    }
+  } catch (error, stackTrace) {
+    logger.log(
+      'Error persisting playlist move',
+      error: error,
+      stackTrace: stackTrace,
+    );
+    if (!await restoreOwned()) return null;
+    return false;
+  }
+  // Publish only after acknowledged writes and complete owner checks. A
+  // notifier listener may itself make a newer edit; recheck before each publish.
+  // Publish the verified stored maps, preserving canonical owner identities.
+  // The private expected snapshots above remain separate from mutable owners.
+  final expectedLive = Map<String, List<dynamic>>.from(beforeLive);
+  for (final key in changed) {
+    if (!liveMatches(expectedLive) ||
+        !storedMatches(expected, expectedPresence))
+      return null;
+    expectedLive[key] = staged[key]!;
+    switch (key) {
+      case 'playlistFolders':
+        userPlaylistFolders.value = List<Map>.from(
+          box.get(key) as List,
+        );
+      case 'customPlaylists':
+        userCustomPlaylists.value = List<Map>.from(
+          box.get(key) as List,
+        );
+      case 'playlists':
+        userPlaylists.value = List<String>.from(box.get(key) as List);
+    }
+  }
+  if (!liveMatches(expectedLive) || !storedMatches(expected, expectedPresence))
+    return null;
+  return true;
+}
+
+Future<String> movePlaylistToFolder(
   Map playlist,
   String? folderId,
-  BuildContext context,
-) {
+  BuildContext context, {
+  Future<void> Function(String key, List<dynamic>? value)? write,
+}) async {
+  const uncertain =
+      'The move could not be verified. Reload the Library before trying again.';
+  if (!context.mounted) return uncertain;
+  final failure = context.l10n!.error;
+  final success = '${context.l10n!.addedSuccess}!';
+  if (_playlistMoveActive) return failure;
+  _playlistMoveActive = true;
   try {
-    final updatedFolders = List<Map>.from(userPlaylistFolders.value);
-    final updatedCustomPlaylists = List<Map>.from(userCustomPlaylists.value);
+    final ownedPlaylist = _currentPlaylistMoveSource(playlist);
+    final updatedFolders = List<Map>.from(
+      _copyPlaylistMoveValue(userPlaylistFolders.value) as List,
+    );
+    // A stale picker must refuse before removing any current membership.
+    if (folderId != null &&
+        updatedFolders.where((folder) => folder['id'] == folderId).length !=
+            1) {
+      return failure;
+    }
+    final updatedCustomPlaylists = List<Map>.from(
+      _copyPlaylistMoveValue(userCustomPlaylists.value) as List,
+    );
     final updatedYoutubePlaylists = List<String>.from(userPlaylists.value);
 
     for (final folder in updatedFolders) {
-      final folderPlaylists = List<Map>.from(
-        folder['playlists'] ?? [],
-      )..removeWhere((p) => p['ytid'] != null && p['ytid'] == playlist['ytid']);
+      final folderPlaylists = List<Map>.from(folder['playlists'] ?? [])
+        ..removeWhere(
+          (p) => p['ytid'] != null && p['ytid'] == ownedPlaylist['ytid'],
+        );
       folder['playlists'] = folderPlaylists;
     }
 
@@ -683,62 +905,65 @@ String movePlaylistToFolder(
 
       if (targetFolder.isNotEmpty) {
         final folderPlaylists = List<Map>.from(targetFolder['playlists'] ?? [])
-          ..add(playlist);
+          ..add(ownedPlaylist);
         targetFolder['playlists'] = folderPlaylists;
 
-        if (playlist['source'] == 'user-created') {
+        if (ownedPlaylist['source'] == 'user-created') {
           updatedCustomPlaylists.removeWhere(
-            (p) => p['ytid'] == playlist['ytid'],
+            (p) => p['ytid'] == ownedPlaylist['ytid'],
           );
-        } else if (playlist['source'] == 'user-youtube') {
-          updatedYoutubePlaylists.removeWhere((p) => p == playlist['ytid']);
+        } else if (ownedPlaylist['source'] == 'user-youtube') {
+          updatedYoutubePlaylists.removeWhere(
+            (p) => p == ownedPlaylist['ytid'],
+          );
         }
       } else {
         logger.log(
           'Target folder with id $folderId not found for moving playlist',
         );
-        return context.l10n!.error;
+        return failure;
       }
     } else {
-      if (playlist['source'] == 'user-created') {
-        if (!updatedCustomPlaylists.any((p) => p['ytid'] == playlist['ytid'])) {
-          updatedCustomPlaylists.add(playlist);
+      if (ownedPlaylist['source'] == 'user-created') {
+        if (!updatedCustomPlaylists.any(
+          (p) => p['ytid'] == ownedPlaylist['ytid'],
+        )) {
+          updatedCustomPlaylists.add(ownedPlaylist);
         }
-      } else if (playlist['source'] == 'user-youtube') {
-        if (!updatedYoutubePlaylists.contains(playlist['ytid'])) {
-          updatedYoutubePlaylists.add(playlist['ytid']);
+      } else if (ownedPlaylist['source'] == 'user-youtube') {
+        if (!updatedYoutubePlaylists.contains(ownedPlaylist['ytid'])) {
+          updatedYoutubePlaylists.add(ownedPlaylist['ytid']);
         }
       }
     }
 
-    userPlaylistFolders.value = updatedFolders;
-    userCustomPlaylists.value = updatedCustomPlaylists;
-    userPlaylists.value = updatedYoutubePlaylists;
-
-    unawaited(
-      addOrUpdateData<List>(
-        'user',
-        'playlistFolders',
-        userPlaylistFolders.value,
-      ),
+    final result = await _persistPlaylistMove(
+      {
+        'playlistFolders': updatedFolders,
+        'customPlaylists': updatedCustomPlaylists,
+        'playlists': updatedYoutubePlaylists,
+      },
+      folderId != null
+          ? 'playlistFolders'
+          : ownedPlaylist['source'] == 'user-created'
+          ? 'customPlaylists'
+          : 'playlists',
+      write,
     );
-    unawaited(
-      addOrUpdateData<List>(
-        'user',
-        'customPlaylists',
-        userCustomPlaylists.value,
-      ),
-    );
-    unawaited(addOrUpdateData<List>('user', 'playlists', userPlaylists.value));
-
-    return '${context.l10n!.addedSuccess}!';
+    return switch (result) {
+      true => success,
+      false => failure,
+      null => uncertain,
+    };
   } catch (e, stackTrace) {
     logger.log(
       'Error moving playlist to folder',
       error: e,
       stackTrace: stackTrace,
     );
-    return context.l10n!.error;
+    return failure;
+  } finally {
+    _playlistMoveActive = false;
   }
 }
 
@@ -1232,61 +1457,6 @@ Future updatePlaylistList(BuildContext context, String playlistId) async {
       stackTrace: stackTrace,
     );
     return null;
-  }
-}
-
-Future<void> renameSongInPlaylist(
-  dynamic playlistId,
-  dynamic songId,
-  String newTitle,
-  String newArtist,
-) async {
-  try {
-    final found = _findCustomPlaylist(playlistId.toString());
-    final playlist = found?.playlist;
-    final isFromFolder = found?.isFromFolder ?? false;
-
-    if (playlist != null && playlist['list'] != null) {
-      final songIndex = (playlist['list'] as List).indexWhere(
-        (song) => song['ytid'] == songId,
-      );
-
-      if (songIndex != -1) {
-        final updatedSongs = List<dynamic>.from(playlist['list'] as List);
-        updatedSongs[songIndex] =
-            Map<String, dynamic>.from(updatedSongs[songIndex] as Map)
-              ..['title'] = newTitle
-              ..['artist'] = newArtist;
-
-        playlist['list'] = updatedSongs;
-
-        if (isFromFolder) {
-          userPlaylistFolders.value = List<Map>.from(userPlaylistFolders.value);
-          unawaited(
-            addOrUpdateData<List>(
-              'user',
-              'playlistFolders',
-              userPlaylistFolders.value,
-            ),
-          );
-        } else {
-          final updatedPlaylists = userCustomPlaylists.value
-              .map((p) => p['ytid'] == playlistId ? playlist : p)
-              .toList();
-          userCustomPlaylists.value = updatedPlaylists;
-          unawaited(
-            addOrUpdateData<List>('user', 'customPlaylists', updatedPlaylists),
-          );
-        }
-      }
-    }
-  } catch (e, stackTrace) {
-    logger.log(
-      'Error renaming song in playlist',
-      error: e,
-      stackTrace: stackTrace,
-    );
-    rethrow;
   }
 }
 

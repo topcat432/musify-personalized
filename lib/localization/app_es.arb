@@ -159,7 +159,7 @@
   "noSongsInQueue": "No hay canciones en cola",
   "notYTlist": "ID de lista de reproducción de YouTube no válido",
   "offlineMode": "Modo sin conexión",
-  "offlineModeDescription": "Desactive las funciones en línea y use Musify completamente sin conexión.",
+  "offlineModeDescription": "Activado: solo archivos guardados. Desactivado: audio guardado disponible o YouTube. Spotify importa solo metadatos.",
   "offlinePlaylists": "Offline playlists",
   "offlineSongs": "Canciones sin conexión",
   "others": "Otros",
@@ -254,5 +254,15 @@
   "useProxyDescription": "Usa el proxy solo cuando el streaming falle, uso innecesario puede interrumpir la reproducción.",
   "userPlaylists": "Listas de reproducción del usuario",
   "yes": "Si",
-  "youtubePlaylistLinkOrId": "Enlace o ID de lista de reproducción de YouTube"
+  "youtubePlaylistLinkOrId": "Enlace o ID de lista de reproducción de YouTube",
+  "playbackSourceLocal": "Archivo local",
+  "playbackSourceUnknown": "Fuente sin verificar",
+  "playbackSourceNotLoaded": "Fuente sin cargar",
+  "playbackSourceAudioVideo": "audio + vídeo",
+  "playbackSourceAudio": "audio",
+  "playbackSourceDetails": "Fuente de reproducción",
+  "playbackSourceLocalNote": "Este archivo se reproduce desde este dispositivo. Su códec y calidad de audio no se han verificado.",
+  "playbackSourceMuxedNote": "La reproducción compatible incluye datos de vídeo, con la decodificación de vídeo desactivada. Puede consumir más datos. La tasa de bits de audio no está verificada y puede diferir de tu preferencia de calidad.",
+  "playbackSourceUnknownQualityNote": "La tasa de bits y el códec de audio no se han verificado. No se garantiza calidad sin pérdida.",
+  "playbackSourceCapabilities": "La reproducción usa audio guardado cuando está disponible; si no, YouTube. El modo sin conexión usa solo archivos guardados. Spotify importa solo metadatos."
 }

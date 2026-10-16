@@ -8,6 +8,10 @@ maintenance guide, not approval to redesign unrelated product surfaces.
 
 The implementation remains the source of truth, especially:
 
+- `lib/theme/app_spacing.dart`, `lib/theme/app_shape.dart`,
+  `lib/theme/motion.dart`, `lib/theme/app_semantic_colors.dart`, and
+  `lib/theme/app_typography.dart` — the named design-token foundation (see
+  "Design tokens" below)
 - `lib/widgets/personalized_ui.dart`
 - `lib/theme/app_themes.dart`
 - `lib/theme/app_colors.dart`
@@ -16,6 +20,9 @@ The implementation remains the source of truth, especially:
 - the personalized import and review screens under `lib/screens/`
 - `tool/visual_review_test.dart`; its golden run generates output under
   `tool/visual_review_goldens/`
+- `test/theme/app_theme_foundation_test.dart`; token-level tests (theme
+  construction, semantic-color/typography availability, reduced motion, text
+  scaling)
 
 ## Direction
 
@@ -29,6 +36,58 @@ without an explicit design decision and coverage for every supported theme.
 Avoid Aqua, space, Orbit, SaaS-dashboard, or developer-tool styling. A new
 screen should feel like part of the listening experience: expressive but calm,
 layered rather than flat, and clear enough for repetitive review work.
+
+## Design tokens
+
+`docs/VISUAL_OVERHAUL_PLAN.md` Phase 1 formalized the vocabulary this document
+already described into named, testable tokens under `lib/theme/`. This did
+not redesign anything — every token substitution in
+`lib/widgets/personalized_ui.dart` preserves the exact value already
+documented below, verified by byte-identical golden output before and after
+(see `docs/DECISIONS.md` D-011).
+
+- `AppSpacing` (`lib/theme/app_spacing.dart`) — the spacing scale (4/8/12/16/
+  20/24/32) plus semantic aliases (`compactGap`, `normalGap`, `sectionGap`,
+  `pagePadding`, `largeStructuralGap`). Reach for these instead of a new
+  `EdgeInsets`/`SizedBox` literal. This does not replace the small set of
+  outer-layer constants in `lib/constants/app_constants.dart`
+  (`commonSingleChildScrollViewPadding`, `commonBarContentPadding`,
+  `commonListViewBottomPadding`, `miniPlayerTotalHeight`).
+- `AppShape` (`lib/theme/app_shape.dart`) — named radius roles (`control`,
+  `card`, `artwork`, `status`, `surface`, `hero`/`heroCompact`, `dialog`,
+  `popup`, `pill`) matching the radii already used by `getAppTheme` and the
+  shared personalized components.
+- `AppMotionDuration`/`AppMotionCurve`/`AppMotion` (`lib/theme/motion.dart`) —
+  named durations (`fastFeedback`, `normalTransition`, `metricChange`,
+  `emphasizedEnter`/`emphasizedExit`, `dismissal`, `reveal`), the shared
+  curves, and `AppMotion.resolve(context, duration)` /
+  `AppMotion.isReduced(context)` reduced-motion helpers. New motion should use
+  `AppMotion.resolve` rather than re-deriving the `MediaQuery.disableAnimations`
+  check ad hoc.
+- `AppSemanticColors` (`lib/theme/app_semantic_colors.dart`) — a
+  `ThemeExtension` aliasing `success`/`warning`/`info`/`destructive`/
+  `selected`/`disabledContent`/`disabledContainer`/`overlayScrim`/
+  `elevatedSurface` (each with an `on*` counterpart) onto the active
+  `ColorScheme`. Access via `AppSemanticColors.of(context)`. Every field is
+  derived from the scheme, so light, dark, pure-black, and dynamic-color
+  themes resolve correctly automatically.
+- `AppTypography` (`lib/theme/app_typography.dart`) — a `ThemeExtension`
+  naming the treatments in the "Typography" section below (`heroTitle`/
+  `heroTitleCompact`, `sectionTitle`, `strongTitle`, `body`/`bodyCompact`,
+  `supportingBody`, `eyebrow`, `label`, `metricValue`), plus two roles that
+  did not have a name before this phase: `metadata` (small supporting
+  captions) and `numeric` (prominent numeric values with tabular figures).
+  Access via `AppTypography.of(context)`.
+
+`getAppTheme` registers `AppSemanticColors` and `AppTypography` as theme
+extensions built from its own resolved `colorScheme`/`textTheme`, so they are
+always available via `Theme.of(context).extension<...>()` (or the `.of(context)`
+helpers above) on any screen using the app theme.
+
+Icon system: the core app uses `fluentui_system_icons`; the personalized/
+Spotify-import surfaces intentionally use Material's built-in `Icons.*` as a
+documented exception (`docs/DECISIONS.md` D-012). New code in each area should
+continue using that area's existing icon system rather than mixing a third.
 
 ## Color and elevation
 
@@ -54,6 +113,11 @@ Status color is semantic, not decorative. Neutral, success, warning, and error
 messages use `PersonalizedStatusBanner`; do not communicate state through color
 alone.
 
+`AppSemanticColors` (`lib/theme/app_semantic_colors.dart`) names these and a
+few additional roles (`destructive`, `selected`, `disabledContent`/
+`disabledContainer`, `overlayScrim`, `elevatedSurface`) — see "Design tokens"
+above.
+
 ## Typography
 
 Use the active `ThemeData.textTheme`. The existing app theme uses `paytoneOne`
@@ -72,6 +136,9 @@ weight and spacing rather than introducing another font.
 Large headings need compact alternatives. Test long track, artist, album,
 playlist, and translated strings; do not rely on a single English screenshot.
 
+Each treatment above has a named role in `AppTypography`
+(`lib/theme/app_typography.dart`) — see "Design tokens" above.
+
 ## Shape, spacing, and composition
 
 Rounded, layered cards are the primary composition language. Existing shared
@@ -88,6 +155,10 @@ These values describe current components, not a requirement to repeat one
 radius everywhere. Reuse the shared components before introducing another card
 primitive. Keep a visible hierarchy between page background, grouped surface,
 selection state, and primary action.
+
+The radii above have named roles in `AppShape` (`lib/theme/app_shape.dart`)
+and the spacing values have named roles in `AppSpacing`
+(`lib/theme/app_spacing.dart`) — see "Design tokens" above.
 
 Use generous page margins and consistent vertical rhythm. Dense, repetitive
 review controls may be more compact, but touch targets and readable labels take
@@ -127,8 +198,11 @@ Current shared timing establishes the vocabulary:
 - shared reveal: 360 ms plus its stagger delay;
 - review-deck actions: approximately 220-260 ms for commit or recovery.
 
-Use `MediaQuery.disableAnimations` for reduced-motion behavior. Shared reveal
-and route helpers already collapse to no motion. New motion must handle
+Use `AppMotion.resolve(context, duration)` (`lib/theme/motion.dart`) for
+reduced-motion behavior instead of checking `MediaQuery.disableAnimations` ad
+hoc; the named durations/curves above are `AppMotionDuration`/`AppMotionCurve`
+— see "Design tokens" above. Shared reveal and route helpers already collapse
+to no motion. New motion must handle
 interruption, rapid taps, back navigation, cancellation, and state changes while
 an animation is active. Haptics should confirm meaningful decisions, not every
 minor tap.

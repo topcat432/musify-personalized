@@ -43,6 +43,7 @@ class RenameSongDialog extends StatefulWidget {
 class _RenameSongDialogState extends State<RenameSongDialog> {
   late final TextEditingController _titleController;
   late final TextEditingController _artistController;
+  bool _submitted = false;
 
   @override
   void initState() {
@@ -59,6 +60,7 @@ class _RenameSongDialogState extends State<RenameSongDialog> {
   }
 
   void _handleRename() {
+    if (_submitted) return;
     final newTitle = _titleController.text.trim();
     final newArtist = _artistController.text.trim();
 
@@ -78,6 +80,7 @@ class _RenameSongDialogState extends State<RenameSongDialog> {
       return;
     }
 
+    _submitted = true;
     widget.onRename(newTitle, newArtist);
     Navigator.of(context).pop();
   }
@@ -137,7 +140,11 @@ class _RenameSongDialogState extends State<RenameSongDialog> {
       actionsAlignment: MainAxisAlignment.center,
       actions: <Widget>[
         OutlinedButton(
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () {
+            if (_submitted) return;
+            _submitted = true;
+            Navigator.of(context).pop();
+          },
           style: OutlinedButton.styleFrom(
             side: BorderSide(color: colorScheme.outline),
             shape: RoundedRectangleBorder(

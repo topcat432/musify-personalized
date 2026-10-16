@@ -13,11 +13,18 @@ import 'package:musify/services/spotify_import_destination_service.dart';
 import 'package:musify/widgets/personalized_ui.dart';
 
 class SpotifyImportDestinationPage extends StatefulWidget {
-  const SpotifyImportDestinationPage({super.key, this.initialSnapshot});
+  const SpotifyImportDestinationPage({
+    super.key,
+    this.initialSnapshot,
+    this.sourcePlaylistPosition,
+    this.routingService = const SpotifyImportDestinationService(),
+  });
 
   /// Supplies deterministic data to screenshot previews without touching the
   /// user's Hive boxes. Production callers leave this null.
   final SpotifyImportDestinationSnapshot? initialSnapshot;
+  final int? sourcePlaylistPosition;
+  final SpotifyImportDestinationService routingService;
 
   @override
   State<SpotifyImportDestinationPage> createState() =>
@@ -26,14 +33,17 @@ class SpotifyImportDestinationPage extends StatefulWidget {
 
 class _SpotifyImportDestinationPageState
     extends State<SpotifyImportDestinationPage> {
-  final _service = const SpotifyImportDestinationService();
+  SpotifyImportDestinationService get _service => widget.routingService;
   final _countController = TextEditingController();
   final _playlistNameController = TextEditingController();
   SpotifyImportDestinationSnapshot? _snapshot;
   SpotifyImportDestinationKind _destination =
       SpotifyImportDestinationKind.likedSongs;
   String? _existingPlaylistId;
-  bool _useAll = true;
+  SpotifyImportSelectionKind _selectionKind = SpotifyImportSelectionKind.all;
+  final Set<String> _selectedRecordingIds = {};
+  bool get _useAll => _selectionKind == SpotifyImportSelectionKind.all;
+  bool _requireWholeSource = false;
   bool _loading = true;
   bool _saving = false;
   String? _error;
@@ -58,8 +68,30 @@ class _SpotifyImportDestinationPageState
   }
 
   void _applySnapshot(SpotifyImportDestinationSnapshot snapshot) {
+    final previousSnapshot = _snapshot;
     _snapshot = snapshot;
-    _countController.text = snapshot.resolvedSongs.length.toString();
+    if (previousSnapshot != null &&
+        previousSnapshot.importSessionId != snapshot.importSessionId) {
+      _selectionKind = SpotifyImportSelectionKind.all;
+      _selectedRecordingIds.clear();
+      _requireWholeSource = false;
+    }
+    _selectedRecordingIds.retainAll(
+      snapshot.resolvedSongs
+          .map((song) => song['ytid']?.toString().trim())
+          .whereType<String>(),
+    );
+    if (previousSnapshot == null || _useAll) {
+      _countController.text = snapshot.resolvedSongs.length.toString();
+    } else {
+      // Refresh duplicate counts after a transfer without silently expanding
+      // the first-N amount the user approved for this destination.
+      final requestedCount = int.tryParse(_countController.text.trim());
+      if (requestedCount != null &&
+          requestedCount > snapshot.resolvedSongs.length) {
+        _countController.text = snapshot.resolvedSongs.length.toString();
+      }
+    }
     if (_playlistNameController.text.trim().isEmpty) {
       _playlistNameController.text = snapshot.sourceName;
     }
@@ -70,7 +102,11 @@ class _SpotifyImportDestinationPageState
 
   Future<void> _load() async {
     try {
-      final snapshot = await _service.loadSnapshot();
+      final snapshot = widget.sourcePlaylistPosition == null
+          ? await _service.loadSnapshot()
+          : await _service.loadSourcePlaylistSnapshot(
+              widget.sourcePlaylistPosition!,
+            );
       if (!mounted) return;
       setState(() {
         _applySnapshot(snapshot);
@@ -86,16 +122,59 @@ class _SpotifyImportDestinationPageState
     }
   }
 
+  int _requestedCount(SpotifyImportDestinationSnapshot snapshot) =>
+      (int.tryParse(_countController.text.trim()) ?? 0).clamp(
+        0,
+        snapshot.resolvedSongs.length,
+      );
+
+  void _chooseSelection(
+    SpotifyImportSelectionKind kind, {
+    bool wholeSource = false,
+  }) {
+    setState(() {
+      _selectionKind = kind;
+      _requireWholeSource = wholeSource;
+      _error = null;
+    });
+  }
+
   int _selectedCount(SpotifyImportDestinationSnapshot snapshot) {
-    if (_useAll) return snapshot.resolvedSongs.length;
-    final parsed = int.tryParse(_countController.text.trim()) ?? 0;
-    return parsed.clamp(0, snapshot.resolvedSongs.length);
+    if (_requireWholeSource && snapshot.wholeSourceReadiness?.ready != true)
+      return 0;
+    if (_selectionKind == SpotifyImportSelectionKind.newlyResolved &&
+        !snapshot.newlyResolvedBaselineKnown)
+      return 0;
+    return _service
+        .selectSongs(
+          snapshot,
+          _requestedCount(snapshot),
+          selectionKind: _selectionKind,
+          selectedRecordingIds: _selectedRecordingIds,
+          requireWholeSource: _requireWholeSource,
+        )
+        .length;
+  }
+
+  void _reportTransferError(Object error) {
+    if (!mounted) return;
+    final message = error.toString();
+    setState(() => _error = message);
+    ScaffoldMessenger.maybeOf(
+      context,
+    )?.showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _route() async {
     final snapshot = _snapshot;
     if (snapshot == null || _saving) return;
     final count = _selectedCount(snapshot);
+    final approvedKind = _selectionKind;
+    final approvedWholeSource = _requireWholeSource;
+    final approvedIds = Set<String>.unmodifiable(_selectedRecordingIds);
+    final approvedDestination = _destination;
+    final approvedName = _playlistNameController.text;
+    final approvedPlaylistId = _existingPlaylistId;
     if (count == 0) {
       setState(() => _error = 'Choose at least one resolved song.');
       return;
@@ -111,13 +190,22 @@ class _SpotifyImportDestinationPageState
       return;
     }
 
-    final preview = _service.preview(
-      snapshot: snapshot,
-      requestedCount: count,
-      destinationKind: _destination,
-      newPlaylistName: _playlistNameController.text,
-      existingPlaylistId: _existingPlaylistId,
-    );
+    final SpotifyImportRoutePreview preview;
+    try {
+      preview = _service.preview(
+        snapshot: snapshot,
+        requestedCount: count,
+        destinationKind: approvedDestination,
+        newPlaylistName: approvedName,
+        existingPlaylistId: approvedPlaylistId,
+        selectionKind: approvedKind,
+        selectedRecordingIds: approvedIds,
+        requireWholeSource: approvedWholeSource,
+      );
+    } catch (error) {
+      _reportTransferError(error);
+      return;
+    }
     final approved = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => SpotifyImportConfirmationDialog(
@@ -136,23 +224,26 @@ class _SpotifyImportDestinationPageState
       final result = await _service.route(
         snapshot: snapshot,
         requestedCount: count,
-        destinationKind: _destination,
-        newPlaylistName: _playlistNameController.text,
-        existingPlaylistId: _existingPlaylistId,
+        destinationKind: approvedDestination,
+        newPlaylistName: approvedName,
+        existingPlaylistId: approvedPlaylistId,
+        selectionKind: approvedKind,
+        selectedRecordingIds: approvedIds,
+        requireWholeSource: approvedWholeSource,
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             '${result.addedCount} songs added to ${result.destinationTitle}. '
-            '${result.alreadyPresentCount} already present.',
+            '${result.alreadyPresentCount} already present.'
+            '${result.trackingRecorded ? '' : ' Transfer saved, but tracking could not be verified. Choose songs explicitly next time.'}',
           ),
         ),
       );
       await _load();
     } catch (error) {
-      if (!mounted) return;
-      setState(() => _error = error.toString());
+      _reportTransferError(error);
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -183,14 +274,27 @@ class _SpotifyImportDestinationPageState
                   icon: Icons.move_to_inbox_rounded,
                   title: 'Finish your music transfer',
                   description:
-                      'Choose how many matched songs to move and exactly where they should appear in Musify.',
+                      'Choose which matched recordings to transfer and exactly where they should appear in Musify.',
                 ),
+
+                if (readySnapshot?.sourcePlaylistPosition != null)
+                  PersonalizedStatusBanner(
+                    title: 'Source playlist: ${readySnapshot!.sourceName}',
+                    message:
+                        'Only resolved recordings from this source are selected, in source order. ${readySnapshot.sourceUnsupportedMembers} unsupported items stay in source review; ${readySnapshot.sourceRepeatedMembers} repeated resolved memberships are retained in the source and transferred once.',
+                  ),
                 if (_error != null) ...[
                   const SizedBox(height: 16),
                   PersonalizedStatusBanner(
                     tone: PersonalizedStatusTone.error,
                     title: 'Transfer not completed',
                     message: _error!,
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: _saving ? null : _load,
+                    icon: const Icon(Icons.refresh_rounded),
+                    label: const Text('Reload source'),
                   ),
                 ],
                 const SizedBox(height: 22),
@@ -214,10 +318,11 @@ class _SpotifyImportDestinationPageState
                     child: _ImportSummary(snapshot: readySnapshot),
                   ),
                   const SizedBox(height: 26),
-                  const PersonalizedSectionHeading(
-                    title: '1. Choose how many',
-                    description:
-                        'Songs stay in their original CSV order. Unmatched tracks are never moved.',
+                  PersonalizedSectionHeading(
+                    title: '1. Choose songs',
+                    description: readySnapshot.sourceRowsReliable
+                        ? 'Songs stay in their original CSV order. Unmatched tracks are never moved.'
+                        : 'Songs keep their saved order. Missing historical row positions are not guessed; unmatched tracks are never moved.',
                   ),
                   const SizedBox(height: 12),
                   _SelectionCard(
@@ -225,20 +330,46 @@ class _SpotifyImportDestinationPageState
                     title: 'Move every matched song',
                     description:
                         '${readySnapshot.resolvedSongs.length} unique songs are ready',
-                    selected: _useAll,
+                    selected: _useAll && !_requireWholeSource,
                     enabled: !_saving,
-                    onTap: () => setState(() => _useAll = true),
+                    onTap: () =>
+                        _chooseSelection(SpotifyImportSelectionKind.all),
                   ),
+                  if (readySnapshot.wholeSourceReadiness != null) ...[
+                    const SizedBox(height: 10),
+                    KeyedSubtree(
+                      key: const ValueKey('whole-source-selection'),
+                      child: _SelectionCard(
+                        icon: Icons.done_all_rounded,
+                        title: 'Whole source recordings',
+                        description: readySnapshot.wholeSourceReadiness!.ready
+                            ? '${readySnapshot.wholeSourceReadiness!.sourceRows} source rows resolved. Each recording transfers once; repeated memberships stay retained.'
+                            : readySnapshot.wholeSourceReadiness!.issue ??
+                                  '${readySnapshot.wholeSourceReadiness!.pending} unresolved, ${readySnapshot.wholeSourceReadiness!.excluded} excluded, ${readySnapshot.wholeSourceReadiness!.unsupported} unsupported members, ${readySnapshot.wholeSourceReadiness!.rejectedInputRows} rejected input rows and ${readySnapshot.wholeSourceReadiness!.unknown} unverified entries remain. Review them or choose a partial transfer.',
+                        selected: _requireWholeSource,
+                        enabled:
+                            !_saving &&
+                            readySnapshot.wholeSourceReadiness!.ready,
+                        onTap: () => _chooseSelection(
+                          SpotifyImportSelectionKind.all,
+                          wholeSource: true,
+                        ),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 10),
                   _SelectionCard(
                     icon: Icons.tune_rounded,
                     title: 'Choose an exact amount',
                     description: 'Move the first songs from this import',
-                    selected: !_useAll,
+                    selected:
+                        _selectionKind == SpotifyImportSelectionKind.firstCount,
                     enabled: !_saving,
-                    onTap: () => setState(() => _useAll = false),
+                    onTap: () =>
+                        _chooseSelection(SpotifyImportSelectionKind.firstCount),
                   ),
-                  if (!_useAll) ...[
+                  if (_selectionKind ==
+                      SpotifyImportSelectionKind.firstCount) ...[
                     const SizedBox(height: 12),
                     TextField(
                       controller: _countController,
@@ -254,6 +385,81 @@ class _SpotifyImportDestinationPageState
                       ),
                     ),
                   ],
+                  const SizedBox(height: 10),
+                  _SelectionCard(
+                    icon: Icons.checklist_rounded,
+                    title: 'Choose individual songs',
+                    description:
+                        'Keep the exact recordings you select, in source order.',
+                    selected:
+                        _selectionKind == SpotifyImportSelectionKind.individual,
+                    enabled: !_saving,
+                    onTap: () =>
+                        _chooseSelection(SpotifyImportSelectionKind.individual),
+                  ),
+                  if (_selectionKind ==
+                      SpotifyImportSelectionKind.individual) ...[
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      height: 320,
+                      child: ListView.builder(
+                        key: const ValueKey('individual-import-recordings'),
+                        itemCount: readySnapshot.resolvedSongs.length,
+                        itemBuilder: (context, index) {
+                          final song = readySnapshot.resolvedSongs[index];
+                          final id = song['ytid']?.toString().trim() ?? '';
+                          return CheckboxListTile(
+                            key: ValueKey('import-recording-$id'),
+                            value: _selectedRecordingIds.contains(id),
+                            onChanged: _saving
+                                ? null
+                                : (checked) => setState(() {
+                                    if (checked == true) {
+                                      _selectedRecordingIds.add(id);
+                                    } else {
+                                      _selectedRecordingIds.remove(id);
+                                    }
+                                  }),
+                            title: Text(
+                              song['title']?.toString() ?? 'Recording',
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            subtitle: Text(
+                              song['artist']?.toString() ?? '',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            controlAffinity: ListTileControlAffinity.leading,
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 10),
+                  _SelectionCard(
+                    icon: Icons.new_releases_outlined,
+                    title: 'Only newly resolved songs',
+                    description: readySnapshot.newlyResolvedBaselineKnown
+                        ? '${readySnapshot.newlyResolvedRecordingIds.length} recordings resolved since the last saved checkpoint.'
+                        : 'Previous resolution tracking is unknown. Choose songs explicitly for this transfer.',
+                    selected:
+                        _selectionKind ==
+                        SpotifyImportSelectionKind.newlyResolved,
+                    enabled:
+                        !_saving && readySnapshot.newlyResolvedBaselineKnown,
+                    onTap: () => _chooseSelection(
+                      SpotifyImportSelectionKind.newlyResolved,
+                    ),
+                  ),
+                  if (!readySnapshot.newlyResolvedBaselineKnown) ...[
+                    const SizedBox(height: 12),
+                    const PersonalizedStatusBanner(
+                      title: 'Previous tracking is unknown',
+                      message:
+                          'Your import and saved music are intact. A confirmed transfer can establish tracking when the saved recording identities are complete.',
+                    ),
+                  ],
                   const SizedBox(height: 28),
                   const PersonalizedSectionHeading(
                     title: '2. Choose a destination',
@@ -265,8 +471,8 @@ class _SpotifyImportDestinationPageState
                     icon: Icons.favorite_rounded,
                     title: 'Liked Songs',
                     description: 'Add them to your heart collection',
-                    selected: _destination ==
-                        SpotifyImportDestinationKind.likedSongs,
+                    selected:
+                        _destination == SpotifyImportDestinationKind.likedSongs,
                     enabled: !_saving,
                     onTap: () => setState(
                       () => _destination =
@@ -277,8 +483,10 @@ class _SpotifyImportDestinationPageState
                   _SelectionCard(
                     icon: Icons.playlist_add_rounded,
                     title: 'Create a new playlist',
-                    description: 'Keep this import together as its own playlist',
-                    selected: _destination ==
+                    description:
+                        'Keep this import together as its own playlist',
+                    selected:
+                        _destination ==
                         SpotifyImportDestinationKind.newPlaylist,
                     enabled: !_saving,
                     onTap: () => setState(
@@ -305,7 +513,8 @@ class _SpotifyImportDestinationPageState
                     description: readySnapshot.customPlaylists.isEmpty
                         ? 'No Musify playlists are available yet'
                         : 'Choose from ${readySnapshot.customPlaylists.length} Musify playlists',
-                    selected: _destination ==
+                    selected:
+                        _destination ==
                         SpotifyImportDestinationKind.existingPlaylist,
                     enabled:
                         !_saving && readySnapshot.customPlaylists.isNotEmpty,
@@ -368,6 +577,7 @@ class SpotifyImportConfirmationDialog extends StatelessWidget {
     return AlertDialog(
       icon: const Icon(Icons.move_to_inbox_rounded),
       title: const Text('Ready to transfer?'),
+      scrollable: true,
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -381,6 +591,27 @@ class SpotifyImportConfirmationDialog extends StatelessWidget {
             value: preview.alreadyPresentCount.toString(),
             label: 'already there and will be skipped',
           ),
+          if (preview.selectedSongs.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Text(
+              '${preview.selectedCount} selected recordings',
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            const SizedBox(height: 6),
+            for (final song in preview.selectedSongs.take(5))
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Text(
+                  '${song['title'] ?? 'Recording'}${song['artist'] == null ? '' : ' - ${song['artist']}'}',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            if (preview.selectedSongs.length > 5)
+              Text(
+                'And ${preview.selectedSongs.length - 5} more selected recordings.',
+              ),
+          ],
           if (preview.unresolvedCount > 0) ...[
             const SizedBox(height: 10),
             _DialogMetric(
@@ -392,10 +623,7 @@ class SpotifyImportConfirmationDialog extends StatelessWidget {
       ),
       actions: [
         TextButton(onPressed: onCancel, child: const Text('Not yet')),
-        FilledButton(
-          onPressed: onConfirm,
-          child: const Text('Transfer songs'),
-        ),
+        FilledButton(onPressed: onConfirm, child: const Text('Transfer songs')),
       ],
     );
   }
@@ -611,9 +839,7 @@ class _TransferActionBar extends StatelessWidget {
             ),
             const SizedBox(width: 14),
             FilledButton.icon(
-              style: FilledButton.styleFrom(
-                minimumSize: const Size(0, 48),
-              ),
+              style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
               onPressed: saving ? null : onPressed,
               icon: saving
                   ? const SizedBox.square(

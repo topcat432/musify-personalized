@@ -8,6 +8,7 @@
  */
 
 import 'package:just_audio/just_audio.dart';
+import 'package:musify/services/online_audio_source.dart';
 
 class ReviewSprintAudioState {
   const ReviewSprintAudioState({
@@ -37,7 +38,7 @@ abstract interface class ReviewSprintAudioPlayer {
 
 class JustAudioReviewSprintPlayer implements ReviewSprintAudioPlayer {
   JustAudioReviewSprintPlayer({AudioPlayer? player})
-      : _player = player ?? AudioPlayer();
+    : _player = player ?? AudioPlayer(useProxyForRequestHeaders: false);
 
   final AudioPlayer _player;
 
@@ -52,7 +53,7 @@ class JustAudioReviewSprintPlayer implements ReviewSprintAudioPlayer {
 
   @override
   Future<void> setUrl(String url) async {
-    await _player.setUrl(url);
+    await _player.setAudioSource(onlineAudioSource(url));
   }
 
   @override

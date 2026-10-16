@@ -30,7 +30,7 @@ import 'package:go_router/go_router.dart';
 import 'package:musify/extensions/l10n.dart';
 import 'package:musify/main.dart';
 import 'package:musify/services/common_services.dart';
-import 'package:musify/services/playlists_manager.dart';
+import 'package:musify/services/playlist_song_rename.dart';
 import 'package:musify/services/router_service.dart';
 import 'package:musify/services/settings_manager.dart';
 import 'package:musify/utilities/flutter_toast.dart';
@@ -202,9 +202,11 @@ List<PopupMenuEntry<String>> _buildSongMenuItems({
                   color: colorScheme.primary,
                 ),
                 const SizedBox(width: 8),
-                Text(
-                  value ? removeOfflineText : makeOfflineText,
-                  style: TextStyle(color: colorScheme.secondary),
+                Flexible(
+                  child: Text(
+                    value ? removeOfflineText : makeOfflineText,
+                    style: TextStyle(color: colorScheme.secondary),
+                  ),
                 ),
               ],
             );
@@ -341,6 +343,9 @@ class SongBar extends StatefulWidget {
     this.showQueueActions = true,
     this.showPlayTime = false,
     this.playlistId,
+    this.playlist,
+    this.playlistSongIndex,
+    this.playlistSourceOrder,
     this.onRenamed,
     this.rank,
     this.barPadding,
@@ -359,7 +364,10 @@ class SongBar extends StatefulWidget {
   final bool isFromLikedSongs;
   final bool showQueueActions;
   final String? playlistId;
-  final VoidCallback? onRenamed;
+  final Map? playlist;
+  final int? playlistSongIndex;
+  final List<int>? playlistSourceOrder;
+  final ValueChanged<Map>? onRenamed;
   final EdgeInsetsGeometry? barPadding;
   final int? rank;
   @override
@@ -397,6 +405,11 @@ class _SongBarState extends State<SongBar> {
     _songOfflineStatus = ValueNotifier(isOffline);
     userLikedSongsList.addListener(_syncLikeStatus);
     userOfflineSongs.addListener(_syncOfflineStatus);
+    offlineAudioChecks.addListener(_syncOfflineAvailability);
+  }
+
+  void _syncOfflineAvailability() {
+    if (mounted) setState(() {});
   }
 
   void _syncLikeStatus() {
@@ -433,6 +446,7 @@ class _SongBarState extends State<SongBar> {
   void dispose() {
     userLikedSongsList.removeListener(_syncLikeStatus);
     userOfflineSongs.removeListener(_syncOfflineStatus);
+    offlineAudioChecks.removeListener(_syncOfflineAvailability);
     _songLikeStatus.dispose();
     _songOfflineStatus.dispose();
     super.dispose();
@@ -441,6 +455,10 @@ class _SongBarState extends State<SongBar> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final saved = getOfflineSongByYtid(_ytid);
+    final canPlay = saved.isEmpty || isOfflineSongPlayable(saved);
+    final checking =
+        saved.isNotEmpty && !offlineAudioChecks.value.containsKey(_ytid);
     final _plays = widget.showPlayTime
         ? (widget.song['listeningCount'] is int)
               ? widget.song['listeningCount'] as int
@@ -453,7 +471,7 @@ class _SongBarState extends State<SongBar> {
       borderRadius: widget.borderRadius,
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: _handleSongTap,
+        onTap: canPlay ? _handleSongTap : null,
         child: Padding(
           padding:
               widget.barPadding ??
@@ -483,11 +501,25 @@ class _SongBarState extends State<SongBar> {
               const SizedBox(width: 14),
 
               Expanded(
-                child: _SongInfo(
-                  title: _songTitle,
-                  artist: _songArtist,
-                  plays: _plays,
-                  colorScheme: colorScheme,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _SongInfo(
+                      title: _songTitle,
+                      artist: _songArtist,
+                      plays: _plays,
+                      colorScheme: colorScheme,
+                    ),
+                    if (!canPlay)
+                      Text(
+                        checking
+                            ? 'Checking saved audio'
+                            : 'Saved audio is unavailable',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: colorScheme.error,
+                        ),
+                      ),
+                  ],
                 ),
               ),
 
@@ -502,7 +534,8 @@ class _SongBarState extends State<SongBar> {
                   onRemove: widget.onRemove,
                   onRename: () => _handleRenameSong(context),
                 ),
-                itemBuilder: (context) => _buildMenuItems(context, colorScheme),
+                itemBuilder: (context) =>
+                    _buildMenuItems(context, colorScheme, canPlay: canPlay),
               ),
             ],
           ),
@@ -559,13 +592,21 @@ class _SongBarState extends State<SongBar> {
   }
 
   void _handleRenameSong(BuildContext context) {
+    final rename = widget.playlist == null || widget.playlistSongIndex == null
+        ? null
+        : PlaylistSongRename(
+            widget.playlist!,
+            sourceIndex: widget.playlistSongIndex!,
+            expectedSong: widget.song as Map,
+            sourceOrder: widget.playlistSourceOrder,
+          );
     showDialog(
       context: context,
-      builder: (context) => RenameSongDialog(
+      builder: (_) => RenameSongDialog(
         currentTitle: _songTitle,
         currentArtist: _songArtist,
         onRename: (newTitle, newArtist) {
-          _renameSong(newTitle, newArtist, context);
+          _renameSong(newTitle, newArtist, context, rename);
         },
       ),
     );
@@ -575,7 +616,10 @@ class _SongBarState extends State<SongBar> {
     String newTitle,
     String newArtist,
     BuildContext context,
+    PlaylistSongRename? rename,
   ) async {
+    if (!mounted) return;
+    final onRenamed = widget.onRenamed;
     try {
       if (widget.isFromLikedSongs) {
         await renameSongInLikedSongs(_ytid, newTitle, newArtist);
@@ -589,21 +633,15 @@ class _SongBarState extends State<SongBar> {
           showToast(context, context.l10n!.settingChangedMsg);
         }
       } else if (widget.playlistId != null) {
-        await renameSongInPlaylist(
-          widget.playlistId,
-          _ytid,
-          newTitle,
-          newArtist,
-        );
-        widget.song['title'] = newTitle;
-        widget.song['artist'] = newArtist;
-        if (context.mounted) {
+        final renamed = await rename?.apply(title: newTitle, artist: newArtist);
+        if (renamed == null) throw StateError('Playlist rename became stale');
+        onRenamed?.call(renamed);
+        if (mounted && context.mounted) {
           setState(() {
             _songTitle = newTitle;
             _songArtist = newArtist;
           });
           showToast(context, context.l10n!.settingChangedMsg);
-          widget.onRenamed?.call();
         }
       }
     } catch (e, stackTrace) {
@@ -616,8 +654,9 @@ class _SongBarState extends State<SongBar> {
 
   List<PopupMenuEntry<String>> _buildMenuItems(
     BuildContext context,
-    ColorScheme colorScheme,
-  ) {
+    ColorScheme colorScheme, {
+    bool canPlay = true,
+  }) {
     final canRename = widget.isFromLikedSongs || widget.playlistId != null;
 
     return _buildSongMenuItems(
@@ -625,7 +664,7 @@ class _SongBarState extends State<SongBar> {
       colorScheme: colorScheme,
       songLikeStatus: _songLikeStatus,
       songOfflineStatus: _songOfflineStatus,
-      showQueueActions: widget.showQueueActions,
+      showQueueActions: widget.showQueueActions && canPlay,
       isRecentSong: widget.isRecentSong == true,
       canRename: canRename,
       canRemove: widget.onRemove != null,

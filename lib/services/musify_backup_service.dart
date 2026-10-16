@@ -16,14 +16,15 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
 import 'package:musify/constants/version.dart';
+import 'package:musify/services/personalized_update_service.dart';
 import 'package:path_provider/path_provider.dart';
 
 const String musifyBackupExtension = 'musifybackup';
 const String musifyBackupFormat = 'musify-personalized-backup';
 const int musifyBackupSchemaVersion = 1;
 const List<String> _requiredBoxNames = ['user', 'settings'];
-const String _releasePackage = 'com.topcat432.musifypersonalized';
-const String _debugPackage = 'com.topcat432.musifypersonalized.debug';
+const String _releasePackage = personalizedProductionPackage;
+const String _debugPackage = '$personalizedProductionPackage.debug';
 const String _gitSha = String.fromEnvironment(
   'GIT_SHA',
   defaultValue: 'unknown',
@@ -67,9 +68,7 @@ class BackupSummary {
       reviewItems: count('reviewItems'),
       unmatchedItems: count('unmatchedItems'),
       errorItems: count('errorItems'),
-      excludedItems: json['excludedItems'] == null
-          ? 0
-          : count('excludedItems'),
+      excludedItems: json['excludedItems'] == null ? 0 : count('excludedItems'),
       favorites: count('favorites'),
       playlists: count('playlists'),
       userKeys: count('userKeys'),
@@ -162,9 +161,9 @@ class MusifyBackupService {
             'The required $boxName database file does not exist.',
           );
         }
-        if (await source.length() == 0) {
+        if (await source.length() == 0 && box.isNotEmpty) {
           throw BackupValidationException(
-            'The required $boxName database file is empty.',
+            'The $boxName file is empty but its open box contains data.',
           );
         }
         sourceFiles[boxName] = source;
@@ -187,6 +186,7 @@ class MusifyBackupService {
         descriptors,
         snapshots,
         summary,
+        appIdentity: await _backupAppIdentity(),
       );
       final bundleFile = File(
         '${stagingDirectory.path}/verified.$musifyBackupExtension',
@@ -244,11 +244,7 @@ class MusifyBackupService {
       );
       return BackupOperationResult(success: false, message: error.message);
     } catch (error, stackTrace) {
-      _logError(
-        'Verified backup failed',
-        error: error,
-        stackTrace: stackTrace,
-      );
+      _logError('Verified backup failed', error: error, stackTrace: stackTrace);
       return BackupOperationResult(
         success: false,
         message: 'Backup failed before verification: $error',
@@ -374,11 +370,15 @@ class MusifyBackupService {
       } else {
         final path = selected.path;
         if (path == null || !await File(path).exists()) {
-          throw BackupValidationException('${selected.name} could not be read.');
+          throw BackupValidationException(
+            '${selected.name} could not be read.',
+          );
         }
         await File(path).openRead().pipe(localCopy.openWrite());
       }
-      return _inspectBundleFile(
+      // Inspection reads the staged file asynchronously. Keep it alive until
+      // validation has completed before the finally block removes its directory.
+      return await _inspectBundleFile(
         localCopy,
         sourceDescription: selected.name,
       );
@@ -485,14 +485,20 @@ class MusifyBackupService {
 
   @visibleForTesting
   static Future<Uint8List> createBundleBytesForTesting(
-    Map<String, Uint8List> payloads,
-  ) async {
+    Map<String, Uint8List> payloads, {
+    InstalledAppIdentity? identity,
+  }) async {
     final staging = await _newTemporaryDirectory('bundle-test-create');
     try {
       final snapshots = await _validatePayloadSet(payloads, staging);
       final summary = _summaryFromSnapshots(snapshots);
       return _encodeBundle(
-        _buildManifest(payloads, snapshots, summary),
+        _buildManifest(
+          payloads,
+          snapshots,
+          summary,
+          appIdentity: identity == null ? null : _manifestAppIdentity(identity),
+        ),
         payloads,
       );
     } finally {
@@ -624,9 +630,7 @@ class MusifyBackupService {
         );
       }
       _requireMatchingSummary(
-        BackupSummary.fromJson(
-          Map<String, dynamic>.from(manifestSummaryRaw),
-        ),
+        BackupSummary.fromJson(Map<String, dynamic>.from(manifestSummaryRaw)),
         actualSummary,
       );
       _requireMatchingBoxInventories(manifestPayloads, snapshots);
@@ -699,9 +703,6 @@ class MusifyBackupService {
           'The $boxName database payload is not valid Base64.',
         );
       }
-      if (bytes.isEmpty) {
-        throw BackupValidationException('The $boxName database is empty.');
-      }
       final record = Map<String, dynamic>.from(payloadRecord);
       final expectedLength = _readNonNegativeInt(
         record['byteLength'],
@@ -764,6 +765,7 @@ class MusifyBackupService {
     final rollbackBytes = <String, Uint8List>{};
     final preRestoreFiles = <String, File>{};
     File? journalFile;
+    var transactionStarted = false;
     try {
       staging = await _newTemporaryDirectory('restore-transaction');
       final candidateSnapshots = await _validatePayloadSet(
@@ -794,6 +796,11 @@ class MusifyBackupService {
         rollbackBytes[boxName] = Uint8List.fromList(
           await currentFile.readAsBytes(),
         );
+        if (rollbackBytes[boxName]!.isEmpty && box.isNotEmpty) {
+          throw BackupValidationException(
+            'The $boxName file is empty but its open box contains data.',
+          );
+        }
       }
 
       // A rollback copy must itself be readable before live data is touched.
@@ -821,6 +828,7 @@ class MusifyBackupService {
         );
       }
       await _writeRestoreJournal(journalFile, state: 'replacing');
+      transactionStarted = true;
 
       var replacements = 0;
       for (final boxName in _requiredBoxNames) {
@@ -845,7 +853,7 @@ class MusifyBackupService {
 
       final restoredSnapshots = <String, _BoxSnapshot>{};
       for (final boxName in _requiredBoxNames) {
-        final box = await Hive.openBox(boxName);
+        final box = await _openStrictBox(boxName);
         restoredSnapshots[boxName] = _snapshotOpenBox(boxName, box);
       }
       final restoredSummary = _summaryFromSnapshots(restoredSnapshots);
@@ -873,17 +881,24 @@ class MusifyBackupService {
         error: error,
         stackTrace: stackTrace,
       );
-      final rollbackError = await _rollBackRestore(
-        targetPaths: targetPaths,
-        rollbackBytes: rollbackBytes,
-        journalFile: journalFile,
-      );
+      // Preflight rejection must not close/reopen or rewrite existing files.
+      // In particular, Hive's normal crash recovery could otherwise truncate
+      // corrupt originals while handling an import that never replaced data.
+      final rollbackError = transactionStarted
+          ? await _rollBackRestore(
+              targetPaths: targetPaths,
+              rollbackBytes: rollbackBytes,
+              journalFile: journalFile,
+            )
+          : null;
       final reason = error is BackupValidationException
           ? error.message
           : error.toString();
       return BackupOperationResult(
         success: false,
-        message: rollbackError == null
+        message: !transactionStarted
+            ? 'Restore rejected before replacement; original data was not changed. $reason'
+            : rollbackError == null
             ? 'Restore rejected; original data was restored. $reason'
             : 'Restore failed and automatic rollback also failed: '
                   '$reason; rollback: $rollbackError',
@@ -895,7 +910,17 @@ class MusifyBackupService {
   }
 
   static Future<Box> _openRequiredBox(String name) async {
-    return Hive.isBoxOpen(name) ? Hive.box(name) : Hive.openBox(name);
+    return Hive.isBoxOpen(name) ? Hive.box(name) : _openStrictBox(name);
+  }
+
+  static Future<Box> _openStrictBox(String name, {String? path}) async {
+    // Hive 2.2.3 shares a completion future for concurrent opens, but leaves
+    // its error unobserved when there is only one caller. Join that same open
+    // through the public API so both error futures are handled, without
+    // enabling recovery or repairing rejected bytes.
+    final first = Hive.openBox(name, path: path, crashRecovery: false);
+    final joined = Hive.openBox(name, path: path, crashRecovery: false);
+    return (await Future.wait([first, joined])).first;
   }
 
   /// Repairs an interrupted two-box restore before Hive opens either box.
@@ -973,9 +998,7 @@ class MusifyBackupService {
     return Uint8List.fromList(await source.readAsBytes());
   }
 
-  static Map<String, dynamic> _validateManifest(
-    Map<String, dynamic> manifest,
-  ) {
+  static Map<String, dynamic> _validateManifest(Map<String, dynamic> manifest) {
     if (manifest['format'] != musifyBackupFormat) {
       throw const BackupValidationException(
         'This file is not a Musify Personalized backup.',
@@ -996,8 +1019,17 @@ class MusifyBackupService {
     final sourcePackage = app['package'];
     final sourceChannel = app['channel'];
     final recognizedIdentity =
-        (sourcePackage == _releasePackage && sourceChannel == 'production') ||
-        (sourcePackage == _debugPackage && sourceChannel == 'debug');
+        (sourcePackage == _releasePackage && sourceChannel == 'stable') ||
+        (sourcePackage == _debugPackage && sourceChannel == 'debug') ||
+        (sourcePackage == 'com.gokadzev.musify.fdroid' &&
+            sourceChannel == 'stable') ||
+        (sourcePackage == 'com.gokadzev.musify.fdroid.debug' &&
+            sourceChannel == 'debug') ||
+        // Historical exports mislabeled the preview binary as production.
+        (sourcePackage == 'com.topcat432.musifypersonalized' &&
+            sourceChannel == 'production') ||
+        (sourcePackage == 'com.topcat432.musifypersonalized.debug' &&
+            sourceChannel == 'debug');
     if (!recognizedIdentity) {
       throw BackupValidationException(
         'Unrecognized backup origin: $sourcePackage / $sourceChannel.',
@@ -1015,8 +1047,9 @@ class MusifyBackupService {
   static Map<String, dynamic> _buildManifest(
     Map<String, Uint8List> payloads,
     Map<String, _BoxSnapshot> snapshots,
-    BackupSummary summary,
-  ) {
+    BackupSummary summary, {
+    Map<String, dynamic>? appIdentity,
+  }) {
     final descriptors = {
       for (final boxName in _requiredBoxNames)
         boxName: _PayloadDescriptor(
@@ -1024,14 +1057,46 @@ class MusifyBackupService {
           sha256: sha256.convert(payloads[boxName]!).toString(),
         ),
     };
-    return _buildManifestFromDescriptors(descriptors, snapshots, summary);
+    return _buildManifestFromDescriptors(
+      descriptors,
+      snapshots,
+      summary,
+      appIdentity: appIdentity,
+    );
+  }
+
+  static Map<String, dynamic> get _fallbackAppIdentity => {
+    'package': kDebugMode ? _debugPackage : _releasePackage,
+    'channel': kDebugMode ? 'debug' : 'stable',
+    'version': appVersion,
+    'gitSha': _gitSha,
+  };
+
+  static Future<Map<String, dynamic>> _backupAppIdentity() async {
+    if (!Platform.isAndroid) return _fallbackAppIdentity;
+    final identity = await const AndroidPersonalizedUpdatePlatform()
+        .getInstalledIdentity();
+    return _manifestAppIdentity(identity);
+  }
+
+  static Map<String, dynamic> _manifestAppIdentity(
+    InstalledAppIdentity identity,
+  ) {
+    return {
+      'package': identity.packageName,
+      'channel': identity.packageName.endsWith('.debug') ? 'debug' : 'stable',
+      'version': identity.versionName,
+      'versionCode': identity.versionCode,
+      'gitSha': _gitSha,
+    };
   }
 
   static Map<String, dynamic> _buildManifestFromDescriptors(
     Map<String, _PayloadDescriptor> descriptors,
     Map<String, _BoxSnapshot> snapshots,
-    BackupSummary summary,
-  ) {
+    BackupSummary summary, {
+    Map<String, dynamic>? appIdentity,
+  }) {
     final payloadManifest = <String, dynamic>{};
     for (final boxName in _requiredBoxNames) {
       final descriptor = descriptors[boxName]!;
@@ -1048,12 +1113,7 @@ class MusifyBackupService {
       'format': musifyBackupFormat,
       'schemaVersion': musifyBackupSchemaVersion,
       'createdAtUtc': DateTime.now().toUtc().toIso8601String(),
-      'app': {
-        'package': kDebugMode ? _debugPackage : _releasePackage,
-        'channel': kDebugMode ? 'debug' : 'production',
-        'version': appVersion,
-        'gitSha': _gitSha,
-      },
+      'app': appIdentity ?? _fallbackAppIdentity,
       'payloads': payloadManifest,
       'summary': summary.toJson(),
     };
@@ -1071,11 +1131,6 @@ class MusifyBackupService {
         );
       }
       final byteLength = await file.length();
-      if (byteLength == 0) {
-        throw BackupValidationException(
-          'The required $boxName database file is empty.',
-        );
-      }
       descriptors[boxName] = _PayloadDescriptor(
         byteLength: byteLength,
         sha256: await _streamSha256(file),
@@ -1117,10 +1172,7 @@ class MusifyBackupService {
         if (index > 0) sink.write(',');
         sink.write('"$boxName.hive":"');
         await sink.addStream(
-          source
-              .openRead()
-              .transform(base64.encoder)
-              .transform(utf8.encoder),
+          source.openRead().transform(base64.encoder).transform(utf8.encoder),
         );
         sink.write('"');
       }
@@ -1144,8 +1196,8 @@ class MusifyBackupService {
     final snapshots = <String, _BoxSnapshot>{};
     for (final boxName in _requiredBoxNames) {
       final source = payloadFiles[boxName]!;
-      if (!await source.exists() || await source.length() == 0) {
-        throw BackupValidationException('The $boxName database is empty.');
+      if (!await source.exists()) {
+        throw BackupValidationException('The $boxName database is missing.');
       }
       final uniqueName =
           'verify_${boxName}_${DateTime.now().microsecondsSinceEpoch}';
@@ -1153,7 +1205,7 @@ class MusifyBackupService {
       await source.openRead().pipe(staged.openWrite());
       Box? box;
       try {
-        box = await Hive.openBox(uniqueName, path: directory.path);
+        box = await _openStrictBox(uniqueName, path: directory.path);
         snapshots[boxName] = _snapshotOpenBox(boxName, box);
       } catch (error) {
         throw BackupValidationException(
@@ -1161,6 +1213,9 @@ class MusifyBackupService {
         );
       } finally {
         await box?.close();
+        if (box == null) {
+          await _waitForValidationClose(uniqueName, directory);
+        }
         try {
           await Hive.deleteBoxFromDisk(uniqueName, path: directory.path);
         } catch (_) {
@@ -1184,16 +1239,15 @@ class MusifyBackupService {
     final snapshots = <String, _BoxSnapshot>{};
     for (final boxName in _requiredBoxNames) {
       final bytes = payloads[boxName]!;
-      if (bytes.isEmpty) {
-        throw BackupValidationException('The $boxName database is empty.');
-      }
+      // Hive represents a new, valid empty box with zero bytes. Nonempty
+      // input must still pass strict frame/CRC validation without repair.
       final uniqueName =
           'verify_${boxName}_${DateTime.now().microsecondsSinceEpoch}';
       final file = File('${directory.path}/$uniqueName.hive');
       await file.writeAsBytes(bytes, flush: true);
       Box? box;
       try {
-        box = await Hive.openBox(uniqueName, path: directory.path);
+        box = await _openStrictBox(uniqueName, path: directory.path);
         snapshots[boxName] = _snapshotOpenBox(boxName, box);
       } catch (error) {
         throw BackupValidationException(
@@ -1201,6 +1255,9 @@ class MusifyBackupService {
         );
       } finally {
         await box?.close();
+        if (box == null) {
+          await _waitForValidationClose(uniqueName, directory);
+        }
         try {
           await Hive.deleteBoxFromDisk(uniqueName, path: directory.path);
         } catch (_) {
@@ -1209,6 +1266,24 @@ class MusifyBackupService {
       }
     }
     return snapshots;
+  }
+
+  static Future<void> _waitForValidationClose(
+    String uniqueName,
+    Directory directory,
+  ) async {
+    // Hive starts close without awaiting it after a failed initialization.
+    // Its own lock deletion must finish before we remove the staged copy.
+    final lock = File('${directory.path}/$uniqueName.lock');
+    final elapsed = Stopwatch()..start();
+    while (await lock.exists()) {
+      if (elapsed.elapsed >= const Duration(seconds: 2)) {
+        throw const BackupValidationException(
+          'The rejected validation database could not be closed safely.',
+        );
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
   }
 
   static _BoxSnapshot _snapshotOpenBox(String logicalName, Box box) {
@@ -1329,7 +1404,8 @@ class MusifyBackupService {
           'The $boxName key inventory is invalid.',
         );
       }
-      final expectedKeys = rawKeys.map((key) => key.toString()).toList()..sort();
+      final expectedKeys = rawKeys.map((key) => key.toString()).toList()
+        ..sort();
       final actual = snapshots[boxName]!;
       if (!listEquals(expectedKeys, actual.keys)) {
         throw BackupValidationException(
@@ -1368,7 +1444,7 @@ class MusifyBackupService {
         if (await preRestore.exists()) await preRestore.delete();
       }
       for (final boxName in _requiredBoxNames) {
-        await Hive.openBox(boxName);
+        await _openStrictBox(boxName);
       }
       if (journalFile != null && await journalFile.exists()) {
         await journalFile.delete();
@@ -1391,7 +1467,19 @@ class MusifyBackupService {
   static Future<void> _deleteDirectoryQuietly(Directory? directory) async {
     if (directory == null) return;
     try {
-      if (await directory.exists()) await directory.delete(recursive: true);
+      if (!await directory.exists()) return;
+      // A rejected Hive open may still be closing after our bounded wait.
+      // Do not remove its lock behind the unawaited backend close, including
+      // when the wait timed out. These are only our own validation copies.
+      await for (final entity in directory.list(followLinks: false)) {
+        if (entity is File &&
+            RegExp(
+              r'^verify_(user|settings)_[0-9]+[.]lock$',
+            ).hasMatch(entity.uri.pathSegments.last)) {
+          return;
+        }
+      }
+      await directory.delete(recursive: true);
     } catch (error, stackTrace) {
       _logError(
         'Failed to delete temporary backup directory',
@@ -1567,9 +1655,7 @@ class _CanonicalBundleReader {
         if (decodeLength > 0) {
           try {
             sink.add(
-              base64Decode(
-                ascii.decode(combined.sublist(0, decodeLength)),
-              ),
+              base64Decode(ascii.decode(combined.sublist(0, decodeLength))),
             );
           } catch (_) {
             throw const BackupValidationException(

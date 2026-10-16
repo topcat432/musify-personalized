@@ -47,6 +47,7 @@ import 'package:musify/widgets/confirmation_dialog.dart';
 import 'package:musify/widgets/custom_bar.dart';
 import 'package:musify/widgets/mini_player_bottom_space.dart';
 import 'package:musify/widgets/section_header.dart';
+import 'package:musify/widgets/validated_backup_summary.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
@@ -528,7 +529,7 @@ class SettingsPage extends StatelessWidget {
   void _showAccentColorPicker(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    showCustomBottomSheet(
+    showPreferenceBottomSheet(
       context,
       Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -558,7 +559,7 @@ class SettingsPage extends StatelessWidget {
                   useSystemColor: false,
                 );
                 showToast(context, context.l10n!.accentChangeMsg);
-                Navigator.pop(context);
+                Navigator.of(context, rootNavigator: true).pop();
               },
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
@@ -594,7 +595,7 @@ class SettingsPage extends StatelessWidget {
       FluentIcons.weather_moon_24_regular,
     ];
 
-    showCustomBottomSheet(
+    showPreferenceBottomSheet(
       context,
       ListView.builder(
         shrinkWrap: true,
@@ -614,7 +615,7 @@ class SettingsPage extends StatelessWidget {
             () {
               addOrUpdateData<int>('settings', 'themeIndex', mode.index);
               Musify.updateAppState(context, newThemeMode: mode);
-              Navigator.pop(context);
+              Navigator.of(context, rootNavigator: true).pop();
             },
             themeMode == mode,
             icon: modeIcons[mode.index],
@@ -632,7 +633,7 @@ class SettingsPage extends StatelessWidget {
         ? '$activeLanguageCode-$activeScriptCode'
         : activeLanguageCode;
 
-    showCustomBottomSheet(
+    showPreferenceBottomSheet(
       context,
       ListView.builder(
         shrinkWrap: true,
@@ -656,7 +657,7 @@ class SettingsPage extends StatelessWidget {
               );
               Musify.updateAppState(context, newLocale: newLocale);
               showToast(context, context.l10n!.languageMsg);
-              Navigator.pop(context);
+              Navigator.of(context, rootNavigator: true).pop();
             },
             activeLanguageFullCode == newLocaleFullCode,
           );
@@ -678,7 +679,7 @@ class SettingsPage extends StatelessWidget {
       FluentIcons.speaker_2_24_filled,
     ];
 
-    showCustomBottomSheet(
+    showPreferenceBottomSheet(
       context,
       ListView.builder(
         shrinkWrap: true,
@@ -694,7 +695,7 @@ class SettingsPage extends StatelessWidget {
               addOrUpdateData<String>('settings', 'audioQuality', quality);
               audioQualitySetting.value = quality;
               showToast(context, context.l10n!.audioQualityMsg);
-              Navigator.pop(context);
+              Navigator.of(context, rootNavigator: true).pop();
             },
             audioQualitySetting.value == quality,
             icon: qualityIcons[index],
@@ -1003,7 +1004,7 @@ class SettingsPage extends StatelessWidget {
             scrollable: true,
             icon: const Icon(FluentIcons.shield_checkmark_24_regular),
             title: Text(legacy ? 'Validated legacy data' : 'Validated backup'),
-            content: _ValidatedBackupSummary(
+            content: ValidatedBackupSummary(
               sourceDescription: backup.sourceDescription,
               summary: summary,
             ),
@@ -1049,159 +1050,5 @@ class SettingsPage extends StatelessWidget {
         icon: result.success ? null : FluentIcons.error_circle_24_regular,
       );
     }
-  }
-}
-
-class _ValidatedBackupSummary extends StatelessWidget {
-  const _ValidatedBackupSummary({
-    required this.sourceDescription,
-    required this.summary,
-  });
-
-  final String sourceDescription;
-  final BackupSummary summary;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-    final metrics = <(String, int)>[
-      ('Imported tracks', summary.importedTracks),
-      ('Match results', summary.matchResults),
-      ('Strong matches', summary.strongMatches),
-      ('Needs review', summary.reviewItems),
-      ('Unmatched', summary.unmatchedItems),
-      if (summary.excludedItems > 0) ('Excluded', summary.excludedItems),
-      ('Errors', summary.errorItems),
-      ('Favorites', summary.favorites),
-      ('Playlists', summary.playlists),
-    ];
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        DecoratedBox(
-          decoration: BoxDecoration(
-            color: colors.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(13),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(
-                  Icons.description_outlined,
-                  color: colors.primary,
-                  size: 21,
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Source',
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: colors.onSurfaceVariant,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        sourceDescription,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 14),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final width = (constraints.maxWidth - 8) / 2;
-            return Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final metric in metrics)
-                  SizedBox(
-                    width: width,
-                    child: _BackupMetric(label: metric.$1, value: metric.$2),
-                  ),
-              ],
-            );
-          },
-        ),
-        const SizedBox(height: 14),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(Icons.undo_rounded, color: colors.primary, size: 20),
-            const SizedBox(width: 9),
-            Expanded(
-              child: Text(
-                'Musify creates and verifies a rollback copy before replacing '
-                'live data. Continue only if these counts look correct.',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: colors.onSurfaceVariant,
-                  height: 1.35,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-class _BackupMetric extends StatelessWidget {
-  const _BackupMetric({required this.label, required this.value});
-
-  final String label;
-  final int value;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colors.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: colors.outlineVariant.withValues(alpha: 0.42),
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '$value',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: colors.onSurfaceVariant,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }

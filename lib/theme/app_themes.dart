@@ -24,6 +24,9 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:musify/services/settings_manager.dart';
+import 'package:musify/theme/app_semantic_colors.dart';
+import 'package:musify/theme/app_shape.dart';
+import 'package:musify/theme/app_typography.dart';
 import 'package:musify/theme/dynamic_color_compat.dart';
 
 ThemeMode themeMode = getThemeMode(themeModeSetting);
@@ -116,14 +119,14 @@ ThemeData getAppTheme(ColorScheme colorScheme) {
         )
       : colorScheme;
 
-  return ThemeData(
+  final resolvedTheme = ThemeData(
     scaffoldBackgroundColor: bgColor,
     colorScheme: effectiveColorScheme,
     cardColor: cardBgColor,
     cardTheme: base.cardTheme.copyWith(
       elevation: 0,
       color: cardBgColor,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(borderRadius: AppShape.card),
     ),
     appBarTheme: base.appBarTheme.copyWith(
       backgroundColor: bgColor,
@@ -171,7 +174,7 @@ ThemeData getAppTheme(ColorScheme colorScheme) {
                 ? pureBlackContainerHigh
                 : colorScheme.surfaceContainerHigh),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: AppShape.control,
         borderSide: BorderSide.none,
       ),
       contentPadding: const EdgeInsets.fromLTRB(18, 14, 20, 14),
@@ -180,7 +183,7 @@ ThemeData getAppTheme(ColorScheme colorScheme) {
       backgroundColor: isLight
           ? colorScheme.surfaceContainerLow
           : (isPureBlack ? pureBlackContainer : null),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      shape: RoundedRectangleBorder(borderRadius: AppShape.dialog),
     ),
     navigationBarTheme: base.navigationBarTheme.copyWith(
       backgroundColor: bgColor,
@@ -241,7 +244,7 @@ ThemeData getAppTheme(ColorScheme colorScheme) {
       color: isLight
           ? colorScheme.surfaceContainerLow
           : (isPureBlack ? pureBlackContainer : null),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(borderRadius: AppShape.popup),
     ),
     dividerTheme: base.dividerTheme.copyWith(
       color: effectiveColorScheme.outlineVariant,
@@ -254,7 +257,7 @@ ThemeData getAppTheme(ColorScheme colorScheme) {
         fontWeight: FontWeight.w500,
       ),
       behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(borderRadius: AppShape.popup),
       elevation: 6,
       actionTextColor: effectiveColorScheme.secondary,
     ),
@@ -265,5 +268,18 @@ ThemeData getAppTheme(ColorScheme colorScheme) {
         TargetPlatform.android: transitionsBuilder,
       },
     ),
+  );
+
+  // Attach the semantic-color and typography-role token extensions on top of
+  // the theme's own resolved `textTheme`/`colorScheme`, so text scaling,
+  // locale-driven font fallback, and pure-black/dynamic-color overrides that
+  // already went into `resolvedTheme` flow through unchanged. This adds a
+  // documented, testable token surface without altering anything
+  // `resolvedTheme` already renders.
+  return resolvedTheme.copyWith(
+    extensions: [
+      AppSemanticColors.fromScheme(effectiveColorScheme),
+      AppTypography.fromTheme(resolvedTheme.textTheme, effectiveColorScheme),
+    ],
   );
 }

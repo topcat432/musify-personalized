@@ -264,6 +264,7 @@ class ProxyManager {
           .timeout(Duration(seconds: timeoutSeconds));
       return manifest;
     } catch (e) {
+      if (e is RequestLimitExceededException) rethrow;
       return null;
     }
   }
@@ -286,6 +287,7 @@ class ProxyManager {
       shouldCloseClient = true;
       return manifest;
     } catch (e, stackTrace) {
+      if (e is RequestLimitExceededException) rethrow;
       logger.log(
         'ProxyManager: failed to validate proxy ${proxy.address}',
         error: e,

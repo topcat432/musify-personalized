@@ -14,7 +14,11 @@ import 'package:musify/services/spotify_track_matching_service.dart';
 import 'package:musify/widgets/personalized_ui.dart';
 
 class SpotifyMatchingPage extends StatefulWidget {
-  const SpotifyMatchingPage({super.key});
+  const SpotifyMatchingPage({
+    super.key,
+    this.matchingService = const SpotifyTrackMatchingService(),
+  });
+  final SpotifyTrackMatchingService matchingService;
 
   @override
   State<SpotifyMatchingPage> createState() => _SpotifyMatchingPageState();
@@ -23,7 +27,7 @@ class SpotifyMatchingPage extends StatefulWidget {
 class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
   static const int _allRemaining = -1;
 
-  final _service = const SpotifyTrackMatchingService();
+  SpotifyTrackMatchingService get _service => widget.matchingService;
   SpotifyMatchingSnapshot? _snapshot;
   bool _loading = true;
   bool _running = false;
@@ -174,7 +178,7 @@ class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
       builder: (dialogContext) => AlertDialog(
         title: const Text('Restart matching?'),
         content: const Text(
-          'This clears the current staged matching results and starts again with the newest finder. Your imported CSV remains saved.',
+          'This clears the current staged matching results and starts again with the newest finder. Your imported song list remains saved.',
         ),
         actions: [
           TextButton(
@@ -247,8 +251,7 @@ class _SpotifyMatchingPageState extends State<SpotifyMatchingPage> {
                       onReviewTap: snapshot.reviewCount > 0 && !_running
                           ? _openQuickReview
                           : null,
-                      onUnmatchedTap:
-                          snapshot.unmatchedCount > 0 && !_running
+                      onUnmatchedTap: snapshot.unmatchedCount > 0 && !_running
                           ? _openResolutionQueue
                           : null,
                     ),
@@ -579,11 +582,7 @@ class _ProgressCard extends StatelessWidget {
 }
 
 class _CountMetric extends StatelessWidget {
-  const _CountMetric({
-    required this.label,
-    required this.count,
-    this.onTap,
-  });
+  const _CountMetric({required this.label, required this.count, this.onTap});
 
   final String label;
   final int count;

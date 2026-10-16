@@ -50,3 +50,11 @@ lib/localization/app_*.dart
 
 # Generated untranslated messages file
 lib/localization/untranslated.json
+
+# Verification output and personal data never belong in source control.
+tool/failures/
+*.musifybackup
+*.hive
+*.jks
+*.hprof
+android/key.properties

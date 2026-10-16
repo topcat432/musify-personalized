@@ -8,12 +8,27 @@
  */
 
 import 'package:flutter/material.dart';
+import 'package:musify/theme/app_semantic_colors.dart';
+import 'package:musify/theme/app_shape.dart';
+import 'package:musify/theme/app_spacing.dart';
+import 'package:musify/theme/app_typography.dart';
+import 'package:musify/theme/motion.dart';
 
 /// Shared visual language for the personalized import and review workflow.
 ///
 /// These widgets deliberately inherit Musify's active color scheme so the
 /// workflow remains at home in dynamic-color, light, dark, and pure-black
 /// themes.
+///
+/// This file consumes the foundation tokens in `lib/theme/` (spacing, shape,
+/// motion, typography, semantic colors) established in
+/// `docs/VISUAL_OVERHAUL_PLAN.md` Phase 1. Every token substitution below
+/// preserves the exact numeric value already in use — this phase formalizes
+/// the existing design language, it does not redesign it. A few
+/// fine-tuned, non-scale values (e.g. the hero's own compact/standard
+/// padding rhythm) are deliberately left as local literals rather than
+/// forced onto the general scale, since changing them would be a visual
+/// change, not a token substitution.
 class PersonalizedHero extends StatelessWidget {
   const PersonalizedHero({
     required this.title,
@@ -36,6 +51,7 @@ class PersonalizedHero extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
+    final typography = AppTypography.of(context);
 
     return PersonalizedReveal(
       child: DecoratedBox(
@@ -48,7 +64,7 @@ class PersonalizedHero extends StatelessWidget {
               colors.surfaceContainerHigh,
             ],
           ),
-          borderRadius: BorderRadius.circular(compact ? 24 : 28),
+          borderRadius: compact ? AppShape.heroCompact : AppShape.hero,
           border: Border.all(
             color: colors.outlineVariant.withValues(alpha: 0.45),
           ),
@@ -63,40 +79,19 @@ class PersonalizedHero extends StatelessWidget {
                 SizedBox(height: compact ? 14 : 20),
               ],
               if (eyebrow != null) ...[
-                Text(
-                  eyebrow!.toUpperCase(),
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color: colors.primary,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1.1,
-                  ),
-                ),
+                Text(eyebrow!.toUpperCase(), style: typography.eyebrow),
                 SizedBox(height: compact ? 5 : 8),
               ],
               Text(
                 title,
-                style:
-                    (compact
-                            ? theme.textTheme.titleLarge
-                            : theme.textTheme.headlineSmall)
-                        ?.copyWith(
-                          color: colors.onSurface,
-                          fontWeight: FontWeight.w800,
-                          height: 1.08,
-                          letterSpacing: -0.5,
-                        ),
+                style: compact
+                    ? typography.heroTitleCompact
+                    : typography.heroTitle,
               ),
               SizedBox(height: compact ? 7 : 10),
               Text(
                 description,
-                style:
-                    (compact
-                            ? theme.textTheme.bodyMedium
-                            : theme.textTheme.bodyLarge)
-                        ?.copyWith(
-                          color: colors.onSurfaceVariant,
-                          height: 1.42,
-                        ),
+                style: compact ? typography.bodyCompact : typography.body,
               ),
               if (footer != null) ...[
                 SizedBox(height: compact ? 14 : 18),
@@ -138,7 +133,7 @@ class PersonalizedSurface extends StatelessWidget {
     super.key,
     this.padding = const EdgeInsets.all(18),
     this.color,
-    this.borderRadius = 24,
+    this.borderRadius = AppShape.surfaceRadius,
   });
 
   final Widget child;
@@ -150,8 +145,8 @@ class PersonalizedSurface extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOutCubic,
+      duration: AppMotion.resolve(context, AppMotionDuration.normalTransition),
+      curve: AppMotionCurve.standardEnter,
       decoration: BoxDecoration(
         color: color ?? colors.surfaceContainerLow,
         borderRadius: BorderRadius.circular(borderRadius),
@@ -178,7 +173,7 @@ class PersonalizedSectionHeading extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final typography = AppTypography.of(context);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -186,27 +181,18 @@ class PersonalizedSectionHeading extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                title,
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.25,
-                ),
-              ),
+              Text(title, style: typography.sectionTitle),
               if (description != null) ...[
                 const SizedBox(height: 5),
-                Text(
-                  description!,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                    height: 1.4,
-                  ),
-                ),
+                Text(description!, style: typography.supportingBody),
               ],
             ],
           ),
         ),
-        if (trailing != null) ...[const SizedBox(width: 12), trailing!],
+        if (trailing != null) ...[
+          const SizedBox(width: AppSpacing.normalGap),
+          trailing!,
+        ],
       ],
     );
   }
@@ -260,7 +246,7 @@ class PersonalizedStatusBanner extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: background.withValues(alpha: 0.82),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: AppShape.status,
       ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(14, 13, 10, 13),
@@ -315,8 +301,8 @@ class PersonalizedMetric extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
+    final colors = Theme.of(context).colorScheme;
+    final typography = AppTypography.of(context);
     return Semantics(
       label: '$label: $value',
       child: Column(
@@ -327,9 +313,12 @@ class PersonalizedMetric extends StatelessWidget {
             const SizedBox(height: 10),
           ],
           AnimatedSwitcher(
-            duration: const Duration(milliseconds: 240),
-            switchInCurve: Curves.easeOutCubic,
-            switchOutCurve: Curves.easeInCubic,
+            duration: AppMotion.resolve(
+              context,
+              AppMotionDuration.metricChange,
+            ),
+            switchInCurve: AppMotionCurve.standardEnter,
+            switchOutCurve: AppMotionCurve.standardExit,
             transitionBuilder: (child, animation) => FadeTransition(
               opacity: animation,
               child: ScaleTransition(
@@ -342,10 +331,7 @@ class PersonalizedMetric extends StatelessWidget {
               key: ValueKey(value),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.4,
-              ),
+              style: typography.metricValue,
             ),
           ),
           const SizedBox(height: 2),
@@ -353,9 +339,7 @@ class PersonalizedMetric extends StatelessWidget {
             label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.labelMedium?.copyWith(
-              color: colors.onSurfaceVariant,
-            ),
+            style: typography.label,
           ),
         ],
       ),
@@ -377,11 +361,10 @@ class PersonalizedReveal extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final disableAnimations =
-        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    final duration = disableAnimations
-        ? Duration.zero
-        : Duration(milliseconds: 360 + delay.inMilliseconds);
+    final duration = AppMotion.resolve(
+      context,
+      AppMotionDuration.reveal + delay,
+    );
     final delayFraction = duration.inMilliseconds == 0
         ? 0.0
         : delay.inMilliseconds / duration.inMilliseconds;
@@ -391,7 +374,7 @@ class PersonalizedReveal extends StatelessWidget {
       curve: Interval(
         delayFraction.clamp(0, 0.8).toDouble(),
         1,
-        curve: Curves.easeOutCubic,
+        curve: AppMotionCurve.standardEnter,
       ),
       builder: (context, value, child) => Opacity(
         opacity: value,
@@ -410,17 +393,17 @@ class PersonalizedReveal extends StatelessWidget {
 
 Route<T> personalizedPageRoute<T>({required WidgetBuilder builder}) {
   return PageRouteBuilder<T>(
-    transitionDuration: const Duration(milliseconds: 320),
-    reverseTransitionDuration: const Duration(milliseconds: 240),
+    transitionDuration: AppMotionDuration.emphasizedEnter,
+    reverseTransitionDuration: AppMotionDuration.emphasizedExit,
     pageBuilder: (context, animation, secondaryAnimation) => builder(context),
     transitionsBuilder: (context, animation, secondaryAnimation, child) {
-      if (MediaQuery.maybeOf(context)?.disableAnimations ?? false) {
+      if (AppMotion.isReduced(context)) {
         return child;
       }
       final curved = CurvedAnimation(
         parent: animation,
-        curve: Curves.easeOutCubic,
-        reverseCurve: Curves.easeInCubic,
+        curve: AppMotionCurve.standardEnter,
+        reverseCurve: AppMotionCurve.standardExit,
       );
       return FadeTransition(
         opacity: curved,
@@ -448,8 +431,9 @@ Future<bool> showPersonalizedDestructiveConfirmation({
     useSafeArea: true,
     isScrollControlled: true,
     builder: (sheetContext) {
-      final theme = Theme.of(sheetContext);
-      final colors = theme.colorScheme;
+      final colors = Theme.of(sheetContext).colorScheme;
+      final semanticColors = AppSemanticColors.of(sheetContext);
+      final typography = AppTypography.of(sheetContext);
       return Padding(
         padding: EdgeInsets.fromLTRB(
           22,
@@ -473,24 +457,19 @@ Future<bool> showPersonalizedDestructiveConfirmation({
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.lg),
             Text(
               title,
               textAlign: TextAlign.center,
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
+              style: typography.strongTitle,
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.sm),
             Text(
               message,
               textAlign: TextAlign.center,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: colors.onSurfaceVariant,
-                height: 1.4,
-              ),
+              style: typography.supportingBody,
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: AppSpacing.xl),
             Row(
               children: [
                 Expanded(
@@ -503,8 +482,8 @@ Future<bool> showPersonalizedDestructiveConfirmation({
                 Expanded(
                   child: FilledButton.icon(
                     style: FilledButton.styleFrom(
-                      backgroundColor: colors.error,
-                      foregroundColor: colors.onError,
+                      backgroundColor: semanticColors.destructive,
+                      foregroundColor: semanticColors.onDestructive,
                     ),
                     onPressed: () => Navigator.of(sheetContext).pop(true),
                     icon: const Icon(Icons.delete_forever_outlined),
@@ -539,8 +518,9 @@ class PersonalizedEmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
+    final typography = AppTypography.of(context);
     return PersonalizedSurface(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(AppSpacing.xxl),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -554,10 +534,14 @@ class PersonalizedEmptyState extends StatelessWidget {
               child: Icon(icon, color: colors.onPrimaryContainer, size: 28),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppSpacing.lg),
           Text(
             title,
             textAlign: TextAlign.center,
+            // Deliberately not `typography.sectionTitle`: that role also
+            // applies a -0.25 letter-spacing tweak this empty-state title
+            // has never had. Keeping the literal here avoids a token
+            // substitution that would silently change rendered spacing.
             style: theme.textTheme.titleLarge?.copyWith(
               fontWeight: FontWeight.w700,
             ),
@@ -566,10 +550,7 @@ class PersonalizedEmptyState extends StatelessWidget {
           Text(
             description,
             textAlign: TextAlign.center,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: colors.onSurfaceVariant,
-              height: 1.4,
-            ),
+            style: typography.supportingBody,
           ),
           if (action != null) ...[const SizedBox(height: 18), action!],
         ],

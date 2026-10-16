@@ -23,10 +23,14 @@ import 'package:audio_service/audio_service.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_flip_card/flutter_flip_card.dart';
+import 'package:go_router/go_router.dart';
 import 'package:musify/main.dart';
+import 'package:musify/services/router_service.dart';
 import 'package:musify/widgets/now_playing/bottom_actions_row.dart';
 import 'package:musify/widgets/now_playing/now_playing_artwork.dart';
 import 'package:musify/widgets/now_playing/now_playing_controls.dart';
+import 'package:musify/widgets/playback_source_error.dart';
+import 'package:musify/widgets/playback_source_status.dart';
 import 'package:musify/widgets/queue_list_view.dart';
 
 class NowPlayingPage extends StatefulWidget {
@@ -66,6 +70,14 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
             return Column(
               children: [
                 _buildAppBar(context, colorScheme),
+                PlaybackSourceError(
+                  stream: audioHandler.playbackState,
+                  onOpenLibrary: () {
+                    final router = GoRouter.of(context);
+                    Navigator.of(context).pop();
+                    router.go(NavigationManager.libraryPath);
+                  },
+                ),
                 Expanded(
                   child: isLargeScreen
                       ? _DesktopLayout(
@@ -107,6 +119,9 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
               ),
             ),
             onPressed: () => Navigator.pop(context),
+          ),
+          Expanded(
+            child: PlaybackSourceStatus(stream: audioHandler.activeSource),
           ),
         ],
       ),

@@ -31,6 +31,15 @@ class SectionTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final fontSize = Theme.of(context).textTheme.titleMedium?.fontSize ?? 16;
+    final titleWidget = Text(
+      title,
+      style: TextStyle(
+        color: colorScheme.onSurface,
+        fontSize: fontSize,
+        fontWeight: FontWeight.w600,
+      ),
+    );
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 16),
@@ -41,17 +50,11 @@ class SectionTitle extends StatelessWidget {
             const SizedBox(width: 10),
           ],
           Expanded(
-            child: MarqueeWidget(
-              child: Text(
-                title,
-                style: TextStyle(
-                  color: colorScheme.onSurface,
-                  fontSize:
-                      Theme.of(context).textTheme.titleMedium?.fontSize ?? 16,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
+            child:
+                MediaQuery.textScalerOf(context).scale(fontSize) >
+                    fontSize * 1.3
+                ? titleWidget
+                : MarqueeWidget(child: titleWidget),
           ),
         ],
       ),

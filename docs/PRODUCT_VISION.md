@@ -2,6 +2,34 @@
 
 Musify Personalized is a private, local-first, single-user music system built exclusively for Daniel. It prioritizes personal relevance, complete user control, exceptional reliability, intelligent automation, transparent recommendations, data ownership, and premium visual design over mass-market compatibility.
 
+## Listening outcome clarification, 2026-10-12
+
+Solve the playback issue and recreate the intended listening experience; the
+internal engine, provider and routing may change. Preserve YouTube-primary
+preference, no mandatory Premium/subscription dependency, easy native playback
+and queue, background/screen-off operation, visible sources and optional modes,
+the intended recording/version, and the existing library/data. The owner is
+implementation-flexible while requiring avoidance of approaches risking a
+YouTube account ban. Assistant execution constraints are attributed separately
+in [decision D-015](DECISIONS.md#d-015---listening-outcome-and-execution-boundary-attribution).
+
+## Supported release scope, approved 2026-10-12
+
+The owner accepts YouTube playback plus saved/offline audio, with Spotify used
+for importing music metadata. The existing Offline mode control and actual-source
+details expose these capabilities. Saved audio is preferred when available;
+otherwise online playback uses the selected YouTube recording. Offline mode uses
+saved files only. Spotify-only/both playback is not a promised capability of this
+release. See decision D-017; provider, device and signed-delivery gates remain.
+
+## Spotify stretch clarification, 2026-10-13
+
+The owner requires Spotify-led playback inside Musify, without playback ads
+or Premium. External handoff and previews do not fulfill that stretch. Research
+must distinguish Spotify-led metadata/discovery with attributed alternate audio
+from Spotify-delivered audio; no fulfillment claim is established for either.
+The supported release baseline above continues unchanged. See D-018.
+
 ## Core rules
 
 - Treat a song as a canonical musical identity, not merely a YouTube video ID.

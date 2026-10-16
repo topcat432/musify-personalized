@@ -9,6 +9,8 @@ void main() {
     required ReviewSwipeDeckController controller,
     required Future<bool> Function(ReviewSwipeAction) onAction,
     bool canAccept = true,
+    Widget? currentCard,
+    Widget? nextCard,
   }) {
     return MaterialApp(
       home: Scaffold(
@@ -18,11 +20,13 @@ void main() {
             height: 560,
             child: ReviewSwipeDeck(
               controller: controller,
-              currentCard: const ColoredBox(
-                key: ValueKey('card-content'),
-                color: Colors.blue,
-              ),
-              nextCard: const ColoredBox(color: Colors.green),
+              currentCard:
+                  currentCard ??
+                  const ColoredBox(
+                    key: ValueKey('card-content'),
+                    color: Colors.blue,
+                  ),
+              nextCard: nextCard ?? const ColoredBox(color: Colors.green),
               canAccept: canAccept,
               onAction: onAction,
             ),
@@ -31,6 +35,41 @@ void main() {
       ),
     );
   }
+
+  testWidgets('only the current recording is exposed to accessibility', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    try {
+      final controller = ReviewSwipeDeckController();
+      Widget card(String label) => Semantics(
+        label: label,
+        child: const ColoredBox(color: Colors.blue),
+      );
+      await tester.pumpWidget(
+        harness(
+          controller: controller,
+          onAction: (_) async => true,
+          currentCard: card('First recording'),
+          nextCard: card('Second recording'),
+        ),
+      );
+      expect(find.bySemanticsLabel('First recording'), findsOneWidget);
+      expect(find.bySemanticsLabel('Second recording'), findsNothing);
+
+      await tester.pumpWidget(
+        harness(
+          controller: controller,
+          onAction: (_) async => true,
+          currentCard: card('Second recording'),
+        ),
+      );
+      expect(find.bySemanticsLabel('Second recording'), findsOneWidget);
+      expect(find.bySemanticsLabel('First recording'), findsNothing);
+    } finally {
+      semantics.dispose();
+    }
+  });
 
   testWidgets('card follows the finger and snaps back below threshold', (
     tester,

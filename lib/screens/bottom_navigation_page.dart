@@ -28,8 +28,9 @@ import 'package:musify/constants/app_constants.dart';
 import 'package:musify/extensions/l10n.dart';
 import 'package:musify/main.dart';
 import 'package:musify/services/settings_manager.dart';
+import 'package:musify/theme/app_spacing.dart';
 import 'package:musify/utilities/flutter_bottom_sheet.dart'
-    show closeCurrentBottomSheet;
+    show closeCurrentBottomSheet, currentBottomSheetOpen;
 import 'package:musify/widgets/mini_player.dart';
 
 class BottomNavigationPage extends StatefulWidget {
@@ -52,11 +53,28 @@ class _BottomNavigationPageState extends State<BottomNavigationPage> {
   int? _previousTabIndex;
 
   @override
+  void initState() {
+    super.initState();
+    currentBottomSheetOpen.addListener(_onSheetVisibilityChanged);
+  }
+
+  @override
+  void dispose() {
+    currentBottomSheetOpen.removeListener(_onSheetVisibilityChanged);
+    super.dispose();
+  }
+
+  void _onSheetVisibilityChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
   Widget build(BuildContext context) {
     return PopScope(
-      canPop: widget.child.currentIndex == 0,
+      canPop: !currentBottomSheetOpen.value && widget.child.currentIndex == 0,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
+        if (closeCurrentBottomSheet()) return;
 
         final currentIndex = widget.child.currentIndex;
         if (currentIndex != 0) {
@@ -126,8 +144,8 @@ class _BottomNavigationPageState extends State<BottomNavigationPage> {
                                 ),
                                 const Padding(
                                   padding: EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 8,
+                                    horizontal: AppSpacing.sm,
+                                    vertical: AppSpacing.sm,
                                   ),
                                   child: MiniPlayer(),
                                 ),

@@ -9,9 +9,17 @@ class StreamManifest {
   /// Available streams.
   final UnmodifiableListView<StreamInfo> streams;
 
+  /// The exact caller-selected format validated before returning this manifest.
+  final StreamInfo? validatedStream;
+
   /// Initializes an instance of [StreamManifest]
-  StreamManifest(Iterable<StreamInfo> streams)
-      : streams = UnmodifiableListView(streams);
+  StreamManifest(Iterable<StreamInfo> streams, {this.validatedStream})
+      : streams = UnmodifiableListView(streams) {
+    if (validatedStream != null &&
+        !this.streams.any((stream) => identical(stream, validatedStream))) {
+      throw ArgumentError('Validated format must belong to this manifest.');
+    }
+  }
 
   /// Gets streams that contain audio
   /// (which includes muxed and audio-only streams).

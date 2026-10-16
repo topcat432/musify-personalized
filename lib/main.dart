@@ -32,7 +32,10 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:musify/extensions/l10n.dart';
 import 'package:musify/localization/app_localizations.dart';
+import 'package:musify/screens/spotify_incoming_files_page.dart';
 import 'package:musify/services/audio_service.dart';
+import 'package:musify/services/common_services.dart'
+    show startOfflineAudioValidation;
 import 'package:musify/services/data_manager.dart';
 import 'package:musify/services/io_service.dart';
 import 'package:musify/services/listening_stats_service.dart';
@@ -42,12 +45,16 @@ import 'package:musify/services/playlist_sharing.dart';
 import 'package:musify/services/playlists_manager.dart';
 import 'package:musify/services/router_service.dart';
 import 'package:musify/services/settings_manager.dart';
+import 'package:musify/services/shared_song_metadata.dart';
+import 'package:musify/services/spotify_incoming_file_service.dart';
 import 'package:musify/services/update_manager.dart';
 import 'package:musify/theme/app_themes.dart';
 import 'package:musify/utilities/flutter_toast.dart';
 import 'package:musify/utilities/language_utils.dart';
 import 'package:musify/utilities/playlist_utils.dart';
 import 'package:musify/utilities/sharing_intent.dart';
+import 'package:musify/widgets/mini_player.dart';
+import 'package:musify/widgets/shared_song_failure_notice.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 
@@ -83,6 +90,41 @@ class Musify extends StatefulWidget {
 }
 
 class _MusifyState extends State<Musify> with WidgetsBindingObserver {
+  bool _incomingInboxOpen = false;
+  int _textShareGeneration = 0;
+  final _sharedSongFailures = ValueNotifier<SharedSongFailure?>(null);
+
+  void _logSharedSongFailure(Object error, StackTrace stackTrace) {
+    logger.log('Shared song failed',
+      error: sharedSongFailureDiagnostic(error), stackTrace: stackTrace);
+  }
+
+  void _reportSharedSongFailure(
+    Object error,
+    StackTrace stackTrace,
+    bool Function() stillCurrent,
+  ) {
+    if (!mounted || !stillCurrent()) return;
+    _logSharedSongFailure(error, stackTrace);
+    _sharedSongFailures.value = SharedSongFailure(
+      sharedSongFailureMessage(error),
+      () => mounted && stillCurrent(),
+    );
+  }
+
+  Future<void> _reviewIncomingFiles() async {
+    final service = SpotifyIncomingFileService.instance;
+    final navigator = NavigationManager.parentNavigatorKey.currentState;
+    if (_incomingInboxOpen || service.inbox.active != null || navigator == null) return;
+    _incomingInboxOpen = true;
+    try {
+      await navigator.push(MaterialPageRoute<void>(
+        builder: (_) => SpotifyIncomingFilesPage(service: service),
+      ));
+    } finally {
+      _incomingInboxOpen = false;
+    }
+  }
   void changeSettings({
     ThemeMode? newThemeMode,
     Locale? newLocale,
@@ -117,6 +159,7 @@ class _MusifyState extends State<Musify> with WidgetsBindingObserver {
     super.initState();
 
     WidgetsBinding.instance.addObserver(this);
+    unawaited(SpotifyIncomingFileService.instance.start());
 
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
 
@@ -133,24 +176,49 @@ class _MusifyState extends State<Musify> with WidgetsBindingObserver {
 
     offlineMode.addListener(_onOfflineModeChanged);
 
+    final initialShareGeneration = _textShareGeneration;
     sharingIntentSubscription = ReceiveSharingIntent.getTextStream().listen(
       (String? value) async {
+        final shareGeneration = ++_textShareGeneration;
         await consumeYoutubeSharedTextIntent(
           value,
           audioHandler: audioHandler,
-          onError: (error, stackTrace) {
-            logger.log(
-              'Error while playing shared song:',
-              error: error,
-              stackTrace: stackTrace,
-            );
-          },
+          stillCurrent: () =>
+              mounted && _textShareGeneration == shareGeneration,
+          onError: _logSharedSongFailure,
+          onOwnedError: (error, stackTrace, ownsAction) => _reportSharedSongFailure(
+            error, stackTrace,
+            () => mounted && _textShareGeneration == shareGeneration && ownsAction(),
+          ),
         );
       },
       onError: (err) {
         logger.log('getTextStream error:', error: err);
       },
     );
+
+    unawaited(consumeInitialSharedTextIntent(
+      audioHandler: audioHandler,
+      readInitialText: ReceiveSharingIntent.getInitialText,
+      stillCurrent: () =>
+          mounted && _textShareGeneration == initialShareGeneration,
+      consume: (value) => consumeYoutubeSharedTextIntent(
+        value,
+        audioHandler: audioHandler,
+        stillCurrent: () =>
+            mounted && _textShareGeneration == initialShareGeneration,
+        onError: _logSharedSongFailure,
+        onOwnedError: (error, stackTrace, ownsAction) => _reportSharedSongFailure(
+          error, stackTrace,
+          () => mounted && _textShareGeneration == initialShareGeneration && ownsAction(),
+        ),
+      ),
+      onError: (error, stackTrace) => logger.log(
+        'getInitialText error:',
+        error: error,
+        stackTrace: stackTrace,
+      ),
+    ));
 
     try {
       LicenseRegistry.addLicense(() async* {
@@ -218,6 +286,8 @@ class _MusifyState extends State<Musify> with WidgetsBindingObserver {
 
     Hive.close();
     sharingIntentSubscription.cancel();
+    _sharedSongFailures.dispose();
+    SpotifyIncomingFileService.instance.dispose();
     super.dispose();
   }
 
@@ -263,14 +333,36 @@ class _MusifyState extends State<Musify> with WidgetsBindingObserver {
             supportedLocales: appSupportedLocales,
             locale: languageSetting,
             routerConfig: NavigationManager.router,
-            builder: (context, child) => kDebugMode
-                ? Banner(
-                    message: 'DEBUG',
-                    location: BannerLocation.topEnd,
-                    color: Colors.red.shade800,
-                    child: child ?? const SizedBox.shrink(),
-                  )
-                : child ?? const SizedBox.shrink(),
+            builder: (context, child) {
+              final display = kDebugMode
+                  ? Banner(
+                      message: 'DEBUG',
+                      location: BannerLocation.topEnd,
+                      color: Colors.red.shade800,
+                      child: child ?? const SizedBox.shrink(),
+                    )
+                  : child ?? const SizedBox.shrink();
+              return Stack(
+                fit: StackFit.expand,
+                children: [
+                  SharedSongFailureNotice(
+                    failures: _sharedSongFailures,
+                    bottomInset: () => audioHandler.mediaItem.value == null
+                        ? 0 : MiniPlayer.playerHeight,
+                    child: display,
+                  ),
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    child: SpotifyIncomingFileNotice(
+                      service: SpotifyIncomingFileService.instance,
+                      onReview: _reviewIncomingFiles,
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
         );
       },
@@ -335,6 +427,7 @@ Future<void> initialisation() async {
 
   applicationDirPath = (await getApplicationDocumentsDirectory()).path;
   await FilePaths.ensureDirectoriesExist();
+  startOfflineAudioValidation();
 }
 
 void handleIncomingLink(Uri? uri) async {

@@ -91,6 +91,13 @@ class ReceiveSharingIntentPlugin : FlutterPlugin, ActivityAware, MethodCallHandl
     }
 
     private fun handleIntent(intent: Intent, initial: Boolean) {
+        // Supported import-file streams are metadata-first in Musify's bridge.
+        // Preserve existing text-only and image/video sharing behavior.
+        val hasStream = intent.hasExtra(Intent.EXTRA_STREAM)
+                || (0 until (intent.clipData?.itemCount ?: 0)).any {
+                    intent.clipData?.getItemAt(it)?.uri != null
+                }
+        if (ImportFileIntentPolicy.excludeFromLegacyCopy(intent.action, intent.type, hasStream)) return
         when {
             (intent.type?.startsWith("text") != true)
                     && (intent.action == Intent.ACTION_SEND

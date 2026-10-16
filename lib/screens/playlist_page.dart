@@ -32,13 +32,13 @@ import 'package:musify/services/common_services.dart';
 import 'package:musify/services/data_manager.dart';
 import 'package:musify/services/playlist_download_service.dart';
 import 'package:musify/services/playlist_sharing.dart';
+import 'package:musify/services/playlist_slot_undo.dart';
 import 'package:musify/services/playlists_manager.dart';
 import 'package:musify/services/settings_manager.dart';
 import 'package:musify/utilities/app_utils.dart';
 import 'package:musify/utilities/flutter_toast.dart';
 import 'package:musify/utilities/offline_playlist_dialogs.dart';
 import 'package:musify/utilities/playlist_dialogs.dart';
-import 'package:musify/utilities/playlist_utils.dart';
 import 'package:musify/utilities/song_filtering.dart';
 import 'package:musify/utilities/sort_utils.dart';
 import 'package:musify/widgets/edit_playlist_dialog.dart';
@@ -73,7 +73,9 @@ class PlaylistPage extends StatefulWidget {
 
 class _PlaylistPageState extends State<PlaylistPage> {
   dynamic _playlist;
+  Map? _sourcePlaylist;
   late List<dynamic> _originalPlaylistList; // Keep original order separately
+  List<int> _playlistSourceOrder = []; // Runtime slots, never stored in songs.
 
   late final playlistLikeStatus = ValueNotifier<bool>(
     isPlaylistAlreadyLiked(_resolvedPlaylistId),
@@ -97,9 +99,9 @@ class _PlaylistPageState extends State<PlaylistPage> {
   late final TextEditingController _searchController;
   late final FocusNode _searchFocusNode;
 
-  List<dynamic> _getSourceList(String searchQuery) {
+  List<int> _getSourceIndices(String searchQuery) {
     final list = _playlist?['list'] as List<dynamic>? ?? [];
-    return filterSongsByQuery(list, searchQuery);
+    return filterSongIndicesByQuery(list, searchQuery);
   }
 
   bool get _isArtistCatalogLoading =>
@@ -170,8 +172,9 @@ class _PlaylistPageState extends State<PlaylistPage> {
         );
       }
 
+      if (_playlist is Map) _sourcePlaylist = _playlist;
       if (_playlist != null && _playlist['list'] != null) {
-        _originalPlaylistList = List<dynamic>.from(_playlist['list'] as List);
+        _capturePlaylistOrder();
         _sortPlaylist(_sortType);
         _syncPlaylistLikeStatus();
       }
@@ -199,7 +202,7 @@ class _PlaylistPageState extends State<PlaylistPage> {
         leading: IconButton(
           icon: const Icon(FluentIcons.arrow_left_24_regular),
           onPressed: () =>
-              Navigator.pop(context, widget.playlistData == _playlist),
+              Navigator.pop(context, widget.playlistData == _sourcePlaylist),
           tooltip: context.l10n!.back,
         ),
       ),
@@ -218,17 +221,19 @@ class _PlaylistPageState extends State<PlaylistPage> {
                     ValueListenableBuilder<String>(
                       valueListenable: _searchQueryNotifier,
                       builder: (context, searchQuery, _) {
-                        final sourceList = _getSourceList(searchQuery);
+                        final sourceIndices = _getSourceIndices(searchQuery);
                         return SliverPadding(
                           padding: commonListViewBottomPadding,
                           sliver: SliverList.builder(
-                            itemCount: sourceList.length,
+                            itemCount: sourceIndices.length,
                             itemBuilder: (context, index) {
                               final isRemovable =
                                   _playlist['source'] == 'user-created';
                               return _buildSongListItem(
-                                sourceList[index],
+                                _playlist['list'][sourceIndices[index]],
                                 index,
+                                sourceIndices[index],
+                                sourceIndices.length,
                                 isRemovable,
                               );
                             },
@@ -255,7 +260,12 @@ class _PlaylistPageState extends State<PlaylistPage> {
                   const SliverMiniPlayerBottomSpace(),
                 ],
               )
-            : EmptyPlaylistState(message: context.l10n!.error),
+            : CustomScrollView(
+                slivers: [
+                  EmptyPlaylistState(message: context.l10n!.error),
+                  const SliverMiniPlayerBottomSpace(),
+                ],
+              ),
       ),
     );
   }
@@ -328,12 +338,15 @@ class _PlaylistPageState extends State<PlaylistPage> {
                     onPressed: () async {
                       final songs = _playlist['list'] as List? ?? [];
                       if (songs.isEmpty) return;
-                      final shuffled = List<Map>.from(songs.whereType<Map>())
-                        ..shuffle();
+                      final orderedSongs = List<Map>.from(
+                        songs.whereType<Map>(),
+                      );
+                      if (orderedSongs.isEmpty) return;
                       await audioHandler.addPlaylistToQueue(
-                        shuffled,
+                        orderedSongs,
                         replace: true,
                         startIndex: 0,
+                        shuffle: true,
                       );
                     },
                   ),
@@ -442,7 +455,7 @@ class _PlaylistPageState extends State<PlaylistPage> {
                     updatePlaylistLikeStatus(
                       _playlist['ytid'],
                       playlistLikeStatus.value,
-                      playlistData: _playlist,
+                      playlistData: _sourcePlaylist ?? _playlist,
                     ),
                   );
                 },
@@ -457,7 +470,7 @@ class _PlaylistPageState extends State<PlaylistPage> {
                     updatePlaylistLikeStatus(
                       _playlist['ytid'],
                       playlistLikeStatus.value,
-                      playlistData: _playlist,
+                      playlistData: _sourcePlaylist ?? _playlist,
                     ),
                   );
                 },
@@ -505,7 +518,7 @@ class _PlaylistPageState extends State<PlaylistPage> {
       onPressed: () async {
         final result = await showDialog<Map?>(
           context: context,
-          builder: (context) => EditPlaylistDialog(playlistData: _playlist),
+          builder: (context) => EditPlaylistDialog(playlistData: _sourcePlaylist ?? _playlist),
         );
 
         if (result != null) {
@@ -518,12 +531,13 @@ class _PlaylistPageState extends State<PlaylistPage> {
             return;
           }
 
+          final sourcePlaylist = _sourcePlaylist ?? _playlist;
           final updatedPlaylist = {
-            ..._playlist,
+            ...sourcePlaylist,
             ...result,
             'ytid': resolvedPlaylistYtid,
             'source': _playlist['source'] ?? result['source'],
-            'list': result['list'] ?? _playlist['list'],
+            'list': result['list'] ?? sourcePlaylist['list'],
           };
 
           // Search root list first, then inside folders.
@@ -571,7 +585,15 @@ class _PlaylistPageState extends State<PlaylistPage> {
           // Update offline playlist if it exists
           unawaited(syncOfflinePlaylistMetadata(updatedPlaylist));
 
-          setState(() => _playlist = updatedPlaylist);
+          setState(() {
+            _playlist = updatedPlaylist;
+            if (_playlist['list'] is List) {
+              _capturePlaylistOrder();
+              _sortPlaylist(_sortType);
+            } else {
+              _sourcePlaylist = updatedPlaylist;
+            }
+          });
           showToast(context, context.l10n!.playlistUpdated);
         }
       },
@@ -700,29 +722,56 @@ class _PlaylistPageState extends State<PlaylistPage> {
       setState(() {
         _playlist = updated;
         if (_playlist['list'] != null) {
-          _originalPlaylistList = List<dynamic>.from(_playlist['list'] as List);
+          _capturePlaylistOrder();
         }
       });
     }
   }
 
   void _updateSongsListOnRemove(int indexOfRemovedSong, dynamic songToRemove) {
-    _originalPlaylistList.removeWhere((s) => s['ytid'] == songToRemove['ytid']);
-    final playlistId = _playlist['ytid'];
+    final sourceIndex = _playlistSourceOrder.removeAt(indexOfRemovedSong);
+    _originalPlaylistList.removeAt(sourceIndex);
+    _playlistSourceOrder = [
+      for (final index in _playlistSourceOrder)
+        index > sourceIndex ? index - 1 : index,
+    ];
+    final undo = PlaylistSlotUndo(
+      _sourcePlaylist!,
+      remainingSourceSongs: _originalPlaylistList,
+      removedSong: songToRemove,
+      sourceIndex: sourceIndex,
+    );
     if (mounted) {
       setState(() {});
       showToastWithButton(
         context,
         context.l10n!.songRemoved,
         context.l10n!.undo.toUpperCase(),
-        () {
-          addSongInCustomPlaylist(
-            context,
-            playlistId,
-            songToRemove,
-            indexToInsert: indexOfRemovedSong,
+        () async {
+          if (!mounted || undo.used) return;
+          _syncOriginalSongValues();
+          final restoredSource = undo.restoredSource(_originalPlaylistList);
+          if (restoredSource == null) {
+            showToast(context, context.l10n!.error);
+            return;
+          }
+          // The writer owns canonical slots; display sorting is reapplied only
+          // to the detached page container after a successful source restore.
+          final restored = await undo.apply(
+            expectedCurrentSongs: List<dynamic>.from(_sourcePlaylist!['list'] as List),
+            currentSourceOrder: List.generate(_originalPlaylistList.length, (i) => i),
+            restoredOrder: List.generate(restoredSource.length, (i) => i),
           );
-          if (mounted) setState(() {});
+          if (!mounted) return;
+          if (restored == null) {
+            showToast(context, context.l10n!.error);
+            return;
+          }
+          setState(() {
+            _playlist = restored;
+            _capturePlaylistOrder();
+            _sortPlaylist(_sortType);
+          });
         },
       );
     } else {
@@ -745,44 +794,82 @@ class _PlaylistPageState extends State<PlaylistPage> {
     }
   }
 
-  void _sortPlaylist(PlaylistSortType type) {
-    if (_playlist == null || _playlist['list'] == null) return;
+  void _capturePlaylistOrder() {
+    _sourcePlaylist = _playlist as Map;
+    // Sort a page-owned container; the library/Hive map retains source order.
+    _playlist = Map<dynamic, dynamic>.from(_sourcePlaylist!)
+      ..['list'] = List<dynamic>.from(_sourcePlaylist!['list'] as List);
+    _originalPlaylistList = List<dynamic>.from(_sourcePlaylist!['list'] as List);
+    _playlistSourceOrder = List.generate(
+      _originalPlaylistList.length,
+      (i) => i,
+    );
+  }
 
-    switch (type) {
-      case PlaylistSortType.default_:
-        // Restore original order from backup
-        _playlist['list'] = List<dynamic>.from(_originalPlaylistList);
-        break;
-      case PlaylistSortType.title:
-        final playlist = List<dynamic>.from(_playlist['list']);
-        sortSongsByKey(playlist, 'title');
-        _playlist['list'] = playlist;
-        break;
-      case PlaylistSortType.artist:
-        final playlist = List<dynamic>.from(_playlist['list']);
-        sortSongsByKey(playlist, 'artist');
-        _playlist['list'] = playlist;
-        break;
-      case PlaylistSortType.dateAdded:
-        _playlist['list'] = List<dynamic>.from(_originalPlaylistList.reversed);
-        break;
+  void _syncOriginalSongValues() {
+    final current = _playlist['list'] as List;
+    if (current.length != _playlistSourceOrder.length) {
+      // A topology change outside this removal flow establishes a fresh view.
+      _capturePlaylistOrder();
+      return;
+    }
+    for (var i = 0; i < current.length; i++) {
+      _originalPlaylistList[_playlistSourceOrder[i]] = current[i];
     }
   }
 
-  Widget _buildSongListItem(dynamic song, int index, bool isRemovable) {
-    final sourceList = _getSourceList(_searchQueryNotifier.value);
-    final totalItems = sourceList.length;
+  void _sortPlaylist(PlaylistSortType type) {
+    if (_playlist == null || _playlist['list'] == null) return;
+    _syncOriginalSongValues();
+    _playlistSourceOrder = _sortedSourceOrder(
+      type,
+      _originalPlaylistList,
+      _playlistSourceOrder,
+    );
+    _playlist['list'] = [
+      for (final index in _playlistSourceOrder) _originalPlaylistList[index],
+    ];
+  }
+
+  List<int> _sortedSourceOrder(
+    PlaylistSortType type,
+    List<dynamic> source,
+    List<int> currentOrder,
+  ) {
+    switch (type) {
+      case PlaylistSortType.default_:
+        return List.generate(source.length, (i) => i);
+      case PlaylistSortType.title:
+      case PlaylistSortType.artist:
+        final slots = <dynamic>[
+          for (final index in currentOrder)
+            {
+              'index': index,
+              'title': source[index]['title'],
+              'artist': source[index]['artist'],
+            },
+        ];
+        sortSongsByKey(
+          slots,
+          type == PlaylistSortType.title ? 'title' : 'artist',
+        );
+        return [for (final slot in slots) slot['index'] as int];
+      case PlaylistSortType.dateAdded:
+        return List.generate(source.length, (i) => source.length - 1 - i);
+    }
+  }
+
+  Widget _buildSongListItem(
+    dynamic song,
+    int index,
+    int fullIndex,
+    int totalItems,
+    bool isRemovable,
+  ) {
     final borderRadius = getItemBorderRadius(index, totalItems);
     final isUserCreatedPlaylist = _playlist?['source'] == 'user-created';
     final playlistId = isUserCreatedPlaylist ? _playlist!['ytid'] : null;
     final isSearching = _searchQueryNotifier.value.isNotEmpty;
-    final fullIndex = isSearching
-        ? PlaylistUtils.findSongIndexByYtid(_playlist, song['ytid'])
-        : index;
-
-    if (isSearching && fullIndex == -1) {
-      logger.log('Warning: Song ${song['ytid']} not found in full playlist');
-    }
 
     return SongBar(
       song,
@@ -790,11 +877,13 @@ class _PlaylistPageState extends State<PlaylistPage> {
       key: listItemKey('playlist_song', index, song),
       onRemove: (isRemovable && !isSearching)
           ? () {
+              _syncOriginalSongValues();
               if (removeSongFromPlaylist(
-                _playlist,
+                _sourcePlaylist!,
                 song,
-                removeOneAtIndex: index,
+                removeOneAtIndex: _playlistSourceOrder[index],
               )) {
+                _playlist['list'] = List<dynamic>.from(_playlist['list'] as List)..removeAt(index);
                 _updateSongsListOnRemove(index, song);
               }
             }
@@ -802,12 +891,20 @@ class _PlaylistPageState extends State<PlaylistPage> {
       onPlay: () {
         audioHandler.playPlaylistSong(
           playlist: _playlist,
-          songIndex: fullIndex != -1 ? fullIndex : index,
+          songIndex: fullIndex,
         );
       },
       borderRadius: borderRadius,
       playlistId: playlistId,
-      onRenamed: () => setState(() {}),
+      playlist: isUserCreatedPlaylist ? _sourcePlaylist : null,
+      playlistSongIndex: _playlistSourceOrder[fullIndex],
+      onRenamed: (renamed) {
+        if (!mounted) return;
+        _playlist = renamed;
+        _capturePlaylistOrder();
+        _sortPlaylist(_sortType);
+        setState(() {});
+      },
     );
   }
 }

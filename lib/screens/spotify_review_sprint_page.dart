@@ -67,6 +67,7 @@ class _SpotifyReviewSprintPageState extends State<SpotifyReviewSprintPage> {
   String? _previewLoadingId;
   String? _previewingId;
   String? _error;
+  String? _previewError;
 
   Map<String, dynamic>? get _current => _items.isEmpty ? null : _items.first;
 
@@ -115,6 +116,7 @@ class _SpotifyReviewSprintPageState extends State<SpotifyReviewSprintPage> {
         _loading = false;
         _saving = false;
         _error = null;
+        _previewError = null;
       });
       await _prepareCurrent();
     } catch (error) {
@@ -232,7 +234,7 @@ class _SpotifyReviewSprintPageState extends State<SpotifyReviewSprintPage> {
         _previewLoadingId = songId;
         _previewingId = null;
         _previewPlaying = false;
-        _error = null;
+        _previewError = null;
       });
     }
 
@@ -274,7 +276,7 @@ class _SpotifyReviewSprintPageState extends State<SpotifyReviewSprintPage> {
       if (!_isCurrentPreview(generation, itemKey, songId)) return;
       await _stopPreview();
       if (!mounted) return;
-      setState(() => _error = 'Preview failed: $error');
+      setState(() => _previewError = 'Preview failed: $error');
     }
   }
 
@@ -304,7 +306,7 @@ class _SpotifyReviewSprintPageState extends State<SpotifyReviewSprintPage> {
           if (!_isCurrentPreview(generation, itemKey, songId)) return;
           setState(() {
             _previewPlaying = false;
-            _error = 'Preview failed: $error';
+            _previewError = 'Preview failed: $error';
           });
         }),
       );
@@ -312,7 +314,7 @@ class _SpotifyReviewSprintPageState extends State<SpotifyReviewSprintPage> {
       if (!_isCurrentPreview(generation, itemKey, songId)) return;
       setState(() {
         _previewPlaying = false;
-        _error = 'Preview failed: $error';
+        _previewError = 'Preview failed: $error';
       });
     }
   }
@@ -560,8 +562,7 @@ class _SpotifyReviewSprintPageState extends State<SpotifyReviewSprintPage> {
     setState(() => _saving = true);
     try {
       final importSessionId =
-          item[SpotifyReviewWorkflowService.importSessionItemKey]
-              ?.toString() ??
+          item[SpotifyReviewWorkflowService.importSessionItemKey]?.toString() ??
           '';
       final applied = await _service.bulkApproveCluster(
         key: key,
@@ -667,10 +668,13 @@ class _SpotifyReviewSprintPageState extends State<SpotifyReviewSprintPage> {
                       }
                     },
                   ),
-                  if (_error != null)
+                  if (_error != null || _previewError != null)
                     _InlineError(
-                      message: _error!,
-                      onDismissed: () => setState(() => _error = null),
+                      message: _error ?? _previewError!,
+                      onDismissed: () => setState(() {
+                        _error = null;
+                        _previewError = null;
+                      }),
                     ),
                   Expanded(
                     child: Padding(
@@ -949,6 +953,58 @@ class _ReviewSongCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: LayoutBuilder(
         builder: (context, constraints) {
+          if (constraints.maxHeight < 270) {
+            return Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    '$sourceTitle · $sourceArtist',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    candidateTitle.isEmpty
+                        ? 'No confident suggestion'
+                        : 'Suggested: $candidateTitle · $candidateArtist',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      if (candidateCount > 1)
+                        IconButton(
+                          tooltip: 'Previous suggestion',
+                          onPressed: onPreviousCandidate,
+                          icon: const Icon(Icons.chevron_left_rounded),
+                        ),
+                      if (songId.isNotEmpty)
+                        IconButton(
+                          tooltip: playing ? 'Pause preview' : 'Play preview',
+                          onPressed: loading ? null : onPreview,
+                          icon: Icon(
+                            playing
+                                ? Icons.pause_rounded
+                                : Icons.play_arrow_rounded,
+                          ),
+                        ),
+                      if (candidateCount > 1)
+                        IconButton(
+                          tooltip: 'Next suggestion',
+                          onPressed: onNextCandidate,
+                          icon: const Icon(Icons.chevron_right_rounded),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          }
           final compact = constraints.maxHeight < 510;
           return Stack(
             fit: StackFit.expand,

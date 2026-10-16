@@ -103,12 +103,54 @@ String formatMonthPeriodLabel(Locale locale, String monthKey) {
   final month = int.tryParse(parts[1]);
   if (year == null || month == null) return monthKey;
 
-  final label = DateFormat.yMMMM(locale.toString()).format(
-    DateTime(year, month),
-  );
+  final label = DateFormat.yMMMM(
+    locale.toString(),
+  ).format(DateTime(year, month));
   return label.isEmpty
       ? monthKey
       : '${label[0].toUpperCase()}${label.substring(1)}';
+}
+
+/// Select formats of the chosen video, before any media request.
+/// Preserve the canonical library recording and its selected source identity.
+/// Aggregate video bitrate is not used as an audio-quality claim.
+StreamInfo? selectPlaybackStreamForQuality(
+  StreamManifest manifest,
+  String selectedVideoId, {
+  bool preferMuxed = false,
+}) {
+  final validated = manifest.validatedStream;
+  if (validated != null &&
+      validated.videoId.value == selectedVideoId &&
+      validated.size.totalBytes > 0 &&
+      validated is AudioStreamInfo) {
+    return validated;
+  }
+  final audio = manifest.audioOnly
+      .where((stream) => stream.videoId.value == selectedVideoId)
+      .toList();
+  if (!preferMuxed && audio.isNotEmpty) {
+    return selectAudioOnlyStreamForQuality(audio.sortByBitrate());
+  }
+  final muxed =
+      manifest.muxed.where((stream) {
+        if (stream.videoId.value != selectedVideoId) return false;
+        final codec = stream.audioCodec.toLowerCase();
+        return (stream.container == StreamContainer.mp4 &&
+                (codec.contains('mp4a') || codec.contains('aac'))) ||
+            (stream.container == StreamContainer.webM &&
+                (codec.contains('opus') || codec.contains('vorbis')));
+      }).toList()..sort((a, b) {
+        final resolution = (a.videoResolution.width * a.videoResolution.height)
+            .compareTo(b.videoResolution.width * b.videoResolution.height);
+        return resolution != 0
+            ? resolution
+            : a.size.totalBytes.compareTo(b.size.totalBytes);
+      });
+  if (muxed.isNotEmpty) return muxed.first;
+  return audio.isEmpty
+      ? null
+      : selectAudioOnlyStreamForQuality(audio.sortByBitrate());
 }
 
 AudioOnlyStreamInfo selectAudioOnlyStreamForQuality(

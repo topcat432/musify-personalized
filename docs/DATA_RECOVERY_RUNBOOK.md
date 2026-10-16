@@ -1,98 +1,118 @@
-# Musify Personalized data-recovery runbook
+# Musify data export and disposable restore
 
-## Incident state
+This procedure preserves the daily Samsung app. It replaces obsolete
+debug-to-separate-production reset/reimport instructions; those remain in Git
+history, not standing recovery instructions.
 
-The debug and production apps are separate Android packages with separate
-private storage:
+## Targets and data boundary
 
-- debug: `com.topcat432.musifypersonalized.debug`
-- production: `com.topcat432.musifypersonalized`
+Verify the selected phone serial and actual package first:
+Selected Samsung serial recorded in private task evidence; retained com.topcat432.musifypersonalized.preview.
+Always use explicit adb -s SERIAL. Do not operate on the Retroid or another
+project's emulator. A disconnected/locked phone needs reconnect/unlock; do not
+enable debugging, alter security or restart a shared ADB server to force access.
 
-An APK `.sha256` file verifies an APK download. An Android signing key proves
-the publisher of an APK. Neither file contains Favorites, imported tracks,
-matching results, playlists, history, or settings.
+The app's schema-1 .musifybackup contains user.hive and settings.hive, checksums,
+key/type inventories and semantic counts. Downloads, cache, userNoBackup and
+audio files are not included. Copy only the app-exported document; private
+run-as extraction is unavailable for the installed non-debuggable release.
+Never commit/upload personal data or screenshots without explicit sharing approval.
 
-The matching dataset is expected in the installed debug package's Hive files,
-primarily `app_flutter/user.hive`. Do not uninstall the debug package or clear
-its storage until recovery is complete and independently verified.
+## Export without restoring over the live library
 
-## Required recovery evidence
+1. Within authorized data-export scope, launch the existing daily app and record
+   current UI-visible Liked Songs/playlists/import/review/exclusion/settings
+   state. Do not substitute old 2,643/2,454 counts for current measurements.
+2. Use Settings -> Data safety -> Create verified backup -> Choose save location.
+   Save locally through Android's document picker, preserving .musifybackup.
+   Avoid cloud destinations. Export flushes/copies boxes; it does not replace
+   the library. Do not match again, route songs or restore on the phone.
+3. Preserve the exported original, copy the document to task-local private
+   evidence storage, and record SHA-256, size, time and source-device identity.
+4. Reopen that actual saved document using the app-supported backup inspector
+   on the disposable target. Verify lengths/checksums, schema, both Hive boxes,
+   semantic summary and key/type inventories. Android's export success returns
+   after picker write and does NOT reopen the saved document; its toast alone
+   is insufficient. Older valid exports may label preview as production; that
+   known origin is accepted without changing schema or payload semantics.
+5. Stop on missing, empty, corrupt, mismatched or unexpected data. Keep the
+   phone unchanged and originals available; do not repair by reset/reimport.
 
-Before extraction, open the debug app and record the displayed counts. The
-known completed run should report:
+## Independent Android restore/restart
 
-- imported tracks: 2,643
-- match results: 2,643
-- strong: 2,128
-- review: 353
-- unmatched: 162
+Use only a designated fresh task-owned AVD or approved disposable device.
+DESKTOP-OPE9IIV has official C:\devtools\android-sdk tooling and an isolated
+Android 35 x86_64 AVD named musify_rehearsal_api35 (emulator-5556 during this
+task). AVD/user-data files live outside the repository. Verify the AVD name
+with adb -s SERIAL emu avd name and verify package inventory before install.
+Never wipe or borrow an existing emulator's dataset.
 
-Do not run Rescue, Review Sprint, restart matching, restore data, or replace the
-CSV before extraction.
+1. Install the preserved signed baseline APK on the fresh target; record its
+   package/version/hash/signer. This changes only disposable app storage.
+2. Copy the exported .musifybackup into that emulator's local Documents/Download
+   area. Use Settings -> Data safety -> Restore from backup and choose it.
+3. Review Validated backup and its current counts before Restore verified data.
+   Restore replaces only the disposable target's user/settings pair and uses
+   staged validation/rollback. Never click restore on the live Samsung.
+4. Verify recording/source identities, order, favorites, playlist memberships,
+   import outcomes/sessions, exclusions and settings; compare with the source
+   export/UI baseline, rather than counts alone.
+5. Close/reopen and restart the disposable Android target; verify again.
+   Re-export there, reopen it, and compare keyed semantic values/inventories
+   against the original. Bundle timestamps/provenance and Hive file packing can
+   differ; those differences do not justify ignoring data-value changes.
+6. After separate signing approval, rehearse in-place update with the exact
+   signed candidate on this restored disposable app and repeat acceptance.
+   Ephemeral debug/unsigned builds cannot prove installed-signer continuity.
 
-## Extraction path A: existing legacy backup
+The task's preserved baseline exposed a selected-file lifetime defect before
+restore validation. The canonical candidate fixes it by awaiting inspection
+before deleting staging. To rehearse that fix while signing is held, use the
+candidate's separate com.topcat432.musifypersonalized.preview.debug package on
+the designated emulator. Record its exact APK/source evidence and keep the
+baseline package intact. A fresh profile can have an empty user database;
+create a clearly synthetic folder through Library first to establish a readable
+pre-restore rollback state. Never initialize or replace live data this way.
+This debug rehearsal does not prove an in-place signed update.
 
-If the installed debug app can create both files below, preserve the originals:
+An emulator restore demonstrates Android recovery, not live-phone update,
+background playback or network-source health. Those remain separately gated.
+No fallback/old dataset may be removed to force success. Keep the original
+backup and its independently verified copy.
 
-- `user.hive`
-- `settings.hive`
+## Reproducible synthetic/semantic tool
 
-The old success message is not evidence. Recovery is valid only when the new
-legacy importer opens both Hive files and reports the expected 2,643 imported
-tracks and 2,643 match results.
+The manual Flutter support tool never accesses devices or live Hive paths:
 
-## Extraction path B: Android Debug Bridge
-
-Use this when the installed debug app cannot create both legacy files. It does
-not require the lost debug signing key, but the installed package must still be
-debuggable.
-
-Run these commands from Windows **Command Prompt**, not Windows PowerShell.
-PowerShell 5 can corrupt binary output when `>` is used.
-
-```bat
-adb devices
-adb shell run-as com.topcat432.musifypersonalized.debug ls -la app_flutter
-adb exec-out run-as com.topcat432.musifypersonalized.debug cat app_flutter/user.hive > user.hive
-adb exec-out run-as com.topcat432.musifypersonalized.debug cat app_flutter/settings.hive > settings.hive
-dir user.hive settings.hive
-certutil -hashfile user.hive SHA256
-certutil -hashfile settings.hive SHA256
+```bash
+flutter test test/support/backup_rehearsal.dart
 ```
 
-Stop if `run-as` reports that the package is unknown or not debuggable. Do not
-uninstall or reinstall in an attempt to repair that error.
+With no input it creates only synthetic data in ignored build/backup-rehearsal,
+with 5 import outcomes (2 matched, 1 review, 1 unmatched, 1 excluded), two liked
+recordings and one playlist with deliberately reversed order. Its legacy origin
+metadata is explicitly synthetic to exercise the installed APK's old contract.
+It is not the owner's backup and cannot close the real-data gate.
 
-## Import into the permanent app
+Within explicitly approved export-inspection scope, set MUSIFY_BACKUP_FILE to
+the saved local .musifybackup; optional MUSIFY_BACKUP_COMPARE names a re-export.
+Run the same tool to validate schema/checksums/inventories and compare typed,
+keyed semantic hashes (map order normalized, list order preserved). It prints
+only summary counts and hashes, not song values. Set variables only for that
+process and keep personal documents outside Git/Library. Successful comparison
+is still not device restart or playback proof.
 
-1. Install only a permanently signed production APK whose package is
-   `com.topcat432.musifypersonalized` and whose version code is higher than the
-   installed production version.
-2. Open **Settings → Recover legacy debug data**.
-3. Select exactly `user.hive` and `settings.hive`.
-4. Confirm that the inspection screen reports 2,643 imported tracks and 2,643
-   match results before continuing.
-5. Restore. The app must create a verified rollback copy, replace both boxes,
-   reopen them, and repeat the count checks before showing success.
-6. Close and reopen the permanent app. Verify the counts again.
-7. Create one new `.musifybackup` file. Verify the success message contains the
-   saved path and expected counts.
-8. Test that backup on a clean test installation before removing the debug app.
+Use a distinct filename for each newly exported/changed document. The bounded
+synthetic rehearsal observed an apparent stale payload when an existing selected
+filename was overwritten; its root cause remains open in RELEASE_STATE.md.
+Synthetic custom IDs must use the app's customId- prefix so UI navigation uses
+the local playlist rather than a YouTube lookup.
 
-The debug app may be removed only after steps 1–8 pass and the original legacy
-files plus the verified `.musifybackup` file exist in separate locations.
-
-## Hard stop conditions
-
-Stop recovery without modifying live data if any of these occur:
-
-- either Hive file is missing or empty;
-- the importer accepts a random or renamed file;
-- imported-track and match-result counts differ;
-- the expected 2,643 counts are absent;
-- a checksum fails;
-- either staged Hive box cannot open;
-- rollback validation fails;
-- the post-restore counts differ from the pre-restore inspection;
-- the production APK has the debug package, debug label, or wrong signing
-  identity.
+The default comparison requires exact whole-map typed semantics. In the recorded
+synthetic rehearsal, pressing No in the first-run update prompt after restart
+explicitly added settings.shouldWeCheckUpdates=false. Only when reproducing that
+known action may MUSIFY_REHEARSAL_UPDATE_CONSENT=false account for that single
+added setting: all original key/value hashes and every other key remain exact,
+and the tool asserts the comparison input did not already contain the key.
+It reports that explicit addition. Never use this flag to excuse an unexplained
+real-data difference; preserve the initial failed whole-map result as evidence.

@@ -8,10 +8,12 @@
  */
 
 import 'package:flutter/material.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:musify/screens/spotify_import_destination_page.dart';
 import 'package:musify/screens/spotify_import_page.dart';
 import 'package:musify/screens/spotify_matching_page.dart';
 import 'package:musify/screens/spotify_review_sprint_page.dart';
+import 'package:musify/screens/spotify_source_playlists_page.dart';
 import 'package:musify/widgets/personalized_ui.dart';
 
 class SpotifyImportHubPage extends StatelessWidget {
@@ -31,6 +33,7 @@ class SpotifyImportHubPage extends StatelessWidget {
             description:
                 'Import a CSV, let Musify find the right recordings, then review only the tracks that need your judgment.',
           ),
+          const _SavedSourcePlaylistsLink(),
           const SizedBox(height: 24),
           PersonalizedReveal(
             delay: const Duration(milliseconds: 70),
@@ -91,7 +94,7 @@ class SpotifyImportHubPage extends StatelessWidget {
                         icon: Icons.move_to_inbox_rounded,
                         title: 'Choose a destination',
                         description:
-                            'Send all or an exact number of resolved songs to Liked Songs or a playlist.',
+                            'Send your chosen resolved songs to Liked Songs or a playlist.',
                         onPressed: () => Navigator.of(context).push(
                           personalizedPageRoute<void>(
                             builder: (_) =>
@@ -200,6 +203,32 @@ class _WorkflowStep extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _SavedSourcePlaylistsLink extends StatelessWidget {
+  const _SavedSourcePlaylistsLink();
+  @override
+  Widget build(BuildContext context) {
+    if (!Hive.isBoxOpen('user')) return const SizedBox.shrink();
+    return ValueListenableBuilder<Box>(
+      valueListenable: Hive.box(
+        'user',
+      ).listenable(keys: ['spotifyImportMetadata']),
+      builder: (context, box, child) {
+        final metadata = box.get('spotifyImportMetadata');
+        if (metadata is! Map || !metadata.containsKey('sourcePlaylists'))
+          return const SizedBox.shrink();
+        return OutlinedButton(
+          onPressed: () => Navigator.of(context).push(
+            personalizedPageRoute<void>(
+              builder: (_) => const SpotifySourcePlaylistsPage(),
+            ),
+          ),
+          child: const Text('Review saved source playlists'),
+        );
+      },
     );
   }
 }

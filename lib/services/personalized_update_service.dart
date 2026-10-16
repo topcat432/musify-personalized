@@ -10,7 +10,9 @@ import 'package:path_provider/path_provider.dart';
 const personalizedReleaseApiUrl =
     'https://api.github.com/repos/topcat432/musify-personalized/releases/latest';
 const personalizedUpdateManifestAsset = 'musify-personalized-update.json';
-const personalizedProductionPackage = 'com.topcat432.musifypersonalized';
+// The historical suffix is permanent Android identity, not a release channel.
+const personalizedProductionPackage =
+    'com.topcat432.musifypersonalized.preview';
 const _maximumApkBytes = 200 * 1024 * 1024;
 
 enum PersonalizedUpdateAvailability { available, current }
@@ -34,17 +36,20 @@ class InstalledAppIdentity {
     required this.packageName,
     required this.versionCode,
     required this.signerSha256,
+    this.versionName = 'unknown',
   });
 
   factory InstalledAppIdentity.fromMap(Map<Object?, Object?> map) {
     return InstalledAppIdentity(
       packageName: map['packageName']?.toString() ?? '',
+      versionName: map['versionName']?.toString() ?? 'unknown',
       versionCode: _readInt(map['versionCode'], 'versionCode'),
       signerSha256: map['signerSha256']?.toString().toLowerCase() ?? '',
     );
   }
 
   final String packageName;
+  final String versionName;
   final int versionCode;
   final String signerSha256;
 }
@@ -212,7 +217,7 @@ class PersonalizedUpdateService {
       headers: _githubHeaders,
     );
     if (releaseResponse.statusCode == 404) {
-      throw StateError('No personalized production update has been published.');
+      throw StateError('No personalized stable update has been published.');
     }
     if (releaseResponse.statusCode != 200) {
       throw HttpException(
@@ -222,7 +227,7 @@ class PersonalizedUpdateService {
 
     final release = _decodeObject(releaseResponse.body, 'GitHub release');
     if (release['draft'] == true || release['prerelease'] == true) {
-      throw const FormatException('GitHub returned a non-production release.');
+      throw const FormatException('GitHub returned a non-stable release.');
     }
     final manifestUrl = _findManifestAsset(release);
     final manifestResponse = await _client.get(
@@ -242,7 +247,7 @@ class PersonalizedUpdateService {
 
     if (installed.packageName != personalizedProductionPackage) {
       throw StateError(
-        'This build is ${installed.packageName}; production updates only replace '
+        'This build is ${installed.packageName}; stable updates only replace '
         '$personalizedProductionPackage.',
       );
     }
@@ -283,13 +288,10 @@ class PersonalizedUpdateService {
         'GET',
         manifest.apkUrl,
         abortTrigger: cancellation?.abortTrigger,
-      )
-        ..headers.addAll(_githubHeaders);
+      )..headers.addAll(_githubHeaders);
       final response = await _client.send(request);
       if (response.statusCode != 200) {
-        throw HttpException(
-          'APK download returned ${response.statusCode}.',
-        );
+        throw HttpException('APK download returned ${response.statusCode}.');
       }
       final contentLength = response.contentLength;
       if (contentLength != null && contentLength > _maximumApkBytes) {
@@ -386,11 +388,7 @@ String _readString(Map<String, dynamic> json, String key) {
   return value;
 }
 
-String _readHex(
-  Map<String, dynamic> json,
-  String key, {
-  required int length,
-}) {
+String _readHex(Map<String, dynamic> json, String key, {required int length}) {
   final value = _readString(json, key).toLowerCase();
   if (value.length != length || !RegExp(r'^[0-9a-f]+$').hasMatch(value)) {
     throw FormatException('Invalid update field: $key.');

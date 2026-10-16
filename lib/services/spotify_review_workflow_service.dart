@@ -8,9 +8,11 @@
  */
 
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:hive/hive.dart';
 import 'package:musify/services/common_services.dart';
+import 'package:musify/services/spotify_import_routing_state.dart';
 import 'package:musify/services/spotify_match_scoring.dart';
 import 'package:youtube_music_explode_dart/youtube_music_explode_dart.dart';
 
@@ -93,8 +95,12 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
     final box = Hive.box('user');
     final results = _readMaps(box.get('spotifyMatchResults'));
     final sessionId = _sessionId(_readMap(box.get('spotifyImportMetadata')));
+    final excluded = _permanentExclusionRows(box.get('spotifyExcludedImportRows'));
     final items = results
-        .where(isPendingResolution)
+        .where(
+          (item) => isPendingResolution(item) &&
+              !_resultPermanentlyExcluded(item, excluded),
+        )
         .map(
           (item) => Map<String, dynamic>.from(item)
             ..[importSessionItemKey] = sessionId,
@@ -137,14 +143,17 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
     void Function(SpotifyRescueProgress progress)? onProgress,
   }) async {
     final box = Hive.box('user');
+    final checkpointState = _captureCheckpointState(box);
     final results = _readMaps(box.get('spotifyMatchResults'));
     final metadata = _readMap(box.get('spotifyImportMetadata'));
     final importSessionId = _sessionId(metadata);
     final targetIndexes = <int>[];
+    final excluded = _permanentExclusionRows(box.get('spotifyExcludedImportRows'));
 
     for (var index = 0; index < results.length; index++) {
       final status = results[index]['status'];
-      if (status == 'needs_review' || status == 'unmatched' || status == 'error') {
+      if (!_resultPermanentlyExcluded(results[index], excluded) &&
+          (status == 'needs_review' || status == 'unmatched' || status == 'error')) {
         targetIndexes.add(index);
       }
     }
@@ -167,6 +176,11 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
         break;
       }
 
+      final liveExcluded = _permanentExclusionRows(box.get('spotifyExcludedImportRows'));
+      if (_resultPermanentlyExcluded(results[index], liveExcluded)) {
+        stopped = true;
+        break;
+      }
       final current = Map<String, dynamic>.from(results[index]);
       var updated = current;
       try {
@@ -215,6 +229,7 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
           results,
           metadata,
           expectedSessionId: importSessionId,
+          expectedState: checkpointState,
         )) {
           stopped = true;
           break;
@@ -244,6 +259,7 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
         results,
         metadata,
         expectedSessionId: importSessionId,
+        expectedState: checkpointState,
       );
     }
     final progress = SpotifyRescueProgress(
@@ -264,23 +280,54 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
     required Map<String, dynamic> item,
     required bool accept,
     Map<String, dynamic>? selectedAlternative,
+  }) => _resolveDecision(
+    item: item,
+    accept: accept,
+    selectedAlternative: selectedAlternative,
+  );
+
+  Future<SpotifyResolutionResult> resolveManualItem({
+    required Map<String, dynamic> item,
+    required Map<String, dynamic> selectedAlternative,
+    required String query,
+    required bool isDirectUrl,
+  }) => _resolveDecision(
+    item: item,
+    accept: true,
+    selectedAlternative: selectedAlternative,
+    manualQuery: query,
+    isDirectUrl: isDirectUrl,
+  );
+
+  Future<SpotifyResolutionResult> _resolveDecision({
+    required Map<String, dynamic> item,
+    required bool accept,
+    Map<String, dynamic>? selectedAlternative,
+    String? manualQuery,
+    bool isDirectUrl = false,
   }) async {
     final box = Hive.box('user');
     final results = _readMaps(box.get('spotifyMatchResults'));
     final metadata = _readMap(box.get('spotifyImportMetadata'));
     final sourceRow = item['sourceRow']?.toString();
-    final index = results.indexWhere(
-      (candidate) => candidate['sourceRow']?.toString() == sourceRow,
-    );
-    if (index == -1) {
+    final indexes = [
+      for (var i = 0; i < results.length; i++)
+        if (results[i]['sourceRow']?.toString() == sourceRow) i,
+    ];
+    if (sourceRow == null || sourceRow.isEmpty || indexes.length != 1) {
       throw StateError('The imported track is no longer in the match list.');
     }
+    final index = indexes.single;
     final importSessionId = validateCurrentItem(
       item: item,
       currentResult: results[index],
       metadata: metadata,
     );
 
+    final excluded = _permanentExclusionRows(box.get('spotifyExcludedImportRows'));
+    if (_resultPermanentlyExcluded(results[index], excluded)) {
+      throw StateError('This track was permanently excluded. Reload the review queue.');
+    }
     final updated = Map<String, dynamic>.from(results[index]);
     var duplicatesApplied = 0;
     if (accept) {
@@ -297,11 +344,19 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
         ..['reviewDecision'] = 'review_sprint_accept'
         ..['reviewedAt'] = DateTime.now().toUtc().toIso8601String();
       results[index] = updated;
-      duplicatesApplied = _applyExactIsrcDuplicates(
-        results,
-        sourceIndex: index,
-        selectedAlternative: alternative!,
-      );
+      if (manualQuery != null) {
+        updated
+          ..['reviewDecision'] = isDirectUrl ? 'manual_url' : 'manual_search'
+          ..['manualSearchQuery'] = manualQuery
+          ..['manualSourceUrl'] = isDirectUrl ? manualQuery : null;
+      } else {
+        duplicatesApplied = _applyExactIsrcDuplicates(
+          results,
+          sourceIndex: index,
+          selectedAlternative: alternative!,
+          excludedRows: excluded,
+        );
+      }
     } else {
       updated
         ..['status'] = 'manual_unmatched'
@@ -313,14 +368,19 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
       results[index] = updated;
     }
 
-    await _checkpoint(
+    if (!await _checkpoint(
       results,
       metadata,
       expectedSessionId: importSessionId,
-    );
+    )) {
+      throw StateError('The import or exclusion changed before this decision was saved.');
+    }
     return SpotifyResolutionResult(
       duplicatesApplied: duplicatesApplied,
-      remainingUnresolved: results.where(isPendingResolution).length,
+      remainingUnresolved: results.where(
+        (entry) => isPendingResolution(entry) &&
+            !_resultPermanentlyExcluded(entry, excluded),
+      ).length,
     );
   }
 
@@ -335,12 +395,14 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
     if (sourceRow == null || sourceRow.isEmpty) {
       throw StateError('The imported track has no stable source row.');
     }
-    final index = results.indexWhere(
-      (candidate) => candidate['sourceRow']?.toString() == sourceRow,
-    );
-    if (index == -1) {
+    final indexes = [
+      for (var i = 0; i < results.length; i++)
+        if (results[i]['sourceRow']?.toString() == sourceRow) i,
+    ];
+    if (indexes.length != 1) {
       throw StateError('The imported track is no longer in the match list.');
     }
+    final index = indexes.single;
     final importSessionId = validateCurrentItem(
       item: item,
       currentResult: results[index],
@@ -362,15 +424,22 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
       ..['excludedAt'] = DateTime.now().toUtc().toIso8601String()
       ..['reviewedAt'] = DateTime.now().toUtc().toIso8601String();
 
-    await _checkpoint(
+    if (!await _checkpoint(
       results,
       metadata,
       expectedSessionId: importSessionId,
       excludedRows: excludedRows.toList(growable: false)..sort(),
-    );
+      explicitExclusionRow: sourceRow,
+    )) {
+      throw StateError('The import changed before this exclusion was saved.');
+    }
+    final permanent = _permanentExclusionRows(excludedRows.toList());
     return SpotifyResolutionResult(
       duplicatesApplied: 0,
-      remainingUnresolved: results.where(isPendingResolution).length,
+      remainingUnresolved: results.where(
+        (item) => isPendingResolution(item) &&
+            !_resultPermanentlyExcluded(item, permanent),
+      ).length,
     );
   }
 
@@ -388,10 +457,12 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
       );
     }
     var approved = 0;
+    final excluded = _permanentExclusionRows(box.get('spotifyExcludedImportRows'));
 
     for (var index = 0; index < results.length; index++) {
       final item = results[index];
-      if (item['status'] != 'needs_review' ||
+      if (_resultPermanentlyExcluded(item, excluded) ||
+          item['status'] != 'needs_review' ||
           clusterKey(item) != key ||
           !isSafeClusterItem(item)) {
         continue;
@@ -632,6 +703,7 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
     List<Map<String, dynamic>> results, {
     required int sourceIndex,
     required Map<String, dynamic> selectedAlternative,
+    required Set<String> excludedRows,
   }) {
     final sourceIsrc = _normalizeIsrc(results[sourceIndex]['sourceIsrc']?.toString() ?? '');
     if (sourceIsrc.isEmpty) return 0;
@@ -639,7 +711,8 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
     if (candidate is! Map) return 0;
     var applied = 0;
     for (var index = 0; index < results.length; index++) {
-      if (index == sourceIndex || !isPendingResolution(results[index])) continue;
+      if (index == sourceIndex || !isPendingResolution(results[index]) ||
+          _resultPermanentlyExcluded(results[index], excludedRows)) continue;
       final otherIsrc = _normalizeIsrc(results[index]['sourceIsrc']?.toString() ?? '');
       if (otherIsrc != sourceIsrc) continue;
       results[index] = Map<String, dynamic>.from(results[index])
@@ -673,28 +746,127 @@ class SpotifyReviewWorkflowService implements SpotifyReviewSprintDataSource {
     Map<String, dynamic> metadata, {
     String? expectedSessionId,
     List<String>? excludedRows,
+    String? explicitExclusionRow,
+    Map<String, Object?>? expectedState,
   }) async {
     final box = Hive.box('user');
+    // Rescue owns a snapshot, not newer decisions made while it was running.
+    if (expectedState != null &&
+        !_sameCheckpointValue(expectedState, _captureCheckpointState(box))) {
+      return false;
+    }
     if (expectedSessionId != null &&
         _sessionId(_readMap(box.get('spotifyImportMetadata'))) !=
             expectedSessionId) {
       return false;
     }
+    final storedResults = _readMaps(box.get('spotifyMatchResults'));
+    final excluded = _permanentExclusionRows(box.get('spotifyExcludedImportRows'));
+    final protected = <String>{
+      ...excluded,
+      for (final item in storedResults)
+        if (isExcluded(item)) _reviewRowKey(item['sourceRow']),
+    };
+    final currentByRow = <String, List<Map<String, dynamic>>>{};
+    final proposedByRow = <String, List<Map<String, dynamic>>>{};
+    for (final item in storedResults) {
+      (currentByRow[_reviewRowKey(item['sourceRow'])] ??= []).add(item);
+    }
+    for (final item in results) {
+      (proposedByRow[_reviewRowKey(item['sourceRow'])] ??= []).add(item);
+    }
+    for (final row in protected) {
+      final current = currentByRow[row] ?? const <Map<String, dynamic>>[];
+      final proposed = proposedByRow[row] ?? const <Map<String, dynamic>>[];
+      if (current.isEmpty && proposed.isEmpty) continue;
+      if (current.length != 1 || proposed.length != 1) return false;
+      if (explicitExclusionRow != null &&
+          row == _reviewRowKey(explicitExclusionRow) &&
+          isExcluded(proposed.single)) continue;
+      if (!_sameCheckpointValue(proposed.single, current.single)) return false;
+    }
+    if (excludedRows != null) excluded.addAll(_permanentExclusionRows(excludedRows));
+    bool excludedResult(Map<String, dynamic> item) => _resultPermanentlyExcluded(item, excluded);
+    preserveCurrentImportRoutingState(
+      metadata,
+      _readMap(box.get('spotifyImportMetadata')),
+    );
     metadata
-      ..['matchedCount'] = results.where(_isMatched).length
-      ..['reviewCount'] = results.where((item) => item['status'] == 'needs_review').length
-      ..['unmatchedCount'] = results.where(_isUnmatched).length
-      ..['errorCount'] = results.where((item) => item['status'] == 'error').length
-      ..['excludedCount'] = results.where(isExcluded).length
-      ..['pendingResolutionCount'] = results.where(isPendingResolution).length
+      ..['matchedCount'] = results.where((item) => !excludedResult(item) && _isMatched(item)).length
+      ..['reviewCount'] = results.where((item) => !excludedResult(item) && item['status'] == 'needs_review').length
+      ..['unmatchedCount'] = results.where((item) => !excludedResult(item) && _isUnmatched(item)).length
+      ..['errorCount'] = results.where((item) => !excludedResult(item) && item['status'] == 'error').length
+      ..['excludedCount'] = results.where(excludedResult).length
+      ..['pendingResolutionCount'] = results.where((item) => !excludedResult(item) && isPendingResolution(item)).length
       ..['lastMatchingCheckpointAt'] = DateTime.now().toUtc().toIso8601String();
+    // Advance from this write's exact proposal. Rereading after await could
+    // accidentally adopt a different owner's intervening write as our baseline.
+    // Hive caches the supplied values. Detach the write from the working list
+    // so processing the next batch cannot mutate the live cache before its guard.
+    final resultWrite = copyImportRoutingValue(results);
+    final metadataWrite = copyImportRoutingValue(metadata);
+    final exclusionWrite = copyImportRoutingValue(excludedRows);
+    final nextState = expectedState == null ? null : <String, Object?>{
+      ..._captureCheckpointState(box),
+      'spotifyMatchResults': copyImportRoutingValue(resultWrite),
+      'spotifyImportMetadata': copyImportRoutingValue(metadataWrite),
+      if (excludedRows != null)
+        'spotifyExcludedImportRows': copyImportRoutingValue(exclusionWrite),
+    };
     await box.putAll({
-      'spotifyMatchResults': results,
-      'spotifyImportMetadata': metadata,
-      if (excludedRows != null) 'spotifyExcludedImportRows': excludedRows,
+      'spotifyMatchResults': resultWrite,
+      'spotifyImportMetadata': metadataWrite,
+      if (excludedRows != null) 'spotifyExcludedImportRows': exclusionWrite,
     });
+    if (expectedState != null && nextState != null) {
+      expectedState
+        ..clear()
+        ..addAll(nextState);
+    }
     return true;
   }
+
+  static Map<String, Object?> _captureCheckpointState(Box<dynamic> box) => {
+    for (final key in const [
+      'spotifyMatchResults', 'spotifyImportMetadata', 'spotifyExcludedImportRows',
+    ])
+      if (box.containsKey(key)) key: copyImportRoutingValue(box.get(key)),
+  };
+
+  static bool _sameCheckpointValue(dynamic left, dynamic right) {
+    if (left is DateTime || right is DateTime) {
+      return left is DateTime && right is DateTime &&
+          left == right && left.isUtc == right.isUtc;
+    }
+    if ((left is Uint8List) != (right is Uint8List)) return false;
+    if (left is List && right is List) {
+      if (left.length != right.length) return false;
+      for (var i = 0; i < left.length; i++) {
+        if (!_sameCheckpointValue(left[i], right[i])) return false;
+      }
+      return true;
+    }
+    if (left is Map && right is Map) {
+      return left.length == right.length && left.keys.every(
+        (key) => right.containsKey(key) && _sameCheckpointValue(left[key], right[key]),
+      );
+    }
+    return left == right;
+  }
+
+  static String _reviewRowKey(dynamic row) =>
+      importRecordingRow(row) ?? row?.toString().trim() ?? '';
+
+  static Set<String> _permanentExclusionRows(dynamic raw) {
+    if (raw == null) return <String>{};
+    if (raw is! List || raw.any((row) => importRecordingRow(row) == null)) {
+      throw StateError('Permanent exclusion history is unreadable; no decision was saved.');
+    }
+    return raw.map((row) => importRecordingRow(row)!).toSet();
+  }
+
+  static bool _resultPermanentlyExcluded(Map<String, dynamic> item, Set<String> rows) =>
+      isExcluded(item) || rows.contains(_reviewRowKey(item['sourceRow']));
 
   static String _sessionId(Map<String, dynamic> metadata) =>
       metadata['importSessionId']?.toString() ??

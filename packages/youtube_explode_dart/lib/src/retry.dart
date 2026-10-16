@@ -23,11 +23,11 @@ Future<T> retry<T>(
       if (client != null && client.closed) {
         throw HttpClientClosedException();
       }
-      _logger.warning('Retrying after exception: $e', e, s);
       retryCount -= getExceptionCost(e);
       if (retryCount <= 0) {
         rethrow;
       }
+      _logger.warning('Retrying after exception: $e', e, s);
       await Future.delayed(const Duration(milliseconds: 500));
     }
   }
@@ -36,9 +36,12 @@ Future<T> retry<T>(
 /// Get "retry" cost of each YoutubeExplode exception.
 int getExceptionCost(Exception e) {
   if (e is RequestLimitExceededException) {
-    return 2;
+    // A rate-limit or Google sorry response is a denial, not a transient
+    // transport failure. Stop this operation without repeating the request.
+    return 5;
   }
   if (e is FatalFailureException) {
+    if (e.statusCode == 403 || e.terminal) return 5;
     return 3;
   }
   if (e is VideoUnplayableException) {

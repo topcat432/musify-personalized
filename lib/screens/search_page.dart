@@ -30,20 +30,40 @@ import 'package:musify/extensions/l10n.dart';
 import 'package:musify/main.dart';
 import 'package:musify/services/common_services.dart';
 import 'package:musify/services/data_manager.dart';
+import 'package:musify/services/music_search_service.dart';
 import 'package:musify/services/playlists_manager.dart';
 import 'package:musify/services/router_service.dart';
+import 'package:musify/theme/app_spacing.dart';
 import 'package:musify/utilities/app_utils.dart';
 import 'package:musify/widgets/artist_bar.dart';
 import 'package:musify/widgets/confirmation_dialog.dart';
 import 'package:musify/widgets/custom_bar.dart';
 import 'package:musify/widgets/custom_search_bar.dart';
 import 'package:musify/widgets/mini_player_bottom_space.dart';
+import 'package:musify/widgets/personalized_ui.dart';
 import 'package:musify/widgets/playlist_bar.dart';
 import 'package:musify/widgets/section_title.dart';
 import 'package:musify/widgets/song_bar.dart';
 
+typedef SearchLoader = Future<List<dynamic>> Function(String query);
+typedef PlaylistSearchLoader =
+    Future<List<dynamic>> Function(String query, String type);
+
 class SearchPage extends StatefulWidget {
-  const SearchPage({super.key});
+  const SearchPage({
+    super.key,
+    this.songSearch,
+    this.videoSearch,
+    this.artistSearch,
+    this.playlistSearch,
+    this.suggestionSearch,
+  });
+
+  final SearchLoader? songSearch;
+  final SearchLoader? videoSearch;
+  final SearchLoader? artistSearch;
+  final PlaylistSearchLoader? playlistSearch;
+  final SearchLoader? suggestionSearch;
 
   @override
   _SearchPageState createState() => _SearchPageState();
@@ -72,12 +92,36 @@ class _SearchPageState extends State<SearchPage> {
   final ValueNotifier<bool> _fetchingSongs = ValueNotifier(false);
   int maxSongsInList = 15;
   List<dynamic> _songsSearchResult = [];
+  List<dynamic> _videosSearchResult = [];
   List<Map<String, dynamic>> _artistsSearchResult = [];
   List<dynamic> _albumsSearchResult = [];
   List<dynamic> _playlistsSearchResult = [];
   List<String> _suggestionsList = [];
   Timer? _debounce;
   int _latestSuggestionRequest = 0;
+  int _latestSearchRequest = 0;
+  String? _completedSearchQuery;
+  bool _searchHadFailure = false;
+
+  bool get _hasSearchResults =>
+      _songsSearchResult.isNotEmpty ||
+      _videosSearchResult.isNotEmpty ||
+      _artistsSearchResult.isNotEmpty ||
+      _albumsSearchResult.isNotEmpty ||
+      _playlistsSearchResult.isNotEmpty;
+
+  bool _isCurrentSearch(int requestId, String query) =>
+      mounted && requestId == _latestSearchRequest && _searchBar.text == query;
+
+  void _clearSearchResults() {
+    _completedSearchQuery = null;
+    _searchHadFailure = false;
+    _songsSearchResult = [];
+    _videosSearchResult = [];
+    _artistsSearchResult = [];
+    _albumsSearchResult = [];
+    _playlistsSearchResult = [];
+  }
 
   Future<void> _submitSearch([String? query]) async {
     if (query != null) {
@@ -92,12 +136,13 @@ class _SearchPageState extends State<SearchPage> {
     _suggestionsList = [];
     if (mounted) setState(() {});
 
-    await search();
     _inputNode.unfocus();
+    await search();
   }
 
   @override
   void dispose() {
+    _latestSearchRequest++;
     _searchBar.dispose();
     _inputNode.dispose();
     _fetchingSongs.dispose();
@@ -106,18 +151,19 @@ class _SearchPageState extends State<SearchPage> {
   }
 
   Future<void> search() async {
+    if (!mounted) return;
+    final requestId = ++_latestSearchRequest;
     final query = _searchBar.text;
 
     if (query.isEmpty) {
-      _songsSearchResult = [];
-      _artistsSearchResult = [];
-      _albumsSearchResult = [];
-      _playlistsSearchResult = [];
+      _clearSearchResults();
       _suggestionsList = [];
-      if (mounted) setState(() {});
+      _fetchingSongs.value = false;
+      setState(() {});
       return;
     }
     _fetchingSongs.value = true;
+    setState(_clearSearchResults);
 
     if (!searchHistory.contains(query)) {
       final updatedHistory = List.from(searchHistory)..insert(0, query);
@@ -125,38 +171,112 @@ class _SearchPageState extends State<SearchPage> {
       unawaited(addOrUpdateData<List>('user', 'searchHistory', updatedHistory));
     }
 
+    var hadFailure = false;
+    void markFailure() => hadFailure = true;
     try {
       final results = await Future.wait<List<dynamic>>([
-        fetchSongsList(query),
-        searchArtists(query),
-        getPlaylists(query: query, type: 'album'),
-        getPlaylists(query: query, type: 'playlist'),
+        _loadSearchCategory(
+          widget.songSearch ?? searchMusicSongs,
+          query,
+          onFailure: markFailure,
+        ),
+        _loadSearchCategory(
+          widget.artistSearch ?? searchArtists,
+          query,
+          onFailure: markFailure,
+        ),
+        _loadSearchCategory(
+          (value) =>
+              widget.playlistSearch?.call(value, 'album') ??
+              getPlaylists(query: value, type: 'album'),
+          query,
+          onFailure: markFailure,
+        ),
+        _loadSearchCategory(
+          (value) =>
+              widget.playlistSearch?.call(value, 'playlist') ??
+              getPlaylists(query: value, type: 'playlist'),
+          query,
+          onFailure: markFailure,
+        ),
+        _loadSearchCategory(
+          widget.videoSearch ?? fetchSongsList,
+          query,
+          onFailure: markFailure,
+        ),
       ]);
 
-      _songsSearchResult = results[0];
-      _artistsSearchResult = results[1]
+      if (!_isCurrentSearch(requestId, query)) return;
+      var songs = results[0];
+      final artists = results[1]
           .whereType<Map>()
           .map(Map<String, dynamic>.from)
           .toList();
-      if (_songsSearchResult.isEmpty && _artistsSearchResult.isNotEmpty) {
-        _songsSearchResult = await _fetchSongsForResolvedArtist(query);
+      if (songs.isEmpty && artists.isNotEmpty && results[4].isEmpty) {
+        songs = await _fetchSongsForResolvedArtist(
+          query,
+          artists,
+          requestId,
+          onFailure: markFailure,
+        );
       }
+      if (!_isCurrentSearch(requestId, query)) return;
+      _songsSearchResult = songs;
+      final songIds = songs
+          .whereType<Map>()
+          .map((song) => song['ytid'])
+          .whereType<String>()
+          .where((id) => id.isNotEmpty)
+          .toSet();
+      _videosSearchResult = results[4]
+          .where((video) => video is! Map || !songIds.contains(video['ytid']))
+          .toList();
+      _artistsSearchResult = artists;
       _albumsSearchResult = results[2];
       _playlistsSearchResult = results[3];
     } catch (e, stackTrace) {
+      if (!_isCurrentSearch(requestId, query)) return;
+      hadFailure = true;
       logger.log(
         'Error while searching online songs',
         error: e,
         stackTrace: stackTrace,
       );
     } finally {
-      _fetchingSongs.value = false;
-      if (mounted) setState(() {});
+      if (_isCurrentSearch(requestId, query)) {
+        _completedSearchQuery = query;
+        _searchHadFailure = hadFailure;
+        _fetchingSongs.value = false;
+        setState(() {});
+      }
     }
   }
 
-  Future<List<dynamic>> _fetchSongsForResolvedArtist(String query) async {
-    final artistName = _artistsSearchResult.first['title']?.toString().trim();
+  Future<List<dynamic>> _loadSearchCategory(
+    SearchLoader loader,
+    String query, {
+    VoidCallback? onFailure,
+  }) async {
+    try {
+      return await loader(query);
+    } catch (error, stackTrace) {
+      onFailure?.call();
+      logger.log(
+        'Search category unavailable',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return [];
+    }
+  }
+
+  Future<List<dynamic>> _fetchSongsForResolvedArtist(
+    String query,
+    List<Map<String, dynamic>> artists,
+    int requestId, {
+    VoidCallback? onFailure,
+  }) async {
+    final artistName = artists.first['title']?.toString().trim();
     if (artistName == null || artistName.isEmpty) return [];
 
     final fallbackQueries = <String>{
@@ -166,7 +286,13 @@ class _SearchPageState extends State<SearchPage> {
     };
 
     for (final fallbackQuery in fallbackQueries) {
-      final songs = await fetchSongsList(fallbackQuery);
+      if (!_isCurrentSearch(requestId, query)) return [];
+      final songs = await _loadSearchCategory(
+        widget.songSearch ?? searchMusicSongs,
+        fallbackQuery,
+        onFailure: onFailure,
+      );
+      if (!_isCurrentSearch(requestId, query)) return [];
       if (songs.isNotEmpty) return songs;
     }
 
@@ -195,6 +321,8 @@ class _SearchPageState extends State<SearchPage> {
                     focusNode: _inputNode,
                     labelText: '${context.l10n!.search}...',
                     onChanged: (value) {
+                      _latestSearchRequest++;
+                      _fetchingSongs.value = false;
                       // debounce suggestions to avoid rapid API calls
                       _debounce?.cancel();
                       final query = value;
@@ -202,6 +330,7 @@ class _SearchPageState extends State<SearchPage> {
 
                       // Clear suggestions immediately if input is empty
                       if (query.isEmpty) {
+                        _clearSearchResults();
                         _suggestionsList = [];
                         if (mounted) setState(() {});
                         return;
@@ -210,9 +339,9 @@ class _SearchPageState extends State<SearchPage> {
                       _debounce = Timer(
                         const Duration(milliseconds: 300),
                         () async {
-                          final searchSuggestions = await getSearchSuggestions(
-                            query,
-                          );
+                          final searchSuggestions =
+                              await (widget.suggestionSearch ??
+                                  getSearchSuggestions)(query);
 
                           if (!mounted ||
                               requestId != _latestSuggestionRequest ||
@@ -243,11 +372,36 @@ class _SearchPageState extends State<SearchPage> {
               },
             ),
 
+            if (_completedSearchQuery != null &&
+                _completedSearchQuery == _searchBar.text &&
+                _suggestionsList.isEmpty &&
+                (_searchHadFailure || !_hasSearchResults)) ...[
+              const SizedBox(height: AppSpacing.md),
+              PersonalizedStatusBanner(
+                title: _searchHadFailure
+                    ? 'Search incomplete'
+                    : 'No results found',
+                message: _searchHadFailure
+                    ? 'Some search sources are unavailable. Try again.'
+                    : 'Try another search or use a previous query.',
+                tone: _searchHadFailure
+                    ? PersonalizedStatusTone.error
+                    : PersonalizedStatusTone.neutral,
+              ),
+              if (_searchHadFailure)
+                TextButton.icon(
+                  onPressed: _submitSearch,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Retry search'),
+                ),
+              const SizedBox(height: AppSpacing.md),
+            ],
             AnimatedSwitcher(
               duration: const Duration(milliseconds: 200),
               child:
                   (_suggestionsList.isNotEmpty ||
                       (_songsSearchResult.isEmpty &&
+                          _videosSearchResult.isEmpty &&
                           _artistsSearchResult.isEmpty &&
                           _albumsSearchResult.isEmpty &&
                           _playlistsSearchResult.isEmpty))
@@ -358,7 +512,7 @@ class _SearchPageState extends State<SearchPage> {
     if (_songsSearchResult.isNotEmpty) {
       widgets.add(
         SectionTitle(
-          context.l10n!.songs,
+          '${context.l10n!.songs} · YouTube Music',
           primaryColor,
           icon: FluentIcons.music_note_1_24_filled,
         ),
@@ -378,6 +532,30 @@ class _SearchPageState extends State<SearchPage> {
             key: listItemKey('search_song', index, song),
             showMusicDuration: true,
             borderRadius: borderRadius,
+          ),
+        );
+      }
+    }
+
+    // Generic results remain discoverable without claiming they are songs.
+    if (_videosSearchResult.isNotEmpty) {
+      widgets.add(
+        SectionTitle(
+          'YouTube videos',
+          primaryColor,
+          icon: FluentIcons.video_24_regular,
+        ),
+      );
+      final videos = _videosSearchResult.take(maxSongsInList).toList();
+      for (var index = 0; index < videos.length; index++) {
+        final video = videos[index];
+        widgets.add(
+          SongBar(
+            video,
+            true,
+            key: listItemKey('search_video', index, video),
+            showMusicDuration: true,
+            borderRadius: getItemBorderRadius(index, videos.length),
           ),
         );
       }
@@ -452,7 +630,7 @@ class _SearchPageState extends State<SearchPage> {
 
     return Column(
       key: ValueKey(
-        'results-${_songsSearchResult.length}-${_artistsSearchResult.length}-${_albumsSearchResult.length}-${_playlistsSearchResult.length}',
+        'results-${_videosSearchResult.length}-${_songsSearchResult.length}-${_artistsSearchResult.length}-${_albumsSearchResult.length}-${_playlistsSearchResult.length}',
       ),
       children: widgets,
     );

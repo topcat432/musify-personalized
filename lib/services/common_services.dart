@@ -23,17 +23,23 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/widgets.dart';
 import 'package:hive/hive.dart';
 import 'package:http/http.dart' as http;
-import 'package:musify/constants/clients.dart';
 import 'package:musify/main.dart' show logger;
 import 'package:musify/services/data_manager.dart';
 import 'package:musify/services/io_service.dart';
 import 'package:musify/services/lyrics_manager.dart';
+import 'package:musify/services/offline_audio_integrity.dart';
+import 'package:musify/services/offline_file_publication.dart';
+import 'package:musify/services/online_audio_source.dart';
 import 'package:musify/services/playlists_manager.dart';
 import 'package:musify/services/proxy_manager.dart';
 import 'package:musify/services/settings_manager.dart';
+import 'package:musify/services/shared_song_metadata.dart';
+import 'package:musify/services/stream_request_context.dart';
+import 'package:musify/services/stream_url_validation.dart';
 import 'package:musify/utilities/app_utils.dart';
 import 'package:musify/utilities/formatter.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
@@ -51,6 +57,76 @@ ValueNotifier<List> userOfflineSongs = ValueNotifier<List>(
   Hive.box('userNoBackup').get('offlineSongs', defaultValue: []),
 );
 
+final offlineAudioChecks = ValueNotifier<Map<String, OfflineAudioCheck>>({});
+int _offlineCheckGeneration = 0;
+bool _offlineChecksStarted = false;
+final _offlineCheckedRows = <String, String>{};
+String _offlineRowKey(Map row) => jsonEncode([
+  row['ytid'],
+  row['audioPath'],
+  row['offlineAudioBytes'],
+  row['offlineAudioSha256'],
+]);
+
+void startOfflineAudioValidation() {
+  if (!_offlineChecksStarted) {
+    _offlineChecksStarted = true;
+    userOfflineSongs.addListener(
+      () => unawaited(refreshOfflineAudioAvailability()),
+    );
+  }
+  unawaited(refreshOfflineAudioAvailability());
+}
+
+Future<void> refreshOfflineAudioAvailability() async {
+  final generation = ++_offlineCheckGeneration;
+  final rows = List<dynamic>.from(userOfflineSongs.value);
+  _offlineCheckedRows.clear();
+  offlineAudioChecks.value = {};
+  final checks = <String, OfflineAudioCheck>{};
+  for (final row in rows.whereType<Map>()) {
+    final id = row['ytid']?.toString();
+    if (id == null || id.isEmpty) continue;
+    checks[id] = await checkOfflineAudio(
+      row,
+      fallbackPath: FilePaths.getAudioPath(id),
+    );
+    if (generation != _offlineCheckGeneration) return;
+    _offlineCheckedRows[id] = _offlineRowKey(row);
+  }
+  if (generation == _offlineCheckGeneration) offlineAudioChecks.value = checks;
+}
+
+bool isOfflineSongPlayable(Map row) {
+  final check = offlineAudioChecks.value[row['ytid']?.toString()];
+  if (check?.playable != true ||
+      _offlineCheckedRows[row['ytid']?.toString()] != _offlineRowKey(row))
+    return false;
+  return check?.path ==
+      (row['audioPath'] ?? FilePaths.getAudioPath(row['ytid'].toString()));
+}
+
+Future<bool> validateRegisteredOfflineSong(String id) async {
+  Map? currentRow() {
+    final rows = Hive.box('userNoBackup').get('offlineSongs', defaultValue: []);
+    if (rows is! List) return null;
+    return rows.whereType<Map>().where((row) => row['ytid'] == id).firstOrNull;
+  }
+
+  final row = currentRow();
+  if (row == null) return false;
+  final key = _offlineRowKey(row);
+  final check = await checkOfflineAudio(
+    row,
+    fallbackPath: FilePaths.getAudioPath(id),
+  );
+  final latest = currentRow();
+  if (latest == null || _offlineRowKey(latest) != key) return false;
+  _offlineCheckedRows[id] = key;
+  offlineAudioChecks.value = {...offlineAudioChecks.value, id: check};
+  return check.playable;
+}
+
 dynamic nextRecommendedSong;
 
 var _songLikeUpdateToken = 0;
@@ -58,6 +134,16 @@ final _latestSongLikeUpdateTokens = <String, int>{};
 
 final lyrics = ValueNotifier<String?>(null);
 String? lastFetchedLyrics;
+typedef SongLyricsLoader =
+    Future<String?> Function(String artist, String title);
+int _lyricsRequestGeneration = 0;
+_LyricsRequest? _pendingLyrics;
+
+class _LyricsRequest {
+  _LyricsRequest(this.key);
+  final String key;
+  late final Future<String?> future;
+}
 
 void reloadSongLibraryStateFromStorage() {
   final userBox = Hive.box('user');
@@ -67,6 +153,9 @@ void reloadSongLibraryStateFromStorage() {
   userRecentlyPlayed.value = List.from(
     userBox.get('recentlyPlayedSongs', defaultValue: []),
   );
+  userOfflineSongs.value = List.from(
+    Hive.box('userNoBackup').get('offlineSongs', defaultValue: []),
+  );
 }
 
 // Timeouts and durations used across manifest fetching and cache validation.
@@ -74,13 +163,24 @@ const Duration _manifestTimeout = Duration(seconds: 30);
 const Duration _cacheValidationDuration = Duration(hours: 1);
 
 /// Fetches a stream manifest for a song, honoring proxy settings.
-Future<StreamManifest?> _fetchStreamManifest(String songId) async {
+Future<StreamManifest?> _fetchStreamManifest(
+  String songId, {
+  bool preferMuxed = true,
+}) async {
   if (useProxy.value) {
     return ProxyManager().getSongManifest(songId).timeout(_manifestTimeout);
   }
 
   return ytClient.videos.streams
-      .getManifest(songId, ytClients: customClients)
+      .getManifestWithSelectedLength(
+        songId,
+        ytClients: [YoutubeApiClient.androidSdkless],
+        streamForValidation: (streams) => selectPlaybackStreamForQuality(
+          StreamManifest(streams),
+          songId,
+          preferMuxed: preferMuxed,
+        ),
+      )
       .timeout(_manifestTimeout);
 }
 
@@ -100,6 +200,22 @@ Future<String?> _getCachedSongUrl(
   }
 
   final cacheBox = await Hive.openBox('cache');
+  if (StreamRequestContexts.supports(cachedUrl) &&
+      !streamRequestContexts.restore(
+        cachedUrl,
+        cacheBox.get('${cacheKey}_requestContext'),
+      )) {
+    // Retain legacy/partial cache data, but do not guess its resolving identity
+    // or send a media validation request with unknown provenance.
+    return null;
+  }
+  if (StreamRequestContexts.supports(cachedUrl) &&
+      streamRequestContexts.lengthForUrl(cachedUrl) == null &&
+      (int.tryParse(Uri.parse(cachedUrl).queryParameters['clen'] ?? '') ?? 0) <=
+          0) {
+    // Keep old cache bytes intact; obtain selected-format length before reuse.
+    return null;
+  }
   final cacheDate = cacheBox.get('${cacheKey}_date') as DateTime?;
   final now = DateTime.now();
   final isOld =
@@ -120,12 +236,10 @@ Future<String?> _getCachedSongUrl(
 
 /// Checks if a cached URL still responds successfully.
 Future<bool> _validateCachedUrl(String cachedUrl) async {
-  try {
-    final response = await http.head(Uri.parse(cachedUrl));
-    return response.statusCode >= 200 && response.statusCode < 300;
-  } catch (_) {
-    return false;
-  }
+  return validateStreamUrl(
+    cachedUrl,
+    headers: streamRequestContexts.forUrl(cachedUrl) ?? const {},
+  );
 }
 
 Future<List> fetchSongsList(String searchQuery) async {
@@ -401,7 +515,11 @@ bool isSongAlreadyOffline(songIdToCheck) =>
 
 bool isPlaylistFullyOffline(List songs) {
   if (songs.isEmpty) return false;
-  final offlineIds = userOfflineSongs.value.map((s) => s['ytid']).toSet();
+  final offlineIds = userOfflineSongs.value
+      .whereType<Map>()
+      .where(isOfflineSongPlayable)
+      .map((s) => s['ytid'])
+      .toSet();
   return songs.every((s) => offlineIds.contains(s['ytid']));
 }
 
@@ -520,7 +638,7 @@ Future<AudioOnlyStreamInfo?> fetchBestAudioStream(String? songId) async {
       return null;
     }
 
-    final manifest = await _fetchStreamManifest(songId);
+    final manifest = await _fetchStreamManifest(songId, preferMuxed: false);
     final audioStream = manifest?.audioOnly;
     if (audioStream == null || audioStream.isEmpty) {
       logger.log('fetchBestAudioStream: no audio streams for $songId');
@@ -540,8 +658,22 @@ Future<AudioOnlyStreamInfo?> fetchBestAudioStream(String? songId) async {
   }
 }
 
-/// Resolves a playable stream URL for a song (cached when possible).
-Future<String?> fetchSongStreamUrl(String songId, bool isLive) async {
+/// Keeps playback cache publication and invalidation in the resolver's mode.
+String songStreamUrlCacheKey(String songId, {bool preferMuxed = true}) =>
+    preferMuxed
+    ? 'song_${songId}_muxed_${audioQualitySetting.value}_url'
+    : 'song_${songId}_${audioQualitySetting.value}_url';
+
+/// Resolves a playable stream URL for the selected video.
+/// Prefer a supported muxed format before playback; audio-only remains available
+/// when the manifest has no compatible muxed format. Never switch on a denial.
+/// Compatibility streams may carry video bytes, so audio bitrate is not promised.
+Future<String?> fetchSongStreamUrl(
+  String songId,
+  bool isLive, {
+  bool preferMuxed = true,
+  Future<StreamManifest?> Function(String)? manifestLoader,
+}) async {
   try {
     if (songId.isEmpty) {
       logger.log('fetchSongStreamUrl: songId is empty');
@@ -554,7 +686,7 @@ Future<String?> fetchSongStreamUrl(String songId, bool isLive) async {
     }
 
     const _cacheDuration = Duration(hours: 3);
-    final cacheKey = 'song_${songId}_${audioQualitySetting.value}_url';
+    final cacheKey = songStreamUrlCacheKey(songId, preferMuxed: preferMuxed);
 
     // Try to get from cache
     final cachedUrl = await _getCachedSongUrl(cacheKey, _cacheDuration);
@@ -563,17 +695,51 @@ Future<String?> fetchSongStreamUrl(String songId, bool isLive) async {
     }
 
     // Get fresh URL
-    final manifest = await _fetchStreamManifest(songId);
-    final audioStreams = manifest?.audioOnly;
-    if (audioStreams == null || audioStreams.isEmpty) {
-      logger.log('fetchSongStreamUrl: no audio streams for $songId');
+    final manifest =
+        await (manifestLoader?.call(songId) ??
+            _fetchStreamManifest(songId, preferMuxed: preferMuxed));
+    final selectedStream = manifest == null
+        ? null
+        : selectPlaybackStreamForQuality(
+            manifest,
+            songId,
+            preferMuxed: preferMuxed,
+          );
+    if (selectedStream == null) {
+      logger.log('fetchSongStreamUrl: no playable audio formats for $songId');
       return null;
     }
-
-    final selectedStream = selectAudioOnlyStreamForQuality(
-      audioStreams.sortByBitrate(),
-    );
     final url = selectedStream.url.toString();
+
+    final requestHeaders = ytClient.videos.streams.requestHeadersFor(
+      selectedStream,
+    );
+    if (StreamRequestContexts.supports(url) && requestHeaders != null) {
+      streamRequestContexts.remember(
+        url,
+        requestHeaders,
+        sourceLength: selectedStream.size.totalBytes,
+      );
+      final context = streamRequestContexts.snapshot(url);
+      if (context != null) {
+        try {
+          await addOrUpdateData<Map<String, Object>>(
+            'cache',
+            '${cacheKey}_requestContext',
+            context,
+          );
+        } catch (error, stackTrace) {
+          logger.log(
+            'Could not cache stream request context',
+            error: error,
+            stackTrace: stackTrace,
+          );
+          // The fresh in-memory source is still usable; do not publish an
+          // incomplete URL/context cache pair or disturb older cached data.
+          return url;
+        }
+      }
+    }
 
     unawaited(addOrUpdateData<String>('cache', cacheKey, url));
 
@@ -600,35 +766,387 @@ Future<Map<String, dynamic>> getSongDetails(
     return returnSongLayout(songIndex, song);
   } catch (e, stackTrace) {
     logger.log(
-      'Error while getting song details',
-      error: e,
+      'Song metadata fetch failed',
+      error: sharedSongFailureDiagnostic(e, phase: 'watch-metadata'),
       stackTrace: stackTrace,
     );
     rethrow;
   }
 }
 
-Future<String?> getSongLyrics(String? artist, String title) async {
-  if (artist == null) return null;
-  if (lastFetchedLyrics != '$artist - $title') {
-    lyrics.value = null;
-    var _lyrics = await LyricsManager().fetchLyrics(artist, title);
-    if (_lyrics != null) {
-      _lyrics = _lyrics.replaceAll(RegExp(r'\n{4}'), '\n\n');
-      _lyrics = _lyrics.replaceAll(RegExp(r'\n{2}'), '\n');
-      lyrics.value = _lyrics;
-    } else {
-      return null;
-    }
-
-    lastFetchedLyrics = '$artist - $title';
-    return _lyrics;
+Future<String?> getSongLyrics(
+  String? artist,
+  String title, {
+  String? recordingId,
+  SongLyricsLoader? loader,
+}) {
+  if (artist == null) return Future.value();
+  final key = jsonEncode([recordingId ?? '', artist, title]);
+  if (lastFetchedLyrics == key && lyrics.value != null) {
+    return Future.value(lyrics.value);
   }
+  final pending = _pendingLyrics;
+  if (pending != null && pending.key == key) return pending.future;
 
-  return lyrics.value;
+  final generation = ++_lyricsRequestGeneration;
+  lyrics.value = null;
+  lastFetchedLyrics = null;
+  final request = _LyricsRequest(key);
+  _pendingLyrics = request;
+  request.future =
+      Future<String?>.sync(
+            () => (loader ?? LyricsManager().fetchLyrics)(artist, title),
+          )
+          .then((value) {
+            final text = value
+                ?.replaceAll(RegExp(r'\n{4}'), '\n\n')
+                .replaceAll(RegExp(r'\n{2}'), '\n');
+            if (generation == _lyricsRequestGeneration) {
+              lyrics.value = text;
+              lastFetchedLyrics = text == null ? null : key;
+            }
+            return text;
+          })
+          .whenComplete(() {
+            if (identical(_pendingLyrics, request)) _pendingLyrics = null;
+          });
+  return request.future;
 }
 
-Future<bool> makeSongOffline(dynamic song) async {
+class OfflineAudioDownload {
+  const OfflineAudioDownload(this.stream, {this.expectedBytes});
+  final Stream<List<int>> stream;
+  final int? expectedBytes;
+}
+
+typedef OfflineAudioLoader = Future<OfflineAudioDownload?> Function(String id);
+typedef OfflineArtworkLoader = Future<List<int>?> Function(String url);
+typedef OfflineRegistryWriter =
+    Future<void> Function(Box<dynamic> box, List<dynamic> songs);
+
+/// Optional owned acceptance probe; normal downloads supply no callback.
+enum OfflineCommitBoundary {
+  bodyFlushed,
+  ownershipFlushed,
+  beforeRename,
+  afterRename,
+  registryWritten,
+  registryFlushed,
+  ownershipRemoved,
+  beforeReturn,
+}
+
+typedef OfflineCommitProbe =
+    Future<void> Function(OfflineCommitBoundary boundary);
+final Map<String, Future<bool>> _offlineDownloads = {};
+Future<void> _offlineRegistryTail = Future.value();
+int _offlineCancellationGeneration = 0;
+
+Future<void> cancelOfflineSongDownloads() async {
+  _offlineCancellationGeneration++;
+  await Future.wait(_offlineDownloads.values.toList());
+}
+
+Future<T> _serializeOfflineCommit<T>(Future<T> Function() action) {
+  final result = _offlineRegistryTail.then((_) => action());
+  _offlineRegistryTail = result.then<void>(
+    (_) {},
+    onError: (Object _, StackTrace __) {},
+  );
+  return result;
+}
+
+/// Song and playlist registry commits/removals share this mutation order.
+Future<T> serializeOfflineRegistryMutation<T>(Future<T> Function() action) =>
+    _serializeOfflineCommit(action);
+
+Object? _snapshotOfflineRegistryValue(Object? value) {
+  if (value is Map)
+    return value.map(
+      (key, entry) => MapEntry(key, _snapshotOfflineRegistryValue(entry)),
+    );
+  if (value is List) return value.map(_snapshotOfflineRegistryValue).toList();
+  return value;
+}
+
+bool _sameOfflineRegistryValue(Object? left, Object? right) {
+  if (left is Map && right is Map)
+    return left.length == right.length &&
+        left.keys.every(
+          (key) =>
+              right.containsKey(key) &&
+              _sameOfflineRegistryValue(left[key], right[key]),
+        );
+  if (left is List && right is List) {
+    if (left.length != right.length) return false;
+    for (var i = 0; i < left.length; i++) {
+      if (!_sameOfflineRegistryValue(left[i], right[i])) return false;
+    }
+    return true;
+  }
+  return left == right;
+}
+
+String _offlinePathKey(String value) => Platform.isWindows
+    ? value.split(Platform.pathSeparator).join('/').toLowerCase()
+    : value;
+
+// Explicit retry may roll back our own interrupted rename, never adopt it.
+// Legacy/unknown payloads and malformed ownership proofs remain untouched.
+Future<bool> _rollbackOwnedUnregisteredOffline(
+  File audio,
+  String id,
+  bool Function() cancelled,
+) => _serializeOfflineCommit(() async {
+  final registry = Hive.box(
+    'userNoBackup',
+  ).get('offlineSongs', defaultValue: []);
+  if (registry is! List ||
+      registry.whereType<Map>().any(
+        (row) =>
+            row['ytid'] == id ||
+            (row['audioPath'] is String &&
+                _offlinePathKey(row['audioPath'] as String) ==
+                    _offlinePathKey(audio.path)),
+      ))
+    return false;
+  for (final marker
+      in audio.parent.listSync(followLinks: false).whereType<File>()) {
+    if (!_offlinePathKey(marker.path)
+            .split('/')
+            .last
+            .startsWith(
+              '${_offlinePathKey(audio.path).split('/').last}.download-',
+            ) ||
+        !marker.path.endsWith('.part.owner.json'))
+      continue;
+    try {
+      final data = jsonDecode(await marker.readAsString());
+      if (data is! Map ||
+          data['schema'] != 1 ||
+          data['ytid'] != id ||
+          data['audioPath'] != audio.path)
+        continue;
+      final partial = data['partialPath'];
+      final expected = data['expectedBytes'];
+      final digest = data['sha256'];
+      final prefix = '${audio.path}.download-';
+      if (partial is! String ||
+          !partial.startsWith(prefix) ||
+          !partial.endsWith('.part') ||
+          _offlinePathKey(marker.path) !=
+              _offlinePathKey('$partial.owner.json') ||
+          !RegExp(
+            r'^\d+$',
+          ).hasMatch(partial.substring(prefix.length, partial.length - 5)) ||
+          expected is! int ||
+          expected <= 0 ||
+          digest is! String ||
+          !RegExp(r'^[a-f0-9]{64}$').hasMatch(digest))
+        continue;
+      if (await audio.length() != expected ||
+          (await sha256.bind(audio.openRead()).first).toString() != digest)
+        continue;
+      if (data['sourceLinkRequired'] == true &&
+          (!await File(partial).exists() ||
+              !await FileSystemEntity.identical(audio.path, partial)))
+        continue;
+      if (registry.whereType<Map>().any(
+        (row) =>
+            row['audioPath'] is String &&
+            _offlinePathKey(row['audioPath']) == _offlinePathKey(partial),
+      ))
+        continue;
+      if (cancelled()) return false;
+      await audio.delete();
+      if (data['sourceLinkRequired'] == true) await File(partial).delete();
+      try {
+        await marker.delete();
+      } catch (_) {
+        /* Retain proof if cleanup fails. */
+      }
+      return true;
+    } catch (_) {
+      // Do not erase a malformed marker or a payload of unknown ownership.
+    }
+  }
+  return false;
+});
+
+Stream<List<int>> _checkedOfflineStream(
+  OfflineAudioDownload audio,
+  bool Function() cancelled,
+) {
+  late StreamController<List<int>> controller;
+  StreamSubscription<List<int>>? upstream;
+  Timer? timer;
+  var finished = false;
+  var received = 0;
+  void fail(Object error, [StackTrace? stack]) {
+    if (finished) return;
+    finished = true;
+    timer?.cancel();
+    controller.addError(error, stack);
+    unawaited(upstream?.cancel());
+    unawaited(controller.close());
+  }
+
+  controller = StreamController<List<int>>(
+    onListen: () {
+      timer = Timer.periodic(const Duration(milliseconds: 100), (_) {
+        if (cancelled()) fail(StateError('Offline download cancelled'));
+      });
+      upstream = audio.stream.listen(
+        (bytes) {
+          if (finished) return;
+          if (cancelled()) {
+            fail(StateError('Offline download cancelled'));
+            return;
+          }
+          received += bytes.length;
+          if (received > audio.expectedBytes!) {
+            fail(StateError('Offline audio exceeds its declared length'));
+            return;
+          }
+          controller.add(bytes);
+        },
+        onError: fail,
+        onDone: () {
+          if (finished) return;
+          if (cancelled() || received != audio.expectedBytes) {
+            fail(StateError('Offline audio is cancelled or incomplete'));
+            return;
+          }
+          finished = true;
+          timer?.cancel();
+          unawaited(controller.close());
+        },
+      );
+    },
+    onPause: () => upstream?.pause(),
+    onResume: () => upstream?.resume(),
+    onCancel: () async {
+      timer?.cancel();
+      await upstream?.cancel();
+    },
+  );
+  return controller.stream.timeout(const Duration(seconds: 30));
+}
+
+class _OfflineDigestCollector implements Sink<Digest> {
+  Digest? value;
+  @override
+  void add(Digest data) => value = data;
+  @override
+  void close() {}
+}
+
+/// Downloads the selected recording using the same compatibility policy as
+/// playback. Availability probing is not download success; the writer still
+/// requires the complete declared body before publishing an offline entry.
+Future<OfflineAudioDownload?> fetchCompatibleOfflineAudio(
+  String id, {
+  Future<StreamManifest?> Function(String)? manifestLoader,
+  http.Client Function()? clientFactory,
+}) async {
+  final manifest = await (manifestLoader?.call(id) ?? _fetchStreamManifest(id));
+  final stream = manifest == null
+      ? null
+      : selectPlaybackStreamForQuality(manifest, id, preferMuxed: true);
+  if (stream == null) return null;
+  final headers =
+      ytClient.videos.streams.requestHeadersFor(stream) ??
+      const <String, String>{};
+  if (GoogleVideoByteSource.accepts(stream.url, stream.size.totalBytes)) {
+    final source = GoogleVideoByteSource(
+      stream.url,
+      sourceLength: stream.size.totalBytes,
+      requestHeaders: headers,
+      clientFactory: clientFactory,
+    );
+    return OfflineAudioDownload(
+      _completeOfflineSource(source),
+      expectedBytes: stream.size.totalBytes,
+    );
+  }
+  return OfflineAudioDownload(
+    ytClient.videos.streamsClient.get(stream),
+    expectedBytes: stream.size.totalBytes,
+  );
+}
+
+Stream<List<int>> _completeOfflineSource(GoogleVideoByteSource source) async* {
+  try {
+    final response = await source.request();
+    yield* response.stream;
+  } finally {
+    await source.cancelRequests();
+  }
+}
+
+typedef OfflinePayloadVerifier = Future<OfflineAudioCheck> Function(Map row);
+
+Future<bool> makeSongOffline(
+  dynamic song, {
+  OfflineAudioLoader? audioLoader,
+  OfflineArtworkLoader? artworkLoader,
+  OfflineRegistryWriter? registryWriter,
+  OfflineFilePublisher? filePublisher,
+  OfflinePayloadVerifier? payloadVerifier,
+  OfflineCommitProbe? commitProbe,
+  bool Function()? shouldCancel,
+}) async {
+  if (song is! Map || song['ytid'] is! String) return false;
+  final id = song['ytid'] as String;
+  if (id.isEmpty ||
+      id == '.' ||
+      id == '..' ||
+      id.contains(RegExp(r'[/\\\x00]')))
+    return false;
+  final pending = _offlineDownloads[id];
+  if (pending != null) return pending;
+  final generation = _offlineCancellationGeneration;
+  final future = _makeSongOffline(
+    Map<String, dynamic>.from(song),
+    audioLoader: audioLoader,
+    artworkLoader: artworkLoader,
+    registryWriter: registryWriter,
+    filePublisher: filePublisher,
+    payloadVerifier: payloadVerifier,
+    commitProbe: commitProbe,
+    cancelled: () =>
+        generation != _offlineCancellationGeneration ||
+        (shouldCancel?.call() ?? false),
+  );
+  _offlineDownloads[id] = future;
+  try {
+    return await future;
+  } finally {
+    if (identical(_offlineDownloads[id], future)) {
+      unawaited(_offlineDownloads.remove(id));
+    }
+  }
+}
+
+Future<bool> _makeSongOffline(
+  Map<String, dynamic> song, {
+  required bool Function() cancelled,
+  OfflineAudioLoader? audioLoader,
+  OfflineArtworkLoader? artworkLoader,
+  OfflineRegistryWriter? registryWriter,
+  OfflineFilePublisher? filePublisher,
+  OfflinePayloadVerifier? payloadVerifier,
+  OfflineCommitProbe? commitProbe,
+}) async {
+  File? partial;
+  File? committed;
+  OfflineFilePublication? publication;
+  File? ownershipMarker;
+  var commitFinished = false;
+  var ownsPartial = false;
+  var canRemoveCommitted = false;
+  int? expectedBytes;
+  String? expectedDigest;
   try {
     final String? ytid = song['ytid'];
 
@@ -637,35 +1155,78 @@ Future<bool> makeSongOffline(dynamic song) async {
       return false;
     }
 
-    if (isSongAlreadyOffline(ytid)) {
-      final existingPath = FilePaths.getAudioPath(ytid);
-      if (await File(existingPath).exists()) {
-        return true;
-      }
-    }
+    final stored = Hive.box(
+      'userNoBackup',
+    ).get('offlineSongs', defaultValue: []);
+    if (stored is! List) return false;
+    final saved = stored
+        .whereType<Map>()
+        .where((row) => row['ytid'] == ytid)
+        .firstOrNull;
+    if (saved != null) return validateRegisteredOfflineSong(ytid);
 
     final offlineSong = Map<String, dynamic>.from(song as Map);
+    Object? ownedRowSnapshot;
+    bool ownsSavedRow(dynamic row) =>
+        identical(row, offlineSong) &&
+        _sameOfflineRegistryValue(row, ownedRowSnapshot);
 
     final audioPath = FilePaths.getAudioPath(ytid);
     final audioFile = File(audioPath);
     final artworkPath = FilePaths.getArtworkPath(ytid);
 
+    // An unregistered existing payload has unknown provenance/completeness.
+    // Preserve it; do not adopt it or overwrite it to manufacture success.
+    if (cancelled()) return false;
+    if (await audioFile.exists() &&
+        !await _rollbackOwnedUnregisteredOffline(audioFile, ytid, cancelled))
+      return false;
+    if (cancelled()) return false;
+    partial = File(
+      '${audioFile.path}.download-${DateTime.now().microsecondsSinceEpoch}.part',
+    );
+    if (await partial.exists()) return false;
+
     await audioFile.parent.create(recursive: true);
 
     IOSink? fileStream;
     try {
-      final audioManifest = await fetchBestAudioStream(ytid);
-      if (audioManifest == null) {
+      final audio = await (audioLoader ?? fetchCompatibleOfflineAudio)(ytid);
+      if (audio == null ||
+          audio.expectedBytes == null ||
+          audio.expectedBytes! <= 0 ||
+          cancelled()) {
         logger.log('makeSongOffline: audioManifest is null for $ytid');
         return false;
       }
 
-      final stream = ytClient.videos.streamsClient.get(audioManifest);
-      fileStream = audioFile.openWrite();
-      await stream.pipe(fileStream);
+      await partial.create(exclusive: true);
+      ownsPartial = true;
+      fileStream = partial.openWrite();
+      expectedBytes = audio.expectedBytes;
+      final collector = _OfflineDigestCollector();
+      final digestSink = sha256.startChunkedConversion(collector);
+      try {
+        await fileStream.addStream(
+          _checkedOfflineStream(audio, cancelled).map((chunk) {
+            digestSink.add(chunk);
+            return chunk;
+          }),
+        );
+      } finally {
+        digestSink.close();
+      }
+      expectedDigest = collector.value!.toString();
       await fileStream.flush();
       await fileStream.close();
       fileStream = null;
+      await flushOfflineFile(partial);
+      if (await partial.length() != expectedBytes ||
+          (await sha256.bind(partial.openRead()).first).toString() !=
+              expectedDigest)
+        throw StateError('Offline disk payload differs from received bytes');
+      if (commitProbe != null)
+        await commitProbe(OfflineCommitBoundary.bodyFlushed);
     } catch (e, stackTrace) {
       logger.log(
         'Error downloading audio file',
@@ -675,73 +1236,255 @@ Future<bool> makeSongOffline(dynamic song) async {
       try {
         await fileStream?.close();
       } catch (_) {}
-      if (await audioFile.exists()) {
-        await audioFile.delete();
+      if (ownsPartial && await partial.exists()) {
+        await partial.delete();
       }
       return false;
     }
 
+    // Artwork is optional. Preserve an existing file, including invalid evidence,
+    // but never register an empty, interrupted or inherited unrelated path.
+    offlineSong['artworkPath'] = null;
     try {
-      if (offlineSong['highResImage'] != null &&
-          offlineSong['highResImage'].toString().isNotEmpty) {
-        final _artworkFile = await _downloadAndSaveArtworkFile(
+      final existing = File(artworkPath);
+      if (await existing.exists()) {
+        if (await existing.length() > 0)
+          offlineSong['artworkPath'] = artworkPath;
+      } else if (!cancelled() &&
+          offlineSong['highResImage'] is String &&
+          (offlineSong['highResImage'] as String).isNotEmpty) {
+        final artwork = await _downloadAndSaveArtworkFile(
           offlineSong['highResImage'],
           artworkPath,
+          loader: artworkLoader,
+          cancelled: cancelled,
         );
-
-        if (_artworkFile != null && await _artworkFile.exists()) {
-          offlineSong['artworkPath'] = artworkPath;
-        } else {
-          logger.log(
-            'Artwork download failed or file does not exist for $ytid',
-          );
-          offlineSong['artworkPath'] = null;
-        }
+        if (artwork != null) offlineSong['artworkPath'] = artwork.path;
       }
     } catch (e, stackTrace) {
       logger.log('Error downloading artwork', error: e, stackTrace: stackTrace);
-      offlineSong['artworkPath'] = null;
     }
 
     offlineSong['audioPath'] = audioFile.path;
+    offlineSong['offlineAudioBytes'] = expectedBytes;
+    offlineSong['offlineAudioSha256'] = expectedDigest;
     offlineSong['dateAdded'] = DateTime.now().millisecondsSinceEpoch;
 
     try {
-      final existingIndex = userOfflineSongs.value.indexWhere(
-        (s) => s['ytid'] == ytid,
-      );
+      await _serializeOfflineCommit(() async {
+        if (cancelled() || await audioFile.exists())
+          throw StateError('Offline commit is cancelled or stale');
+        Future<void> validatePayload(File file, {bool linked = false}) async {
+          if (linked && !(publication?.owns(file) ?? false))
+            throw StateError('Offline published file was replaced');
+          final check = await (payloadVerifier ?? checkOfflineAudio)({
+            ...offlineSong,
+            'audioPath': file.path,
+          });
+          if (linked && !(publication?.owns(file) ?? false))
+            throw StateError(
+              'Offline published file changed during validation',
+            );
+          if (!check.playable)
+            throw StateError(
+              'Offline payload is incomplete or changed: ${check.state.name}',
+            );
+        }
 
-      final updatedOfflineSongs = List.from(userOfflineSongs.value);
-      if (existingIndex != -1) {
-        updatedOfflineSongs[existingIndex] = offlineSong;
-      } else {
-        updatedOfflineSongs.add(offlineSong);
-      }
-      userOfflineSongs.value = updatedOfflineSongs;
-
-      unawaited(
-        addOrUpdateData<List>(
-          'userNoBackup',
+        await validatePayload(partial!);
+        final box = Hive.box('userNoBackup');
+        final initialRegistry = box.get(
           'offlineSongs',
-          userOfflineSongs.value,
-        ),
-      );
+          defaultValue: <dynamic>[],
+        );
+        if (initialRegistry is! List)
+          throw StateError('Offline registry is not a valid list');
+        final candidateMarker = File('${partial.path}.owner.json');
+        if (await candidateMarker.exists())
+          throw StateError('Offline ownership marker already exists');
+        ownershipMarker = candidateMarker;
+        await ownershipMarker!.writeAsString(
+          jsonEncode({
+            'schema': 1,
+            'ytid': ytid,
+            'audioPath': audioFile.path,
+            'partialPath': partial.path,
+            'expectedBytes': expectedBytes,
+            'sha256': expectedDigest,
+            // A moved Android source has no durable inode witness after exit.
+            // Retain that residual on restart; never claim checksum ownership.
+            'sourceLinkRequired': true,
+          }),
+          flush: true,
+        );
+        if (commitProbe != null)
+          await commitProbe(OfflineCommitBoundary.ownershipFlushed);
+        if (cancelled())
+          throw StateError('Offline commit cancelled before rename');
+        if (commitProbe != null)
+          await commitProbe(OfflineCommitBoundary.beforeRename);
+        await validatePayload(partial);
+        publication = (filePublisher ?? publishOfflineFile)(partial, audioFile);
+        committed = audioFile;
+        if (commitProbe != null)
+          await commitProbe(OfflineCommitBoundary.afterRename);
+        await validatePayload(audioFile, linked: true);
+        await flushOfflineFile(audioFile);
+        final hadRegistry = box.containsKey('offlineSongs');
+        // Read immediately before the write; do not publish the earlier snapshot.
+        final latestRegistry = box.get(
+          'offlineSongs',
+          defaultValue: <dynamic>[],
+        );
+        if (latestRegistry is! List || cancelled())
+          throw StateError('Offline registration cancelled or superseded');
+        if (latestRegistry.whereType<Map>().any((row) => row['ytid'] == ytid))
+          throw StateError('A newer saved row owns this recording');
+        ownedRowSnapshot = _snapshotOfflineRegistryValue(offlineSong);
+        final updatedOfflineSongs = [...latestRegistry, offlineSong];
+        try {
+          await (registryWriter ??
+              (box, values) =>
+                  box.put('offlineSongs', values))(box, updatedOfflineSongs);
+          if (commitProbe != null)
+            await commitProbe(OfflineCommitBoundary.registryWritten);
+          await validatePayload(audioFile, linked: true);
+          await box.flush();
+          if (commitProbe != null)
+            await commitProbe(OfflineCommitBoundary.registryFlushed);
+          await validatePayload(audioFile, linked: true);
+          final durable = box.get('offlineSongs', defaultValue: <dynamic>[]);
+          if (cancelled() || durable is! List || !durable.any(ownsSavedRow))
+            throw StateError('Offline registration lost ownership');
+        } catch (_) {
+          final durable = box.get('offlineSongs', defaultValue: <dynamic>[]);
+          // Only undo our actual row object. A newer row/list is never replaced
+          // by a full prior snapshot, even if its recording/path is identical.
+          if (durable is List && durable.any(ownsSavedRow)) {
+            final retained = durable
+                .where((row) => !ownsSavedRow(row))
+                .toList();
+            if (!hadRegistry &&
+                retained.isEmpty &&
+                identical(durable, updatedOfflineSongs)) {
+              await box.delete('offlineSongs');
+            } else {
+              await box.put('offlineSongs', retained);
+            }
+            await box.flush();
+          }
+          final current = box.get('offlineSongs', defaultValue: <dynamic>[]);
+          if (current is List)
+            userOfflineSongs.value = List<dynamic>.from(current);
+          try {
+            bool referenced(dynamic values) =>
+                values is! List ||
+                values.whereType<Map>().any((row) {
+                  // Legacy rows without an explicit path still own their
+                  // canonical payload, just as playback/validation resolve it.
+                  final path = row['audioPath'] is String
+                      ? row['audioPath'] as String
+                      : row['ytid'] is String
+                      ? FilePaths.getAudioPath(row['ytid'])
+                      : null;
+                  return path != null &&
+                      _offlinePathKey(path) == _offlinePathKey(audioFile.path);
+                });
+            final complete =
+                !referenced(current) &&
+                (publication?.owns(audioFile) ?? false) &&
+                (await (payloadVerifier ?? checkOfflineAudio)(
+                  offlineSong,
+                )).playable;
+            // Re-read registry and inode after the asynchronous checksum. No Dart
+            // await may separate this final live ownership test from removal.
+            canRemoveCommitted =
+                complete &&
+                !referenced(
+                  box.get('offlineSongs', defaultValue: <dynamic>[]),
+                ) &&
+                (publication?.owns(audioFile) ?? false);
+            if (canRemoveCommitted) audioFile.deleteSync();
+          } catch (_) {
+            canRemoveCommitted = false;
+          }
+          rethrow;
+        }
+        userOfflineSongs.value = List<dynamic>.from(box.get('offlineSongs'));
+        _offlineCheckedRows[ytid] = _offlineRowKey(offlineSong);
+        offlineAudioChecks.value = {
+          ...offlineAudioChecks.value,
+          ytid: OfflineAudioCheck(
+            OfflineAudioState.ready,
+            audioFile.path,
+            hasProof: true,
+          ),
+        };
+      });
     } catch (e, st) {
       logger.log(
         'Error updating global offline songs list',
         error: e,
         stackTrace: st,
       );
+      return false;
     }
 
-    return true;
+    commitFinished = true;
+    try {
+      if (ownershipMarker != null && await ownershipMarker!.exists())
+        await ownershipMarker!.delete();
+    } catch (error, stackTrace) {
+      logger.log(
+        'Offline ownership marker cleanup failed',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+    if (commitProbe != null)
+      await commitProbe(OfflineCommitBoundary.ownershipRemoved);
+    if (commitProbe != null)
+      await commitProbe(OfflineCommitBoundary.beforeReturn);
+    final completed = await checkOfflineAudio(offlineSong);
+    final finalRegistry = Hive.box(
+      'userNoBackup',
+    ).get('offlineSongs', defaultValue: <dynamic>[]);
+    if (cancelled() ||
+        finalRegistry is! List ||
+        !finalRegistry.any(ownsSavedRow))
+      return false;
+    _offlineCheckedRows[ytid] = _offlineRowKey(offlineSong);
+    offlineAudioChecks.value = {...offlineAudioChecks.value, ytid: completed};
+    return completed.playable;
   } catch (e, stackTrace) {
     logger.log('Error making song offline', error: e, stackTrace: stackTrace);
     return false;
+  } finally {
+    try {
+      try {
+        if (ownershipMarker != null &&
+            (commitFinished || canRemoveCommitted || committed == null) &&
+            await ownershipMarker!.exists())
+          await ownershipMarker!.delete();
+      } catch (_) {
+        /* Leave known proof for explicit retry if cleanup fails. */
+      }
+      if (ownsPartial &&
+          partial != null &&
+          (committed == null || canRemoveCommitted || commitFinished) &&
+          await partial.exists())
+        await partial.delete();
+    } finally {
+      publication?.close();
+    }
   }
 }
 
-Future<bool> removeSongFromOffline(dynamic songId) async {
+Future<bool> removeSongFromOffline(
+  dynamic songId, {
+  Future<void> Function()? mutationProbe,
+}) => _serializeOfflineCommit(() async {
+  if (mutationProbe != null) await mutationProbe();
   try {
     final audioPath = FilePaths.getAudioPath(songId);
     final audioFile = File(audioPath);
@@ -765,15 +1508,14 @@ Future<bool> removeSongFromOffline(dynamic songId) async {
     }
 
     try {
-      userOfflineSongs.value = List.from(userOfflineSongs.value)
-        ..removeWhere((song) => song['ytid'] == songId);
-      unawaited(
-        addOrUpdateData<List>(
-          'userNoBackup',
-          'offlineSongs',
-          userOfflineSongs.value,
-        ),
-      );
+      final box = Hive.box('userNoBackup');
+      final current = box.get('offlineSongs', defaultValue: <dynamic>[]);
+      if (current is! List) throw StateError('Offline registry is not a list');
+      final retained = List<dynamic>.from(current)
+        ..removeWhere((song) => song is Map && song['ytid'] == songId);
+      await box.put('offlineSongs', retained);
+      await box.flush();
+      userOfflineSongs.value = retained;
     } catch (e, st) {
       logger.log(
         'Error updating offline songs registry after removal',
@@ -791,38 +1533,59 @@ Future<bool> removeSongFromOffline(dynamic songId) async {
     );
     return false;
   }
+});
+
+Future<List<int>?> _fetchOfflineArtwork(String url) async {
+  final response = await ProxyManager().getProxiedResponse(Uri.parse(url));
+  return response.statusCode == 200 ? response.bodyBytes : null;
 }
 
-Future<File?> _downloadAndSaveArtworkFile(String url, String filePath) async {
+Future<File?> _downloadAndSaveArtworkFile(
+  String url,
+  String filePath, {
+  OfflineArtworkLoader? loader,
+  required bool Function() cancelled,
+}) async {
+  File? partial;
+  OfflineFilePublication? publication;
+  var ownsPartial = false;
   try {
-    final response = await ProxyManager().getProxiedResponse(Uri.parse(url));
-
-    if (response.statusCode == 200) {
-      final file = File(filePath);
-      await file.parent.create(recursive: true);
-      await file.writeAsBytes(response.bodyBytes);
-
-      // Validate that the file was actually written
-      if (await file.exists() && await file.length() > 0) {
-        return file;
-      } else {
-        logger.log('Artwork file was not written properly: $filePath');
-        return null;
-      }
-    } else {
-      logger.log(
-        'Failed to download file. Status code: ${response.statusCode}',
-      );
-    }
+    final bytes = await (loader ?? _fetchOfflineArtwork)(url);
+    if (bytes == null || bytes.isEmpty || cancelled()) return null;
+    final file = File(filePath);
+    await file.parent.create(recursive: true);
+    partial = File(
+      '$filePath.download-${DateTime.now().microsecondsSinceEpoch}.part',
+    );
+    if (await partial.exists()) return null;
+    await partial.create(exclusive: true);
+    ownsPartial = true;
+    await partial.writeAsBytes(bytes, flush: true);
+    await flushOfflineFile(partial);
+    final digest = sha256.convert(bytes).toString();
+    if (await partial.length() != bytes.length ||
+        (await sha256.bind(partial.openRead()).first).toString() != digest ||
+        cancelled())
+      return null;
+    publication = publishOfflineFile(partial, file);
+    await flushOfflineFile(file);
+    if (!publication.owns(file) ||
+        await file.length() != bytes.length ||
+        (await sha256.bind(file.openRead()).first).toString() != digest)
+      return null;
+    return file;
   } catch (e, stackTrace) {
     logger.log(
-      'Error downloading and saving file',
+      'Error downloading and saving artwork',
       error: e,
       stackTrace: stackTrace,
     );
+    return null;
+  } finally {
+    publication?.close();
+    if (ownsPartial && partial != null && await partial.exists())
+      await partial.delete();
   }
-
-  return null;
 }
 
 const recentlyPlayedSongsLimit = 100;

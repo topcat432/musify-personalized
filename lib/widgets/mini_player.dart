@@ -135,14 +135,25 @@ class _MiniPlayerBodyState extends State<_MiniPlayerBody>
 
   static const double _dragThresholdForNavigation = 10;
 
+  double _verticalDragDistance = 0;
+  bool _playerRouteOpen = false;
+
   void _handleVerticalDrag(DragUpdateDetails details) {
-    if ((details.primaryDelta ?? 0) < -_dragThresholdForNavigation) {
+    _verticalDragDistance += details.primaryDelta ?? 0;
+    if (_verticalDragDistance < -_dragThresholdForNavigation) {
       _navigateToNowPlaying();
     }
   }
 
-  void _navigateToNowPlaying() {
-    Navigator.of(context).push(_createSlideTransition());
+  Future<void> _navigateToNowPlaying() async {
+    if (_playerRouteOpen || !mounted) return;
+    _playerRouteOpen = true;
+    try {
+      await Navigator.of(context).push(_createSlideTransition());
+    } finally {
+      _playerRouteOpen = false;
+      _verticalDragDistance = 0;
+    }
   }
 
   PageRoute<void> _createSlideTransition() {
@@ -183,7 +194,10 @@ class _MiniPlayerBodyState extends State<_MiniPlayerBody>
             onTapDown: (_) => _animationController.forward(),
             onTapUp: (_) => _animationController.reverse(),
             onTapCancel: () => _animationController.reverse(),
+            onVerticalDragStart: (_) => _verticalDragDistance = 0,
             onVerticalDragUpdate: _handleVerticalDrag,
+            onVerticalDragEnd: (_) => _verticalDragDistance = 0,
+            onVerticalDragCancel: () => _verticalDragDistance = 0,
             onTap: _navigateToNowPlaying,
             child: Container(
               height: MiniPlayer.playerHeight,
@@ -224,7 +238,9 @@ class _MiniPlayerBodyState extends State<_MiniPlayerBody>
                             key: ValueKey(metadata.id),
                             child: _MetadataWidget(
                               title: metadata.title,
-                              artist: metadata.artist,
+                              artist: state.playbackState.errorMessage == null
+                                  ? metadata.artist
+                                  : 'Source unavailable',
                               colorScheme: colorScheme,
                             ),
                           ),
@@ -414,23 +430,28 @@ class _CircularPlayButton extends StatelessWidget {
             ),
           ),
           if (isLoading)
-            SizedBox(
-              width: 24,
-              height: 24,
-              child: CircularProgressIndicator(
-                strokeWidth: 2.5,
-                valueColor: AlwaysStoppedAnimation<Color>(colorScheme.primary),
+            IconButton(
+              onPressed: audioHandler.stop,
+              tooltip: 'Cancel playback',
+              icon: Icon(
+                FluentIcons.stop_24_regular,
+                color: colorScheme.primary,
+                size: 22,
               ),
             )
           else
             IconButton(
-              onPressed: isCompleted
+              onPressed: playbackState.errorMessage != null
+                  ? null
+                  : isCompleted
                   ? () => audioHandler.playAgain()
                   : (isPlaying ? audioHandler.pause : audioHandler.play),
               splashColor: Colors.transparent,
               highlightColor: Colors.transparent,
               icon: Icon(
-                isCompleted
+                playbackState.errorMessage != null
+                    ? FluentIcons.warning_24_regular
+                    : isCompleted
                     ? FluentIcons.arrow_counterclockwise_24_filled
                     : (isPlaying
                           ? FluentIcons.pause_16_filled

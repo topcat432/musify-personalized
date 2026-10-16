@@ -35,10 +35,12 @@ class NowPlayingArtwork extends StatelessWidget {
     required this.size,
     required this.metadata,
     required this.lyricsController,
+    this.lyricsLoader,
   });
   final Size size;
   final MediaItem metadata;
   final FlipCardController lyricsController;
+  final SongLyricsLoader? lyricsLoader;
 
   @override
   Widget build(BuildContext context) {
@@ -101,7 +103,15 @@ class NowPlayingArtwork extends StatelessWidget {
           ],
         ),
         child: AsyncLoader<String?>(
-          future: getSongLyrics(metadata.artist, metadata.title),
+          future: offlineMode.value
+              ? Future<String?>.value()
+              : getSongLyrics(
+                  metadata.artist,
+                  metadata.title,
+                  recordingId:
+                      metadata.extras?['ytid']?.toString() ?? metadata.id,
+                  loader: lyricsLoader,
+                ),
           emptyWidget: Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,

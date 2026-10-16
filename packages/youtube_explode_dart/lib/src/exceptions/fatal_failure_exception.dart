@@ -5,13 +5,16 @@ import 'youtube_explode_exception.dart';
 /// Exception thrown when a fatal failure occurs.
 class FatalFailureException extends YoutubeExplodeException {
   final int statusCode;
+  final bool terminal;
 
   /// Initializes an instance of [FatalFailureException]
-  FatalFailureException(super.message, this.statusCode);
+  FatalFailureException(super.message, this.statusCode,
+      {this.terminal = false});
 
   /// Initializes an instance of [FatalFailureException] with a [Response]
   FatalFailureException.httpRequest(BaseResponse response)
       : statusCode = response.statusCode,
+        terminal = false,
         super('''
 Failed to perform an HTTP request to YouTube due to a fatal failure.
 In most cases, this error indicates that YouTube most likely changed something, which broke the library.

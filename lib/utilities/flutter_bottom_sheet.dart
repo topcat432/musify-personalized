@@ -22,6 +22,7 @@
 import 'package:flutter/material.dart';
 
 PersistentBottomSheetController? _currentBottomSheetController;
+final currentBottomSheetOpen = ValueNotifier<bool>(false);
 
 PersistentBottomSheetController? showCustomBottomSheet(
   BuildContext context,
@@ -75,18 +76,72 @@ PersistentBottomSheetController? showCustomBottomSheet(
   );
 
   _currentBottomSheetController = controller;
+  currentBottomSheetOpen.value = true;
   controller.closed.whenComplete(() {
     if (_currentBottomSheetController == controller) {
       _currentBottomSheetController = null;
+      currentBottomSheetOpen.value = false;
     }
   });
 
   return controller;
 }
 
-void closeCurrentBottomSheet() {
-  try {
-    _currentBottomSheetController?.close();
-  } catch (_) {}
+bool closeCurrentBottomSheet() {
+  final controller = _currentBottomSheetController;
+  if (controller == null) return false;
   _currentBottomSheetController = null;
+  currentBottomSheetOpen.value = false;
+  try {
+    controller.close();
+  } catch (_) {}
+  return true;
+}
+
+/// Preference pickers use the root navigator so Android Back can dismiss them
+/// without falling through a nested tab navigator's persistent-sheet history.
+Future<void> showPreferenceBottomSheet(BuildContext context, Widget content) {
+  final size = MediaQuery.sizeOf(context);
+  final colorScheme = Theme.of(context).colorScheme;
+  return showModalBottomSheet<void>(
+    context: context,
+    useRootNavigator: true,
+    isScrollControlled: true,
+    backgroundColor: colorScheme.surfaceContainerLow,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    ),
+    builder: (sheetContext) => Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 12, bottom: 8),
+            child: GestureDetector(
+              onTap: () => Navigator.of(sheetContext).pop(),
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: colorScheme.onSurfaceVariant.withValues(alpha: .4),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+          ),
+          ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: size.width * .92,
+              maxHeight: size.height * .65,
+            ),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: content,
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
 }

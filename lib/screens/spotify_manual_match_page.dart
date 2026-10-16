@@ -11,9 +11,9 @@ import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:hive/hive.dart';
-import 'package:just_audio/just_audio.dart';
 import 'package:musify/services/common_services.dart';
+import 'package:musify/services/manual_preview_player_pool.dart';
+import 'package:musify/services/review_sprint_audio_player.dart';
 import 'package:musify/services/spotify_manual_source_service.dart';
 import 'package:musify/services/spotify_match_scoring.dart';
 import 'package:musify/services/spotify_review_workflow_service.dart';
@@ -21,9 +21,20 @@ import 'package:musify/widgets/personalized_ui.dart';
 import 'package:youtube_music_explode_dart/youtube_music_explode_dart.dart';
 
 class SpotifyManualMatchPage extends StatefulWidget {
-  const SpotifyManualMatchPage({required this.item, super.key});
+  const SpotifyManualMatchPage({
+    required this.item,
+    super.key,
+    this.audioPlayer,
+    this.previewPool,
+    this.streamResolver,
+    this.candidateSearch,
+  });
 
   final Map<String, dynamic> item;
+  final ReviewSprintAudioPlayer? audioPlayer;
+  final ManualPreviewPlayerPool? previewPool;
+  final Future<String?> Function(String songId)? streamResolver;
+  final Future<List<Map<String, dynamic>>> Function(String query)? candidateSearch;
 
   @override
   State<SpotifyManualMatchPage> createState() => _SpotifyManualMatchPageState();
@@ -36,11 +47,17 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
   static const Duration _timeout = Duration(seconds: 18);
   static const Duration _previewLength = Duration(seconds: 30);
 
-  final AudioPlayer _previewPlayer = AudioPlayer();
+  static final ManualPreviewPlayerPool _defaultPreviewPool =
+      ManualPreviewPlayerPool(JustAudioReviewSprintPlayer.new);
+  late final ManualPreviewPlayerPool _previewPool;
+  ManualPreviewPlayerLease? _previewLease;
+  late final Future<String?> Function(String songId) _streamResolver;
   late final TextEditingController _queryController;
-  StreamSubscription<PlayerState>? _playerStateSubscription;
+  StreamSubscription<ReviewSprintAudioState>? _playerStateSubscription;
   Timer? _previewTimer;
+  int _previewGeneration = 0;
   List<Map<String, dynamic>> _results = [];
+  String _resultsQuery = '';
   bool _searching = false;
   bool _saving = false;
   bool _previewPlaying = false;
@@ -51,44 +68,58 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
   @override
   void initState() {
     super.initState();
+    var suppliedPlayer = widget.audioPlayer;
+    _previewPool = widget.previewPool ?? (suppliedPlayer == null
+        ? _defaultPreviewPool
+        : ManualPreviewPlayerPool(() {
+            final player = suppliedPlayer;
+            if (player == null) {
+              throw StateError('A fresh preview player is required.');
+            }
+            suppliedPlayer = null;
+            return player;
+          }));
+    _streamResolver = widget.streamResolver ??
+        (songId) => fetchSongStreamUrl(songId, false);
     final artist = widget.item['sourceArtist']?.toString().trim() ?? '';
     final title = widget.item['sourceTitle']?.toString().trim() ?? '';
     _queryController = TextEditingController(text: '$artist $title'.trim());
-    _playerStateSubscription = _previewPlayer.playerStateStream.listen((state) {
-      if (!mounted) return;
-      final completed = state.processingState == ProcessingState.completed;
-      setState(() {
-        _previewPlaying = state.playing && !completed;
-        if (completed) {
-          _previewingId = null;
-          _previewLoadingId = null;
-        }
-      });
-    });
     WidgetsBinding.instance.addPostFrameCallback((_) => _search());
   }
 
   @override
   void dispose() {
+    _previewGeneration++;
     _previewTimer?.cancel();
-    _playerStateSubscription?.cancel();
-    unawaited(_previewPlayer.dispose());
+    unawaited(_playerStateSubscription?.cancel());
+    final lease = _previewLease;
+    _previewLease = null;
+    unawaited(_previewPool.release(lease));
     _queryController.dispose();
     super.dispose();
   }
 
   Future<void> _search() async {
     final query = _queryController.text.trim();
-    if (query.isEmpty || _searching) return;
-
-    await _stopPreview();
-    if (!mounted) return;
+    if (query.isEmpty || _searching || _saving) return;
     setState(() {
       _searching = true;
       _error = null;
     });
+    await _stopPreview();
+    if (!mounted) return;
 
     try {
+      final candidateSearch = widget.candidateSearch;
+      if (candidateSearch != null) {
+        final candidates = await candidateSearch(query);
+        if (!mounted) return;
+        setState(() {
+          _results = candidates.map(_rankCandidate).toList();
+          _resultsQuery = query;
+        });
+        return;
+      }
       final exactVideoId = SpotifyManualSourceService.parseExactVideoId(query);
       if (exactVideoId != null) {
         final candidate = await _manualSourceService
@@ -105,7 +136,10 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
         }
         final result = _rankCandidate(candidate, isDirectUrl: true);
         if (!mounted) return;
-        setState(() => _results = [result]);
+        setState(() {
+          _results = [result];
+          _resultsQuery = query;
+        });
         return;
       }
 
@@ -164,7 +198,10 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
       );
 
       if (!mounted) return;
-      setState(() => _results = ranked.toList(growable: false));
+      setState(() {
+        _results = ranked.toList(growable: false);
+        _resultsQuery = query;
+      });
     } catch (error) {
       if (!mounted) return;
       setState(() => _error = error.toString());
@@ -193,147 +230,145 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
     };
   }
 
+  bool _ownsPreview(int generation) =>
+      mounted && generation == _previewGeneration;
+
+  bool _ownsLease(int generation, ManualPreviewPlayerLease lease) =>
+      _ownsPreview(generation) && identical(_previewLease, lease) && !lease.retired;
+
+  void _listenToPreview(ManualPreviewPlayerLease lease) {
+    _playerStateSubscription = lease.player.stateStream.listen((state) {
+      if (!mounted || !identical(_previewLease, lease) ||
+          lease.retired || _previewingId == null) return;
+      setState(() {
+        _previewPlaying = state.playing && !state.completed;
+        if (state.completed) {
+          _previewingId = null;
+          _previewLoadingId = null;
+        }
+      });
+    });
+  }
+
   Future<void> _togglePreview(Map<String, dynamic> result) async {
-    if (_saving) return;
+    if (_saving || _searching) return;
     final candidate = result['candidate'];
     if (candidate is! Map) return;
     final songId = candidate['ytid']?.toString() ?? '';
     if (songId.isEmpty || _previewLoadingId == songId) return;
 
     if (_previewingId == songId) {
-      if (_previewPlaying) {
-        _previewTimer?.cancel();
-        await _previewPlayer.pause();
-      } else {
-        await _previewPlayer.play();
-        _armPreviewTimer();
+      final generation = ++_previewGeneration;
+      final lease = _previewLease;
+      if (lease == null) return;
+      try {
+        if (_previewPlaying) {
+          _previewTimer?.cancel();
+          await lease.run(() async {
+            if (_ownsLease(generation, lease)) await lease.player.pause();
+          });
+        } else {
+          await lease.run(() async {
+            if (_ownsLease(generation, lease)) {
+              _startPreviewPlayback(generation, lease);
+            }
+          });
+        }
+      } catch (error) {
+        if (_ownsPreview(generation)) await _failPreview(error);
       }
       return;
     }
 
-    await _stopPreview();
-    if (!mounted) return;
-    setState(() {
-      _previewLoadingId = songId;
-      _error = null;
-    });
-
+    final generation = ++_previewGeneration;
     try {
-      final streamUrl = await fetchSongStreamUrl(songId, false);
+      await _stopPreview(invalidate: false, loadingId: songId);
+      if (!_ownsPreview(generation)) return;
+      final lease = _previewPool.acquire();
+      _previewLease = lease;
+      _listenToPreview(lease);
+      final streamUrl = await _streamResolver(songId).timeout(_timeout);
+      if (!_ownsLease(generation, lease)) return;
       if (streamUrl == null || streamUrl.isEmpty) {
         throw StateError('No playable audio stream was found for this result.');
       }
-
-      await _previewPlayer.setUrl(streamUrl);
-      final durationSeconds = _asInt(candidate['duration']);
-      final previewStart = durationSeconds != null && durationSeconds > 75
-          ? const Duration(seconds: 20)
-          : Duration.zero;
-      if (previewStart > Duration.zero) {
-        await _previewPlayer.seek(previewStart);
-      }
-      if (!mounted) return;
-      setState(() {
-        _previewingId = songId;
-        _previewLoadingId = null;
+      await lease.run(() async {
+        if (!_ownsLease(generation, lease)) return;
+        await lease.player.setUrl(streamUrl);
+        if (!_ownsLease(generation, lease)) return;
+        final durationSeconds = _asInt(candidate['duration']);
+        if (durationSeconds != null && durationSeconds > 75) {
+          await lease.player.seek(const Duration(seconds: 20));
+        }
+        if (!_ownsLease(generation, lease)) return;
+        setState(() {
+          _previewingId = songId;
+          _previewLoadingId = null;
+        });
+        _startPreviewPlayback(generation, lease);
       });
-      await _previewPlayer.play();
-      _armPreviewTimer();
     } catch (error) {
-      await _stopPreview();
-      if (!mounted) return;
-      setState(() => _error = 'Preview failed: $error');
+      if (_ownsPreview(generation)) await _failPreview(error);
     }
   }
 
-  void _armPreviewTimer() {
-    _previewTimer?.cancel();
-    _previewTimer = Timer(_previewLength, () {
-      unawaited(_stopPreview());
-    });
+  void _startPreviewPlayback(int generation, ManualPreviewPlayerLease lease) {
+    if (!_ownsLease(generation, lease)) return;
+    try {
+      unawaited(lease.player.play().catchError((Object error, StackTrace _) async {
+        if (_ownsLease(generation, lease)) await _failPreview(error);
+      }));
+      _previewTimer?.cancel();
+      _previewTimer = Timer(_previewLength, () {
+        if (_ownsLease(generation, lease)) unawaited(_stopPreview());
+      });
+    } catch (error) {
+      if (_ownsLease(generation, lease)) unawaited(_failPreview(error));
+    }
   }
 
-  Future<void> _stopPreview() async {
+  Future<void> _failPreview(Object error) {
+    if (mounted) setState(() => _error = 'Preview failed: $error');
+    return _stopPreview();
+  }
+
+  Future<void> _stopPreview({bool invalidate = true, String? loadingId}) {
+    if (invalidate) _previewGeneration++;
     _previewTimer?.cancel();
     _previewTimer = null;
-    try {
-      await _previewPlayer.stop();
-    } catch (_) {
-      // A failed or already-disposed player does not need further recovery.
+    unawaited(_playerStateSubscription?.cancel());
+    _playerStateSubscription = null;
+    final lease = _previewLease;
+    _previewLease = null;
+    if (mounted) {
+      setState(() {
+        _previewingId = null;
+        _previewLoadingId = loadingId;
+        _previewPlaying = false;
+        if (loadingId != null) _error = null;
+      });
     }
-    if (!mounted) return;
-    setState(() {
-      _previewingId = null;
-      _previewLoadingId = null;
-      _previewPlaying = false;
-    });
+    return _previewPool.release(lease);
   }
 
   Future<void> _save(Map<String, dynamic> result) async {
-    if (_saving) return;
+    if (_saving || _searching) return;
+    final query = _resultsQuery;
     final candidate = result['candidate'];
     if (candidate is! Map) return;
-
-    await _stopPreview();
-    if (!mounted) return;
     setState(() {
       _saving = true;
       _error = null;
     });
-
     try {
-      final box = Hive.box('user');
-      final results = _readMaps(box.get('spotifyMatchResults'));
-      final metadata = _readMap(box.get('spotifyImportMetadata'));
-      final sourceRow = widget.item['sourceRow']?.toString();
-      final index = results.indexWhere(
-        (item) => item['sourceRow']?.toString() == sourceRow,
-      );
-      if (index == -1) {
-        throw StateError('The imported track is no longer in the match list.');
-      }
-      SpotifyReviewWorkflowService.validateCurrentItem(
+      await _stopPreview();
+      if (!mounted) return;
+      await const SpotifyReviewWorkflowService().resolveManualItem(
         item: widget.item,
-        currentResult: results[index],
-        metadata: metadata,
+        selectedAlternative: result,
+        query: query,
+        isDirectUrl: result['isDirectUrl'] == true,
       );
-
-      final updated = Map<String, dynamic>.from(results[index])
-        ..['status'] = 'manually_matched'
-        ..['score'] = result['score']
-        ..['bestCandidate'] = Map<String, dynamic>.from(candidate)
-        ..['matchEvidence'] = result['evidence']
-        ..['reviewDecision'] = result['isDirectUrl'] == true
-            ? 'manual_url'
-            : 'manual_search'
-        ..['manualSearchQuery'] = _queryController.text.trim()
-        ..['manualSourceUrl'] = result['isDirectUrl'] == true
-            ? _queryController.text.trim()
-            : null
-        ..['reviewedAt'] = DateTime.now().toUtc().toIso8601String();
-      results[index] = updated;
-
-      metadata
-        ..['matchedCount'] = results.where(_isMatched).length
-        ..['reviewCount'] = results
-            .where((item) => item['status'] == 'needs_review')
-            .length
-        ..['unmatchedCount'] = results.where(_isUnmatched).length
-        ..['errorCount'] = results
-            .where((item) => item['status'] == 'error')
-            .length
-        ..['pendingResolutionCount'] = results
-            .where(SpotifyReviewWorkflowService.isPendingResolution)
-            .length
-        ..['lastMatchingCheckpointAt'] = DateTime.now()
-            .toUtc()
-            .toIso8601String();
-
-      await box.putAll({
-        'spotifyMatchResults': results,
-        'spotifyImportMetadata': metadata,
-      });
-
       if (!mounted) return;
       Navigator.of(context).pop(true);
     } catch (error) {
@@ -441,34 +476,13 @@ class _SpotifyManualMatchPageState extends State<SpotifyManualMatchPage> {
     );
   }
 
-  static bool _isMatched(Map<String, dynamic> item) {
-    return item['status'] == 'matched' || item['status'] == 'manually_matched';
-  }
-
-  static bool _isUnmatched(Map<String, dynamic> item) {
-    return item['status'] == 'unmatched' ||
-        item['status'] == 'manual_unmatched';
-  }
-
   static int? _asInt(dynamic value) {
     if (value is int) return value;
     if (value is num) return value.round();
     return int.tryParse(value?.toString() ?? '');
   }
 
-  static Map<String, dynamic> _readMap(dynamic value) {
-    return value is Map
-        ? Map<String, dynamic>.from(value)
-        : <String, dynamic>{};
-  }
 
-  static List<Map<String, dynamic>> _readMaps(dynamic value) {
-    if (value is! List) return <Map<String, dynamic>>[];
-    return value
-        .whereType<Map>()
-        .map(Map<String, dynamic>.from)
-        .toList(growable: true);
-  }
 }
 
 class _ManualSearchLoading extends StatelessWidget {
