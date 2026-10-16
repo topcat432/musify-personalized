@@ -1,5 +1,45 @@
 # Musify Personalized current state
 
+## Android publication component PASS; production gates held, 2026-10-16
+
+The corrected component from127cabd16c79048e036138fc6b8edcb4fff9b4ce passed
+on owned isolated emulator-5560 / musify_isolated_acceptance_api35,under actual
+untrusted_app UID10209,API35/x64. Synthetic APK SHA256:
+47844fdfc42fce9f312de0328ece451e20e7e2488f273bfc988254146e6c4cfc.
+Fresh private/external namespace checks preceded writes. Private and external
+same-mount no-replace publication succeeded;existing destinations were preserved
+(errno17),two isolates produced one winner,same-byte replacement was rejected,
+and the explicit syscall route and descriptor closure passed. Cross-filesystem
+publication refused with errno18 and no destination. App restart reopened the
+validated8192-byte final. Unsupported-filesystem refusal was not observed.
+
+The original debug APK was restored and synced. Immediate and independent cold
+verification passed exact APK hash,signer,UID/version and all four retained Hive
+hashes,sizes,modes. No Hive writes,normal UI,provider,phone or production-package
+operation occurred. At06:15:55Z there were0 owned target processes and the lease
+was free. All failed namespaces/sources,the offline checkpoint manifest and the
+invalid production-fixture proof remain retained and unchanged. The canonical
+private manifest and lineage index retain raw receipts,launch/logcat and hashes.
+This is component proof,not whole-app,signed-source,phone or power-loss acceptance.
+
+Source127cabd1 passes local analysis/1168 Windows tests(7 Linux-specific skips).
+[CI38859710784](https://github.com/topcat432/musify-personalized/actions/runs/38859710784)
+independently passed analysis,1186 Linux tests,both strict Linux visual suites
+(16+24),Windows lifecycle and debug identity before this documentation checkpoint.
+Full required CI remains tracked in [draft PR23](https://github.com/topcat432/musify-personalized/pull/23/checks).
+Both strict Windows visuals remain FAIL16+24,with all40 actual PNGs byte-identical
+to retained controls;representative before/after/diff images were inspected.
+References/comparators are unchanged. The earlier failing Linux and native
+witness controls below remain rejected;no failure is presented as a pass.
+
+The implementation uses no-replace move plus native fd/path stat ownership,
+post-checksum rechecks and synchronous compensated removal. Existing marker
+formats are unchanged;ambiguous moved-source residuals are retained after process
+death. API24 symbol/layout proof covers all four ABIs statically;older-device/ARM
+execution remains unqualified. Original truncation cause and provider playback
+remain unresolved. Review,full exact CI and all release gates still apply before
+promotion;no merge,production signing/publication or phone install is authorized.
+
 ## Native inode witness and checksum timing correction, 2026-10-16
 
 The initial no-replace candidate fee1aa2d is rejected: its proc-fd pathname was
